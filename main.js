@@ -2108,8 +2108,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
     
     // Check for stored private key - show unlock modal
-    const lastAuthMethod = sessionStorage.getItem('authMethod');
-    if (lastAuthMethod === 'privateKey' && hasStoredPrivateKey()) {
+    if (hasStoredPrivateKey()) {
         // Show unlock modal instead of auto-connecting
         const unlockWalletModal = document.getElementById('unlockWalletModal');
         if (unlockWalletModal) {
