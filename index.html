@@ -1,0 +1,904 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <base href="/">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://unpkg.com https://d3js.org; style-src 'self' 'unsafe-inline' https://unpkg.com https://fonts.googleapis.com; img-src 'self' data: https:; font-src 'self' https://fonts.gstatic.com; connect-src 'self' https://gateway.thegraph.com https://gateway-arbitrum.network.thegraph.com https://polygon-rpc.com https://polygon.drpc.org https://polygon-bor-rpc.publicnode.com https://api.etherscan.io https://unpkg.com https://rpc-mainnet.matic.quiknode.pro wss://*.streamr.network wss://*.streamr.network:* wss://*.streamr-nodes.xyz wss://*.streamr-nodes.xyz:* https://ipfs.io https://placehold.co;">
+    <title>Streamr Operators</title>
+
+    <link rel="apple-touch-icon" sizes="180x180" href="/favicon/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="/favicon/favicon-16x16.png">
+    <link rel="manifest" href="/favicon/site.webmanifest">
+    <link rel="shortcut icon" href="/favicon/favicon.ico">
+
+    <!-- Performance: Preconnect to external domains -->
+    <link rel="preconnect" href="https://gateway-arbitrum.network.thegraph.com">
+    <link rel="dns-prefetch" href="https://gateway-arbitrum.network.thegraph.com">
+    <link rel="preconnect" href="https://polygon-rpc.com">
+    <link rel="dns-prefetch" href="https://polygon.drpc.org">
+    <link rel="dns-prefetch" href="https://api.etherscan.io">
+    <link rel="preconnect" href="https://unpkg.com">
+    <link rel="dns-prefetch" href="https://d3js.org">
+
+    <link rel="stylesheet" href="/styles.css">
+    <script src="/libs/ethers.umd.min.js" defer></script>
+    <script src="/libs/chart.js" defer></script>
+    <!-- LeafletJS CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Visual View Dependencies -->
+    <script src="https://unpkg.com/lucide@latest" defer></script>
+    <script src="https://d3js.org/d3.v7.min.js" defer></script>
+</head>
+<body class="text-gray-200">
+
+    <!-- Login Modal -->
+    <div id="loginModal" class="fixed inset-0 bg-[#121212] flex items-center justify-center p-4 z-50 hidden">
+        <div class="bg-[#1E1E1E] rounded-lg p-8 max-w-sm w-full text-gray-300 text-center shadow-2xl border border-[#333333]">
+            
+            <div id="walletLoginView">
+                <h2 class="text-2xl font-bold mb-4 text-white">Streamr Deck</h2>
+                <p class="mb-6 text-gray-400">Connect your wallet for full functionality, or continue as a guest to explore.</p>
+                <button id="connectWalletBtn" class="w-full bg-blue-800 hover:bg-blue-900 text-white font-bold py-3 px-4 rounded-lg transition-colors mb-4 flex items-center justify-center gap-2">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"></path></svg>
+                    Connect Wallet
+                </button>
+                <button id="guestBtn" class="w-full bg-[#444444] hover:bg-[#555555] text-white font-bold py-3 px-4 rounded-lg transition-colors">
+                    Continue as Guest
+                </button>
+                <button id="privateKeyBtn" class="text-gray-500 hover:text-gray-400 text-sm mt-4 transition-colors">
+                    Connect with private key
+                </button>
+            </div>
+
+            <div id="loadingContent" class="hidden">
+                <div class="flex justify-center items-center mb-4">
+                    <div class="loader rounded-full border-4 border-t-4 border-[#555555] border-t-transparent h-8 w-8"></div>
+                </div>
+                <p id="loading-main-text" class="text-lg text-white">Connecting...</p>
+                <p id="loading-sub-text" class="text-sm text-gray-400 mt-2">Please follow the instructions in your wallet.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Private Key Modal -->
+    <div id="privateKeyModal" class="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4 z-50 hidden">
+        <div class="bg-[#1E1E1E] rounded-lg p-8 max-w-md w-full text-gray-300 border border-[#333333] shadow-2xl">
+            <h2 class="text-2xl font-bold mb-4 text-white">Connect with Private Key</h2>
+            
+            <!-- Security Warning -->
+            <div class="bg-amber-900/30 border border-amber-600/50 rounded-lg p-4 mb-6">
+                <div class="flex items-start gap-3">
+                    <svg class="w-6 h-6 text-amber-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+                    </svg>
+                    <div>
+                        <p class="text-amber-500 font-semibold mb-1">Security Warning</p>
+                        <p class="text-amber-200/80 text-sm">Only use an <strong>Agent Wallet</strong> with limited funds and permissions. Never enter the private key of your main wallet.</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="space-y-4">
+                <div>
+                    <label for="privateKeyInput" class="block text-sm font-medium text-gray-400 mb-2">Private Key</label>
+                    <div class="relative">
+                        <input type="password" id="privateKeyInput" placeholder="Enter your private key" class="w-full p-3 pr-12 bg-[#121212] border border-[#333333] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-[#555555] font-mono text-sm">
+                        <button type="button" id="togglePrivateKeyVisibility" class="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-500 hover:text-gray-300 transition-colors">
+                            <svg id="eyeIcon" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
+                            </svg>
+                            <svg id="eyeOffIcon" class="w-5 h-5 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"></path>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="flex items-center gap-2">
+                    <input type="checkbox" id="rememberPrivateKey" class="w-4 h-4 rounded border-[#333333] bg-[#121212] text-blue-600 focus:ring-blue-500 focus:ring-offset-0">
+                    <label for="rememberPrivateKey" class="text-sm text-gray-400">Remember this key for future sessions</label>
+                </div>
+            </div>
+
+            <div class="mt-6 flex gap-4">
+                <button id="pkModalCancel" class="w-full bg-[#444444] hover:bg-[#555555] text-white font-bold py-3 px-4 rounded-lg transition-colors">Cancel</button>
+                <button id="pkModalConnect" class="w-full bg-blue-800 hover:bg-blue-900 text-white font-bold py-3 px-4 rounded-lg transition-colors flex justify-center items-center">Connect</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notifications Container -->
+    <div id="toast-container" class="fixed bottom-4 left-4 z-[60] flex flex-col-reverse gap-3 pointer-events-none max-w-sm w-full">
+    </div>
+
+    <!-- Transaction Modal -->
+    <div id="transactionModal" class="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4 z-50 hidden">
+        <div class="bg-[#1E1E1E] rounded-lg p-8 max-w-md w-full text-gray-300 border border-[#333333] shadow-2xl">
+            <h2 id="tx-modal-title" class="text-2xl font-bold mb-4 text-white">Delegate to Operator</h2>
+            
+            <div id="tx-modal-input-section">
+                <p id="tx-modal-description" class="mb-4 text-gray-400">Enter the amount of DATA to delegate.</p>
+                <div class="relative">
+                    <input 
+                        type="number" 
+                        id="tx-modal-amount" 
+                        placeholder="0.0" 
+                        class="w-full p-3 pr-16 bg-[#121212] border border-[#333333] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-[#555555] transition-colors"
+                    >
+                    <button id="tx-modal-max-btn" class="absolute inset-y-0 right-0 flex items-center pr-3 text-sm font-bold text-blue-500 hover:text-blue-400">MAX</button>
+                </div>
+                <div class="flex justify-between mt-2 text-sm">
+                     <span id="tx-modal-balance-label" class="text-gray-400">Your Balance:</span>
+                     <span id="tx-modal-balance-value" class="text-gray-300">Loading...</span>
+                </div>
+                <div class="flex justify-between mt-1 text-sm text-gray-500">
+                     <span>Minimum to delegate:</span>
+                     <span id="tx-modal-minimum-value">Loading...</span>
+                </div>
+                <div class="mt-6 flex gap-4">
+                    <button id="tx-modal-cancel" class="w-full bg-[#444444] hover:bg-[#555555] text-white font-bold py-3 px-4 rounded-lg transition-colors">Cancel</button>
+                    <button id="tx-modal-confirm" class="w-full bg-[#333333] hover:bg-[#444444] text-white font-bold py-3 px-4 rounded-lg transition-colors flex justify-center items-center" disabled:opacity-50>Confirm</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Stake Management Modal -->
+    <div id="stakeModal" class="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4 z-50 hidden">
+        <div class="bg-[#1E1E1E] rounded-lg p-8 max-w-md w-full text-gray-300 border border-[#333333] shadow-2xl">
+            <h2 id="stake-modal-title" class="text-2xl font-bold mb-4 text-white">Manage Stake</h2>
+            
+            <div id="stake-modal-input-section">
+                <p id="stake-modal-description" class="mb-4 text-gray-400">Enter the new total stake amount for this sponsorship.</p>
+                <div class="relative">
+                    <input 
+                        type="number" 
+                        id="stake-modal-amount" 
+                        placeholder="0.0" 
+                        class="w-full p-3 pr-16 bg-[#121212] border border-[#333333] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-[#555555] transition-colors"
+                    >
+                    <button id="stake-modal-max-btn" class="absolute inset-y-0 right-0 flex items-center pr-3 text-sm font-bold text-blue-500 hover:text-blue-400">MAX</button>
+                </div>
+                <div class="flex justify-between mt-2 text-sm">
+                     <span class="text-gray-400">Your Current Stake:</span>
+                     <span id="stake-modal-current-stake" class="text-gray-300">Loading...</span>
+                </div>
+                <div class="flex justify-between mt-1 text-sm">
+                     <span class="text-gray-400">Operator's Free Funds:</span>
+                     <span id="stake-modal-free-funds" class="text-gray-300">Loading...</span>
+                </div>
+                <div class="mt-6 flex gap-4">
+                    <button id="stake-modal-cancel" class="w-full bg-[#444444] hover:bg-[#555555] text-white font-bold py-3 px-4 rounded-lg transition-colors">Cancel</button>
+                    <button id="stake-modal-confirm" class="w-full bg-[#333333] hover:bg-[#444444] text-white font-bold py-3 px-4 rounded-lg transition-colors flex justify-center items-center" disabled:opacity-50>Confirm</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Settings Modal -->
+    <div id="settingsModal" class="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4 z-50 hidden">
+        <div class="bg-[#1E1E1E] rounded-lg p-8 max-w-md w-full text-gray-300 border border-[#333333] shadow-2xl">
+            <h2 class="text-2xl font-bold mb-4 text-white">Settings</h2>
+            <div class="space-y-4">
+                <div>
+                    <label for="thegraph-api-key-input" class="block text-sm font-medium text-gray-400 mb-2">The Graph API Key</label>
+                    <input type="text" id="thegraph-api-key-input" placeholder="Enter your The Graph API key" class="w-full p-3 bg-[#121212] border border-[#333333] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-[#555555]">
+                </div>
+                <div>
+                    <label for="etherscan-api-key-input" class="block text-sm font-medium text-gray-400 mb-2">Etherscan API Key</Flabel>
+                    <input type="text" id="etherscan-api-key-input" placeholder="Enter your Etherscan API key" class="w-full p-3 bg-[#121212] border border-[#333333] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-[#555555]">
+                </div>
+            </div>
+            <div class="mt-6 flex gap-4">
+                <button id="settings-cancel-btn" class="w-full bg-[#444444] hover:bg-[#555555] text-white font-bold py-3 px-4 rounded-lg transition-colors">Cancel</button>
+                <button id="settings-save-btn" class="w-full bg-blue-800 hover:bg-blue-900 text-white font-bold py-3 px-4 rounded-lg transition-colors">Save & Reload</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Operator Settings Modal -->
+    <div id="operatorSettingsModal" class="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4 z-50 hidden">
+        <div class="bg-[#1E1E1E] rounded-lg p-8 max-w-md w-full text-gray-300 border border-[#333333] shadow-2xl">
+            <h2 id="operator-settings-modal-title" class="text-2xl font-bold mb-4 text-white">Operator Settings</h2>
+            
+            <div id="operator-settings-modal-input-section">
+                <div class="space-y-4">
+                    <div>
+                        <label for="operator-settings-modal-name" class="block text-sm font-medium text-gray-400 mb-2">Display Name</label>
+                        <input type="text" id="operator-settings-modal-name" placeholder="Enter display name" class="w-full p-3 bg-[#121212] border border-[#333333] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-[#555555]">
+                    </div>
+                    <div>
+                        <label for="operator-settings-modal-description-input" class="block text-sm font-medium text-gray-400 mb-2">Description</label>
+                        <textarea id="operator-settings-modal-description-input" rows="3" placeholder="Enter operator description" class="w-full p-3 bg-[#121212] border border-[#333333] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-[#555555]"></textarea>
+                    </div>
+                    <div>
+                        <label for="operator-settings-modal-cut" class="block text-sm font-medium text-gray-400 mb-2">Owner's Cut %</label>
+                        <input type="number" id="operator-settings-modal-cut" placeholder="e.g., 5" min="0" max="100" class="w-full p-3 bg-[#121212] border border-[#333333] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-[#555555]">
+                    </div>
+                    <div>
+                        <label for="operator-settings-modal-redundancy" class="block text-sm font-medium text-gray-400 mb-2">Node Redundancy Factor</label>
+                        <input type="number" id="operator-settings-modal-redundancy" placeholder="e.g., 1" min="1" class="w-full p-3 bg-[#121212] border border-[#333333] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-[#555555]">
+                    </div>
+                </div>
+                <div class="mt-6 flex gap-4">
+                    <button id="operator-settings-modal-cancel" class="w-full bg-[#444444] hover:bg-[#555555] text-white font-bold py-3 px-4 rounded-lg transition-colors">Cancel</button>
+                    <button id="operator-settings-modal-confirm" class="w-full bg-blue-800 hover:bg-blue-900 text-white font-bold py-3 px-4 rounded-lg transition-colors flex justify-center items-center" disabled:opacity-50>Confirm Changes</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Autostaker Panel (Side Panel with Overlay) -->
+    <div id="autostakerOverlay" class="fixed inset-0 bg-black/50 z-40" style="display: none !important;"></div>
+    <div id="autostakerModal" class="fixed top-0 right-0 h-full bg-[#1E1E1E] border-l border-[#333333] shadow-2xl flex flex-col z-50 overflow-hidden" style="display: none !important; width: 384px;">
+        <!-- Panel Header -->
+        <div class="px-4 py-3 border-b border-[#333333] flex items-center justify-between bg-[#1E1E1E] flex-shrink-0">
+            <div class="flex items-center gap-2 min-w-0">
+                <svg class="w-5 h-5 text-blue-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                </svg>
+                <h2 class="text-lg font-bold text-white truncate">Autostaker</h2>
+                <span id="autostaker-panel-status" class="ml-2 px-4 py-1.5 text-xs rounded-full bg-gray-700 text-gray-400 flex-shrink-0">Stopped</span>
+            </div>
+            <button id="autostaker-modal-close" class="text-gray-400 hover:text-white transition-colors p-1 flex-shrink-0">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                </svg>
+            </button>
+        </div>
+
+        <!-- Tabs -->
+        <div class="flex border-b border-[#333333] text-xs flex-shrink-0">
+            <button id="autostaker-tab-settings" class="flex-1 px-3 py-2 font-medium text-white bg-[#2C2C2C] border-b-2 border-blue-500 transition-colors">Settings</button>
+            <button id="autostaker-tab-sponsorships" class="flex-1 px-3 py-2 font-medium text-gray-400 hover:text-white transition-colors">Sponsorships</button>
+            <button id="autostaker-tab-preview" class="flex-1 px-3 py-2 font-medium text-gray-400 hover:text-white transition-colors">Log</button>
+        </div>
+
+        <!-- Tab Content -->
+        <div class="flex-1 overflow-y-auto min-h-0 text-gray-300">
+                <!-- Settings Tab -->
+                <div id="autostaker-content-settings" class="p-4 space-y-4 max-w-full overflow-x-hidden">
+                    <!-- Warning Alert (compact) -->
+                    <div class="bg-amber-900/30 border border-amber-600/50 rounded-lg p-3">
+                        <div class="flex items-start gap-2">
+                            <svg class="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+                            </svg>
+                            <p class="text-amber-200/80 text-xs">Keep this app open for the bot to work. Works while minimized.</p>
+                        </div>
+                    </div>
+
+                    <!-- Bot Status & Control -->
+                    <div id="autostaker-status" class="bg-[#2C2C2C] rounded-lg p-3 border border-[#333333]">
+                        <div class="flex items-center justify-between mb-2">
+                            <span class="text-sm text-gray-400">Bot Status</span>
+                            <span id="autostaker-status-text" class="text-sm font-medium text-gray-400">
+                                <span class="inline-block w-2 h-2 bg-gray-500 rounded-full mr-1"></span>Stopped
+                            </span>
+                        </div>
+                        <div class="text-xs text-gray-500 mb-3">
+                            <span id="autostaker-last-run">Last run: Never</span>
+                            <span class="mx-2">•</span>
+                            <span id="autostaker-next-run">Next: -</span>
+                        </div>
+                        <button id="autostaker-start-bot" class="w-full px-3 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm font-medium">
+                            Start Bot
+                        </button>
+                    </div>
+
+                    <!-- Settings -->
+                    <div class="space-y-3">
+                        <div>
+                            <label for="autostaker-run-interval" class="block text-xs font-medium text-gray-400 mb-1">
+                                Run Interval (minutes)
+                            </label>
+                            <input type="number" id="autostaker-run-interval" value="5" min="1" max="60" class="w-full p-2 text-sm bg-[#121212] border border-[#333333] rounded-lg text-white focus:outline-none focus:ring-1 focus:ring-blue-500">
+                        </div>
+
+                        <div>
+                            <label for="autostaker-max-sponsorships" class="block text-xs font-medium text-gray-400 mb-1">
+                                Max Sponsorships
+                            </label>
+                            <input type="number" id="autostaker-max-sponsorships" value="20" min="1" max="100" class="w-full p-2 text-sm bg-[#121212] border border-[#333333] rounded-lg text-white focus:outline-none focus:ring-1 focus:ring-blue-500">
+                        </div>
+
+                        <div>
+                            <label for="autostaker-min-transaction" class="block text-xs font-medium text-gray-400 mb-1">
+                                Min Transaction (DATA)
+                            </label>
+                            <input type="number" id="autostaker-min-transaction" value="100" min="1" class="w-full p-2 text-sm bg-[#121212] border border-[#333333] rounded-lg text-white focus:outline-none focus:ring-1 focus:ring-blue-500">
+                        </div>
+
+                        <div>
+                            <label for="autostaker-max-min-operators" class="block text-xs font-medium text-gray-400 mb-1">
+                                Max Min Operators
+                            </label>
+                            <input type="number" id="autostaker-max-min-operators" value="4" min="1" max="50" class="w-full p-2 text-sm bg-[#121212] border border-[#333333] rounded-lg text-white focus:outline-none focus:ring-1 focus:ring-blue-500">
+                        </div>
+
+                        <!-- Auto Collect Section -->
+                        <div class="pt-6 mt-6 border-t border-[#333333]">
+                            <div class="flex items-center justify-between mb-2">
+                                <label class="flex items-center gap-2 cursor-pointer group select-none">
+                                    <span class="text-xs font-medium text-gray-400 group-hover:text-gray-300 transition-colors">Auto-Collect Earnings</span>
+                                    <div class="relative">
+                                        <input type="checkbox" id="autostaker-auto-collect-enabled" class="sr-only peer" checked>
+                                        <div class="w-8 h-4 bg-[#333333] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-green-600"></div>
+                                    </div>
+                                </label>
+                            </div>
+                            <div class="flex items-center justify-between mb-2">
+                                <label class="flex items-center gap-2 cursor-pointer group select-none">
+                                    <span class="text-xs font-medium text-gray-400 group-hover:text-gray-300 transition-colors">Skip auto-collect on start</span>
+                                    <div class="relative">
+                                        <input type="checkbox" id="autostaker-ignore-first-collect" class="sr-only peer" checked>
+                                        <div class="w-8 h-4 bg-[#333333] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-green-600"></div>
+                                    </div>
+                                </label>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <label for="autostaker-collect-interval" class="text-xs text-gray-500 whitespace-nowrap">
+                                    Interval:
+                                </label>
+                                <input type="number" id="autostaker-collect-interval" value="24" min="1" max="168" class="flex-1 p-2 text-sm bg-[#121212] border border-[#333333] rounded-lg text-white focus:outline-none focus:ring-1 focus:ring-green-500">
+                                <span class="text-xs text-gray-500">hours</span>
+                            </div>
+                            <div id="autostaker-collect-status" class="text-xs text-gray-500 mt-2">
+                                Next collect: -
+                            </div>
+                        </div>
+                    </div>
+
+                    <button id="autostaker-save-settings" class="w-full bg-blue-700 hover:bg-blue-600 text-white font-medium py-2 px-3 rounded-lg transition-colors text-sm">
+                        Save Settings
+                    </button>
+                </div>
+
+                <!-- Sponsorships Tab -->
+                <div id="autostaker-content-sponsorships" class="p-4 hidden max-w-full overflow-x-hidden">
+                    <div class="mb-4">
+                        <input type="text" id="autostaker-sponsorship-search" placeholder="Search sponsorships..." class="w-full p-2.5 text-sm bg-[#121212] border border-[#2a2a2a] rounded-lg text-white placeholder-gray-600 focus:outline-none focus:ring-1 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all">
+                    </div>
+
+                    <div id="autostaker-sponsorships-list" class="space-y-3 max-h-[60vh] overflow-y-auto pr-1">
+                        <div class="text-center py-8 text-gray-500 text-sm">
+                            Loading sponsorships...
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Log Tab -->
+                <div id="autostaker-content-preview" class="p-4 hidden max-w-full overflow-x-hidden">
+                    <div class="flex items-center justify-between mb-3">
+                        <span class="text-xs text-gray-400">Recent Activity</span>
+                        <button id="autostaker-clear-log" class="text-xs text-gray-500 hover:text-gray-300">Clear</button>
+                    </div>
+
+                    <div id="autostaker-log-list" class="space-y-1 max-h-[70vh] overflow-y-auto text-xs">
+                        <div class="text-center py-6 text-gray-500">
+                            No activity yet. Start the bot to see logs.
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    
+    <!-- Main Loader Overlay -->
+    <div id="loader-overlay" class="fixed inset-0 bg-[#121212] bg-opacity-75 flex items-center justify-center z-50 hidden">
+        <div class="loader rounded-full border-8 border-t-8 border-[#555555] border-t-transparent h-24 w-24"></div>
+    </div>
+    
+    <header class="container mx-auto p-4 md:p-8 flex flex-wrap justify-between items-center gap-4">
+        <div class="flex-grow">
+            <h1 class="text-3xl md:text-5xl font-bold text-white mb-2">Streamr Deck</h1>
+            <p class="text-md text-gray-400">Your command center for Streamr network operations.</p>
+        </div>
+        <div class="flex items-center justify-center lg:justify-end gap-2 flex-wrap">
+            <div id="data-price-box" class="bg-[#1E1E1E] border border-[#333333] text-white p-3 rounded-lg shadow-lg text-sm flex items-center gap-2">
+                <span>DATA Price:</span>
+                <span id="data-price-value" class="font-bold text-green-400">Loading...</span>
+            </div>
+            <div class="relative">
+                <div id="wallet-info" class="bg-[#1E1E1E] border border-[#333333] text-white p-3 rounded-lg shadow-lg text-sm hidden items-center gap-2 cursor-pointer">
+                </div>
+                <!-- Wallet Dropdown Menu -->
+                <div id="wallet-dropdown" class="absolute right-0 top-full mt-2 bg-[#1E1E1E] border border-[#333333] rounded-lg shadow-xl z-50 hidden min-w-[160px]">
+                    <button id="logout-btn" class="w-full px-4 py-3 text-left text-gray-300 hover:bg-[#333333] hover:text-white transition-colors rounded-lg flex items-center gap-2">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path>
+                        </svg>
+                        Disconnect
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Global Autostaker Status Indicator -->
+            <button id="autostaker-global-indicator" class="hidden relative text-gray-400 hover:text-white transition-colors p-3 bg-[#1E1E1E] border border-green-600/50 rounded-lg shadow-lg cursor-pointer hover:bg-[#2a2a2a]" title="Autostaker Running">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                </svg>
+                <span class="absolute top-1 right-1 w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
+            </button>
+            
+            <button id="settings-btn" class="text-gray-400 hover:text-white transition-colors p-3 bg-[#1E1E1E] border border-[#333333] rounded-lg shadow-lg">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+            </button>
+        </div>
+    </header>
+
+
+    <div id="main-container" class="container mx-auto p-4 md:p-8 hidden">
+        <!-- Operator List View -->
+        <main id="operator-list-view">
+            <div class="mb-6 flex gap-2">
+                <div class="relative flex-grow">
+                    <input 
+                        type="text" 
+                        id="search-input" 
+                        placeholder="Search" 
+                        class="w-full p-4 pl-12 bg-[#1E1E1E] border border-[#333333] rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-[#555555] transition-colors"
+                    >
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                    </svg>
+                </div>
+                <button id="visual-view-btn" class="bg-[#1E1E1E] hover:bg-[#333333] border border-[#333333] text-white font-bold p-4 rounded-xl transition-colors flex items-center justify-center" title="Visual">
+                    <svg class="w-6 h-6 text-blue-400" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" stroke-miterlimit="10"><circle cx="16" cy="16" r="6"/><circle cx="25.5" cy="9.5" r="2.5"/><circle cx="5.5" cy="5.5" r="2.5"/><circle cx="5.5" cy="26.5" r="2.5"/><circle cx="25.5" cy="26.5" r="2.5"/><line x1="21.1" y1="13.9" x2="24.4" y2="11.6"/><line x1="10.9" y1="13.9" x2="6.6" y2="7.6"/><line x1="10.9" y1="18.1" x2="6.6" y2="24.4"/><line x1="21.1" y1="18.1" x2="24.4" y2="24.4"/></svg>
+                </button>
+                <button id="race-view-btn" class="bg-[#1E1E1E] hover:bg-[#333333] border border-[#333333] text-white font-bold p-4 rounded-xl transition-colors flex items-center justify-center" title="Stake Race">
+                    <svg class="w-6 h-6 text-yellow-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"></path><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"></path><path d="M4 22h16"></path><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"></path><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"></path><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"></path></svg>
+                </button>
+            </div>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6" id="operators-grid">
+            </div>
+            <div class="mt-8 text-center" id="load-more-container">
+                 <button id="load-more-operators-btn" class="bg-[#2C2C2C] hover:bg-[#3A3A3A] text-white font-bold py-3 px-8 rounded-xl transition-colors hidden disabled:opacity-50">
+                    Load More Operators
+                </button>
+            </div>
+        </main>
+
+        <!-- Operator Detail View -->
+        <div id="operator-detail-view" class="space-y-8">
+            <div class="flex items-center justify-between flex-wrap gap-4">
+                <button id="back-to-list-btn" class="bg-[#333333] hover:bg-[#444444] text-white font-bold py-2 px-4 rounded-lg transition-colors flex items-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clip-rule="evenodd" /></svg>
+                    Back to List
+                </button>
+                <button id="autostaker-btn" class="bg-[#1E1E1E] hover:bg-[#2a2a2a] border border-[#333333] text-gray-300 font-bold py-2 px-4 rounded-lg transition-colors flex items-center hidden">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                    </svg>
+                    <span id="autostaker-btn-text">Autostaker</span>
+                </button>
+            </div>
+            <div id="detail-content">
+            </div>
+        </div>
+
+        <!-- Race View -->
+        <div id="race-view" class="hidden space-y-8">
+            <div>
+                <button id="race-back-to-list-btn" class="bg-[#333333] hover:bg-[#444444] text-white font-bold py-2 px-4 rounded-lg transition-colors flex items-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clip-rule="evenodd" /></svg>
+                    Back to List
+                </button>
+            </div>
+            
+            <!-- Main Card Container -->
+            <div class="w-full bg-[#1E1E1E] rounded-xl border border-[#333333] shadow-2xl flex flex-col relative h-auto">
+                
+                <!-- HEADER PANEL - scrolls with content -->
+                <div class="flex flex-col px-4 sm:px-6 py-4 border-b border-[#333333] bg-[#1E1E1E] gap-4 rounded-t-xl">
+                    
+                    <!-- First Row: Title and Controls -->
+                    <div class="flex items-center justify-between gap-4 flex-wrap">
+                        
+                        <!-- LEFT -->
+                        <div class="flex flex-col min-w-[140px]">
+                            <h2 class="text-xl font-bold text-white flex items-center gap-2">
+                                <svg class="w-5 h-5 text-yellow-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"></path><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"></path><path d="M4 22h16"></path><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"></path><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"></path><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"></path></svg>
+                                <span id="header-title">Operator Race</span>
+                            </h2>
+                            <p class="text-xs text-gray-500">Since Nov '23</p>
+                        </div>
+
+                        <!-- CENTER-LEFT: Metric Toggle -->
+                        <div class="flex bg-[#121212] rounded-lg p-1 border border-[#333333]">
+                            <button id="btn-metric-stake" class="toggle-btn active px-4 py-1.5 text-xs font-semibold rounded text-gray-400 hover:text-white min-w-[70px]">
+                                Stake
+                            </button>
+                            <button id="btn-metric-earnings" class="toggle-btn px-4 py-1.5 text-xs font-semibold rounded text-gray-400 hover:text-white min-w-[70px]">
+                                Earnings
+                            </button>
+                        </div>
+
+                        <!-- RIGHT - Legacy Toggle and Loading -->
+                        <div class="flex items-center gap-4 ml-auto">
+                            
+                            <label class="flex items-center gap-2 cursor-pointer group select-none">
+                                <div class="relative">
+                                    <input type="checkbox" id="toggle-filter" class="sr-only peer">
+                                    <div class="w-8 h-4 bg-[#333333] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-blue-600"></div>
+                                </div>
+                                <span class="text-xs font-medium text-gray-500 group-hover:text-gray-300 transition-colors whitespace-nowrap">Hide Legacy</span>
+                            </label>
+
+                            <div id="loading-mini" class="hidden">
+                                <svg class="w-4 h-4 animate-spin text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="2" x2="12" y2="6"></line><line x1="12" y1="18" x2="12" y2="22"></line><line x1="4.93" y1="4.93" x2="7.76" y2="7.76"></line><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"></line><line x1="2" y1="12" x2="6" y2="12"></line><line x1="18" y1="12" x2="22" y2="12"></line><line x1="4.93" y1="19.07" x2="7.76" y2="16.24"></line><line x1="16.24" y1="7.76" x2="19.07" y2="4.93"></line></svg>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="flex items-center gap-2 sm:gap-4 bg-[#151515] px-3 sm:px-4 py-2 rounded-full border border-[#333] shadow-inner w-full">
+                        
+                        <button id="btn-play" class="w-6 h-6 flex items-center justify-center bg-white/10 hover:bg-white/20 text-white rounded-full transition shadow-sm group shrink-0">
+                            <i data-lucide="play" class="w-3 h-3 ml-0.5 fill-current"></i>
+                        </button>
+
+                        <input type="range" id="timeline-slider" min="0" value="0" step="1" class="w-full h-1.5 cursor-pointer">
+                        
+                        <button id="btn-speed" class="icon-btn text-gray-400 hover:text-white p-1 rounded-full shrink-0" title="Speed">
+                            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 19 22 12 13 5 13 19"></polygon><polygon points="2 19 11 12 2 5 2 19"></polygon></svg>
+                        </button>
+
+                        <span id="lbl-current-date" class="text-xs font-mono text-gray-400 min-w-[60px] sm:min-w-[70px] text-center border-l border-[#333] pl-2 sm:pl-3">
+                            --
+                        </span>
+                    </div>
+                </div>
+
+                <!-- MAIN CONTENT -->
+                <div class="relative w-full bg-[#1E1E1E] rounded-b-xl min-h-[400px]">
+                    
+                    <!-- LOADING STATE -->
+                    <div id="loading-state" class="absolute inset-0 flex flex-col items-center justify-center bg-[#1E1E1E] z-20 h-full rounded-b-xl">
+                        <div class="w-12 h-12 border-4 border-[#555555] border-t-transparent rounded-full animate-spin mb-4"></div>
+                        <p id="loading-text" class="text-gray-300 font-medium text-sm">Initializing...</p>
+                        <div class="w-56 mt-4 bg-[#333333] rounded-full h-2 overflow-hidden">
+                            <div id="loading-bar" class="bg-blue-800 h-full w-0 transition-all duration-300"></div>
+                        </div>
+                    </div>
+
+                    <!-- ERROR STATE -->
+                    <div id="error-state" class="hidden absolute inset-0 flex flex-col items-center justify-center bg-[#1E1E1E] z-20 text-red-400 p-6 text-center h-full rounded-b-xl">
+                        <svg class="w-10 h-10 mb-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+                        <p id="error-msg" class="font-semibold text-sm">Unknown error</p>
+                        <button id="btn-try-again" class="mt-4 px-6 py-2 bg-[#333333] hover:bg-[#444444] text-white rounded text-sm font-bold border border-[#444444]">Try Again</button>
+                    </div>
+
+                    <!-- CHART AREA -->
+                    <div id="chart-area" class="hidden w-full px-4 sm:px-6 md:px-8 py-4 sm:py-6 relative overflow-x-hidden">
+                        
+                        <div class="fixed bottom-4 right-4 sm:bottom-8 sm:right-8 md:bottom-12 md:right-12 text-right pointer-events-none z-0 select-none opacity-60">
+                            <div id="bg-year-display" class="text-4xl sm:text-5xl md:text-6xl font-black text-[#333] tracking-tighter transition-colors leading-none">----</div>
+                            <div id="bg-day-display" class="text-2xl sm:text-3xl md:text-4xl font-bold text-[#444] tracking-tight mt-1">-- --</div>
+                        </div>
+
+                        <!-- Bars Container -->
+                        <div id="bars-container" class="chart-container z-10 w-full transition-all duration-300">
+                            <!-- Bars injected via JS -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Visual View Container -->
+    <div id="visual-view" class="hidden fixed inset-0 z-50 bg-[#121212]">
+        <div id="vis-canvas-container" class="absolute inset-0 z-0">
+            <canvas id="vis-network-canvas"></canvas>
+        </div>
+
+        <div id="vis-tooltip" class="absolute bg-black/90 border border-[#333] rounded-lg p-3 pointer-events-none text-xs shadow-xl transition-opacity opacity-0 z-50 max-w-[250px] backdrop-blur-sm"></div>
+
+        <div id="vis-ui-layer" class="absolute inset-0 p-4 md:p-6 z-10 pointer-events-none flex justify-between items-start transition-opacity duration-300">
+            
+            <div class="flex flex-col h-full justify-between w-full max-w-[300px] pointer-events-none">
+                
+                <div class="flex flex-col gap-4 pointer-events-auto">
+                    
+                    <div class="interactive-card p-4 rounded-2xl shadow-2xl flex flex-col gap-4">
+                        
+                        <div class="flex justify-between items-center">
+                            <div class="flex items-center gap-2">
+                                <button id="vis-btn-back" class="text-gray-500 hover:text-white transition-colors p-1 rounded-md hover:bg-white/5" title="Back">
+                                    <i data-lucide="chevron-left" class="w-4 h-4"></i>
+                                </button>
+                                <span id="vis-entity-counter" class="text-[10px] font-bold text-gray-500 uppercase tracking-wider">0 Operators</span>
+                            </div>
+                            
+                            <div class="flex items-center gap-1">
+                                <div class="relative group">
+                                    <button id="vis-btn-help" class="hidden text-gray-500 hover:text-white transition-colors p-1 rounded-md hover:bg-white/5 cursor-help">
+                                        <i data-lucide="circle-help" class="w-4 h-4"></i>
+                                    </button>
+                                    <!-- Tooltip Content -->
+                                    <div class="absolute right-0 top-full mt-2 w-40 p-3 bg-[#1a1a1a] border border-[#333] rounded-lg shadow-xl text-[10px] text-gray-300 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 backdrop-blur-md">
+                                        <div class="font-bold text-white mb-2 border-b border-white/10 pb-1">Hotkeys</div>
+                                        <div class="flex justify-between items-center mb-1">
+                                            <span>Hide UI</span> 
+                                            <kbd class="bg-white/10 px-1.5 py-0.5 rounded text-white font-mono text-[9px]">H</kbd>
+                                        </div>
+                                        <div class="flex justify-between items-center mb-1">
+                                            <span>Next Sponsorship</span> 
+                                            <kbd class="bg-white/10 px-1.5 py-0.5 rounded text-white font-mono text-[9px]">S</kbd>
+                                        </div>
+                                        <div class="flex justify-between items-center">
+                                            <span>Next Operator</span> 
+                                            <kbd class="bg-white/10 px-1.5 py-0.5 rounded text-white font-mono text-[9px]">O</kbd>
+                                        </div>
+                                    </div>
+                                </div>
+                                <button id="vis-btn-settings" class="text-gray-500 hover:text-white transition-colors p-1 rounded-md hover:bg-white/5" title="Settings">
+                                    <i data-lucide="sliders-horizontal" class="w-4 h-4"></i>
+                                </button>
+                            </div>
+                        </div>      
+
+                        <!-- Time Controls -->
+                        <div id="vis-time-controls-group" class="flex flex-col gap-2 pt-2 border-t border-white/5">
+                            <div class="flex items-center justify-between text-[10px] text-gray-400 font-medium uppercase tracking-wider">
+                                <span id="vis-current-date-display" class="text-blue-400">Loading...</span>
+                            </div>
+                            
+                            <div class="flex items-center gap-3">
+                                <button id="vis-btn-play" class="w-6 h-6 flex items-center justify-center bg-white/10 hover:bg-white/20 text-white rounded-full transition shadow-sm group shrink-0">
+                                    <i data-lucide="play" class="w-3 h-3 ml-0.5 fill-current"></i>
+                                </button>
+                                <div class="flex-grow relative h-4 flex items-center">
+                                    <input type="range" id="vis-time-slider" min="0" max="100" value="100" step="0.001" class="w-full cursor-pointer">
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="flex flex-col gap-3 pt-2 border-t border-white/5">
+                            <div class="flex items-center justify-between">
+                                <div class="flex items-center gap-2">
+                                    <i id="vis-mode-icon" data-lucide="network" class="w-3 h-3 text-gray-400"></i>
+                                    <span id="vis-control-title" class="text-xs font-medium text-gray-300">Live Node View</span>
+                                    
+                                    <!-- Info Tooltip -->
+                                    <div id="vis-live-info-icon" class="relative group flex items-center hidden">
+                                        <i data-lucide="circle-help" class="w-3 h-3 text-gray-500 hover:text-blue-400 cursor-help ml-0.5 transition-colors"></i>
+                                        <div class="absolute bottom-full left-0 mb-2 w-52 p-2.5 bg-[#1a1a1a] border border-[#333] rounded-lg shadow-xl text-[9px] leading-relaxed text-gray-300 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 backdrop-blur-md">
+                                            P2P connections, and individual node distribution within fleets are visual approximations based on real stake actions and network rules.
+                                        </div>
+                                    </div>
+                                </div>
+                                <label class="switch">
+                                    <input type="checkbox" id="vis-live-mode-toggle">
+                                    <span class="slider"></span>
+                                </label>
+                            </div>  
+
+                            <div id="vis-p2p-mode-container" class="hidden flex items-center justify-between pl-5 border-l border-white/10 ml-1">
+                                <div class="flex items-center gap-2">
+                                    <i data-lucide="share-2" class="w-3 h-3 text-gray-400"></i>
+                                    <span class="text-[10px] font-medium text-blue-100">p2p connections</span>
+                                </div>
+                                <label class="switch scale-75 origin-right">
+                                    <input type="checkbox" id="vis-p2p-mode-toggle">
+                                    <span class="slider bg-gray-700"></span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <div id="vis-settings-panel" class="hidden pt-2 border-t border-white/5 space-y-4 animate-in fade-in slide-in-from-top-2 duration-200">
+                            
+                            <!-- DELEGATOR TOGGLE (Inside Settings) -->
+                            <div id="vis-delegator-settings-container" class="flex items-center justify-between pb-3 border-b border-white/5 mb-3">
+                                <div class="flex items-center gap-2">
+                                    <i data-lucide="users" class="w-3 h-3 text-grey-400"></i>
+                                    <span class="text-xs font-medium text-gray-300">Show Delegators</span>
+                                </div>
+                                <label class="switch">
+                                    <input type="checkbox" id="vis-delegator-mode-toggle">
+                                    <span class="slider"></span>
+                                </label>
+                            </div>
+
+                            <h3 class="text-[9px] font-bold text-gray-500 uppercase tracking-wider">Physics Engine</h3>
+                            
+                            <div class="grid grid-cols-2 gap-3">
+                                <div>
+                                    <div class="flex justify-between text-[9px] text-gray-400 mb-1">
+                                        <span>Gravity</span>
+                                        <span id="vis-gravity-display" class="text-white">0.050</span>
+                                    </div>
+                                    <input type="range" id="vis-gravity-slider" min="0" max="100" value="50" class="w-full">
+                                </div>
+                                <div>
+                                    <div class="flex justify-between text-[9px] text-gray-400 mb-1">
+                                        <span>Friction</span>
+                                        <span id="vis-friction-display" class="text-white">0.05</span>
+                                    </div>
+                                    <input type="range" id="vis-friction-slider" min="0" max="100" value="5" class="w-full">
+                                </div>
+                                <div>
+                                    <div class="flex justify-between text-[9px] text-gray-400 mb-1">
+                                        <span>Repulsion</span>
+                                        <span id="vis-repulsion-display" class="text-white">2.0x</span>
+                                    </div>
+                                    <input type="range" id="vis-repulsion-slider" min="1" max="30" value="20" class="w-full">
+                                </div>
+                                <div>
+                                    <div class="flex justify-between text-[9px] text-gray-400 mb-1">
+                                        <span>Tension</span>
+                                        <span id="vis-tension-display" class="text-white">0.05</span>
+                                    </div>
+                                    <input type="range" id="vis-tension-slider" min="1" max="100" value="5" class="w-full">
+                                </div>
+                            </div>
+
+                            <div id="vis-discovery-settings-group" class="hidden">
+                                <h3 class="text-[9px] font-bold text-gray-500 uppercase tracking-wider pt-2 border-t border-white/5">Discovery Config</h3>
+                                <div class="space-y-3 mt-4">
+                                    <div>
+                                        <div class="flex justify-between items-center text-[9px] text-gray-400 mb-1">
+                                            <div class="flex items-center gap-1.5">
+                                                <span>Concurrent Connections</span>
+                                                <!-- Info Tooltip -->
+                                                <div class="relative group">
+                                                    <i data-lucide="info" class="w-3 h-3 text-gray-600 hover:text-gray-300 cursor-help transition-colors"></i>
+                                                    <div class="absolute bottom-full left-0 mb-2 w-48 p-2.5 bg-[#1a1a1a] border border-[#333] rounded-lg shadow-xl text-[9px] leading-relaxed opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 backdrop-blur-md">
+                                                        <p class="text-gray-300 mb-1.5">Controls the maximum number of simultaneous WebSocket connections.</p>
+                                                        <p class="text-gray-300 mb-1.5 font-medium">Reduce this value if you are having trouble discovering live nodes.</p>
+                                                        <p class="text-gray-300 mb-1.5 font-medium"><i data-lucide="chrome" class="w-2.5 h-2.5 inline mr-0.5"></i> Chrome is recommended for best performance.</p>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <span id="vis-max-subs-display" class="text-white">75</span>
+                                        </div>
+                                        <input type="range" id="vis-max-subs-slider" min="10" max="200" value="75" step="5" class="w-full">
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div id="vis-simulation-settings-group" class="hidden">
+                                <h3 class="text-[9px] font-bold text-gray-500 uppercase tracking-wider pt-2 border-t border-white/5">Simulation Config</h3>
+                                <div class="space-y-3 mt-4">
+                                    <div>
+                                        <div class="flex justify-between text-[9px] text-gray-400 mb-1">
+                                            <span>Node Degree</span>
+                                            <span id="vis-degree-display" class="text-white">4</span>
+                                        </div>
+                                        <input type="range" id="vis-degree-slider" min="1" max="12" value="4" step="1" class="w-full">
+                                    </div>
+                                    
+                                    <button id="vis-btn-release-nodes" class="w-full py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded text-[10px] text-gray-300 font-medium uppercase tracking-wider transition-colors flex items-center justify-center gap-2">
+                                        <i data-lucide="unlock" class="w-3 h-3"></i>
+                                        Release Fixed Sponsorships
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            <div id="vis-timeline-settings-group" class="space-y-3 pt-2 border-t border-white/5">
+                                <div>
+                                    <div class="flex justify-between text-[9px] text-gray-400 mb-1">
+                                        <span>Time Step</span>
+                                        <span id="vis-jump-display" class="text-white">0.2%</span>
+                                    </div>
+                                    <input type="range" id="vis-jump-slider" min="1" max="50" value="2" step="1" class="w-full">
+                                </div>
+
+                                <div>
+                                    <div class="flex justify-between text-[9px] text-gray-400 mb-1">
+                                        <span>Playback Speed</span>
+                                        <span id="vis-delay-display" class="text-white">150ms</span>
+                                    </div>
+                                    <input type="range" id="vis-delay-slider" min="50" max="2000" value="150" step="50" class="w-full">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="vis-loading-indicator" class="interactive-card py-1.5 px-3 rounded-full flex items-center gap-2 hidden self-start">
+                        <div class="w-2.5 h-2.5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+                        <span id="vis-loading-text" class="text-[9px] font-bold text-gray-300 uppercase tracking-wide">Syncing</span>
+                    </div>
+                </div>
+
+                <!-- Painel-->
+                <div id="vis-selection-card" class="interactive-card p-3 rounded-lg border-l-2 border-l-blue-500 shadow-lg hidden pointer-events-auto mb-2 backdrop-blur-md">
+                    <div class="flex justify-between items-start mb-1">
+                        <div class="flex items-center gap-2">
+                            <div id="vis-sel-avatar" class="w-8 h-8 rounded-full bg-[#121212] border border-gray-600 bg-cover bg-center hidden"></div>
+                            <div>
+                                <div id="vis-sel-type-label" class="text-[9px] text-blue-500 uppercase tracking-widest font-bold mb-0 leading-none">Selected</div>
+                                
+                                <div class="relative group">
+                                    <h2 id="vis-sel-title" class="text-sm font-bold text-white truncate max-w-[180px] leading-tight cursor-help">Name</h2>
+                                    <div id="vis-sel-title-tooltip" class="absolute bottom-full left-0 mb-2 w-max max-w-[260px] p-2 bg-[#1a1a1a] border border-[#333] rounded-lg shadow-xl text-xs text-white font-medium opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 break-words">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-1">
+                            <button id="vis-btn-goto-operator" class="text-gray-500 hover:text-blue-400 transition-colors hidden" title="View operator details">
+                                <i data-lucide="external-link" class="w-3.5 h-3.5"></i>
+                            </button>
+                            <button id="vis-btn-close-sel" class="text-gray-500 hover:text-white transition-colors">
+                                <i data-lucide="x" class="w-3.5 h-3.5"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="space-y-1 mt-2">
+                        <div id="vis-sel-count-row" class="flex justify-between items-center text-[10px]">
+                            <span id="vis-sel-count-label" class="text-gray-500 font-medium">Operators</span>
+                            <span id="vis-sel-count" class="font-mono text-white">0</span>
+                        </div>
+
+                        <!-- New Delegator Count Row for Operators -->
+                        <div id="vis-sel-delegators-row" class="flex justify-between items-center text-[10px] hidden">
+                            <span class="text-gray-500 font-medium">Total Delegators</span>
+                            <span id="vis-sel-delegators-count" class="font-mono text-white">0</span>
+                        </div>
+
+                        <div class="flex justify-between items-center text-[10px]">
+                            <span id="vis-sel-val-label" class="text-gray-500 font-medium">Total Stake</span>
+                            <span id="vis-sel-val" class="font-bold text-white">0 DATA</span>
+                        </div>
+                        <div id="vis-sel-extra-row" class="flex justify-between items-center text-[10px] hidden">
+                            <span class="text-gray-500 font-medium">Remaining Life</span>
+                            <span id="vis-sel-extra" class="font-bold text-white">0 days</span>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+
+            <div class="flex flex-col items-end pointer-events-none">
+                <div id="vis-search-wrapper" class="pointer-events-auto flex flex-col items-end relative">
+                    <div id="vis-search-bar" class="flex items-center bg-[#121212]/90 backdrop-blur-md border border-[#333333] rounded-full p-2 transition-all duration-300 ease-in-out w-10 overflow-hidden shadow-xl hover:border-gray-500">
+                        <button id="vis-btn-search-toggle" class="w-6 h-6 flex items-center justify-center text-gray-400 hover:text-white shrink-0 transition-colors">
+                            <i data-lucide="search" class="w-4 h-4"></i>
+                        </button>
+                        <input type="text" id="vis-search-input" placeholder="Search..." class="bg-transparent border-none outline-none text-xs text-white w-0 opacity-0 transition-all duration-300 placeholder-gray-600 font-medium ml-0">
+                        <button id="vis-btn-clear-search" class="hidden w-5 h-5 flex items-center justify-center text-gray-500 hover:text-white shrink-0 ml-1">
+                            <i data-lucide="x" class="w-3 h-3"></i>
+                        </button>
+                    </div>
+                    
+                    <div id="vis-search-results" class="absolute top-[calc(100%+8px)] right-0 w-64 bg-[#1e1e1e] border border-[#333333] rounded-lg shadow-2xl hidden max-h-60 overflow-y-auto">
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <div id="custom-tooltip" class="hidden absolute z-30 px-3 py-2 text-sm font-medium text-white bg-black rounded-lg shadow-sm border border-[#333333] max-w-xs break-words">
+    </div>
+
+    <script src="/libs/streamr-sdk.web.js"></script>
+    <!-- LeafletJS JavaScript -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    
+    <script type="module" src="/main.js"></script>
+
+    <!-- Service Worker Registration -->
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/sw.js').then(registration => {
+                    console.log('Service Worker registered with scope:', registration.scope);
+                }).catch(error => {
+                    console.error('Service Worker registration failed:', error);
+                });
+            });
+        }   
+    </script>
+
+</body>
+</html>

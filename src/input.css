@@ -1,0 +1,324 @@
+@import "tailwindcss";
+
+@layer base {
+  body {
+    font-family: 'Inter', sans-serif;
+    background-color: #121212;
+  }
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-track { background: #1E1E1E; }
+  ::-webkit-scrollbar-thumb { background: #555; border-radius: 4px; }
+  ::-webkit-scrollbar-thumb:hover { background: #777; }
+}
+
+@layer components {
+  .loader, .spinner {
+    animation: spin 1s linear infinite;
+  }
+  @keyframes spin {
+    from {
+        transform: rotate(0deg);
+    }
+    to {
+        transform: rotate(360deg);
+    }
+  }
+  .card {
+    transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+    cursor: pointer;
+  }
+  .card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.2), 0 4px 6px -2px rgba(0, 0, 0, 0.1);
+  }
+  .detail-section {
+    background-color: #1E1E1E;
+    border: 1px solid #333333;
+    border-radius: 0.75rem;
+  }
+  #operator-detail-view { display: none; }
+  .btn-spinner {
+    animation: spin 1s linear infinite;
+    display: inline-block;
+    margin-right: 0.5rem;
+  }
+  #price-refresh-btn.spinning svg {
+        animation: spin 1s linear infinite;
+  }
+  .stream-message-entry {
+    animation: slideIn 0.3s ease-out;
+  }
+  @keyframes slideIn {
+    from { opacity: 0; transform: translateY(5px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  a.processing {
+    pointer-events: none;
+    cursor: not-allowed;
+  }
+  .tx-badge {
+    padding: 2px 8px;
+    border-radius: 9999px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+  }
+  .tx-badge-in {
+    background-color: rgba(16, 185, 129, 0.1);
+    color: #10B981;
+  }
+  .tx-badge-out {
+    background-color: rgba(239, 68, 68, 0.1);
+    color: #EF4444;
+  }
+  .tx-badge-stake {
+    background-color: rgba(249, 115, 22, 0.1); /* orange-500 com 10% opacidade */
+    color: #F97316; /* orange-500 */
+  }
+  
+  /* --- RACE STYLES --- */
+  .chart-container {
+    position: relative;
+    overflow: visible; 
+  }
+
+  .bar-row {
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: 15px; 
+    display: flex;
+    align-items: center;
+    gap: 12px; 
+    transition: top 0.5s cubic-bezier(0.25, 1, 0.5, 1), opacity 0.3s ease;
+    width: 100%;
+    padding-right: 24px; 
+  }
+
+  .bar-fill {
+    height: 100%;
+    border-radius: 0.1rem; 
+    transition: width 0.3s linear, background-color 0.3s;
+    position: relative; 
+    overflow: visible; 
+  }
+
+  .bar-hidden {
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  /* Marker lines now thicker and slightly more opaque */
+  .scale-marker-line {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 3px; /* Increased from 2px */
+    background-color: rgba(255, 255, 255, 0.18); /* Slightly more visible */
+    pointer-events: none;
+    z-index: 0;
+  }
+  
+  input[type=range] {
+    -webkit-appearance: none; 
+    background: transparent; 
+  }
+  
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    height: 12px;
+    width: 12px;
+    border-radius: 50%;
+    background: #3b82f6; 
+    cursor: pointer;
+    margin-top: -4px; 
+    border: 2px solid #1E1E1E; 
+    box-shadow: 0 0 0 1px #333;
+  }
+
+  input[type=range]::-webkit-slider-runnable-track {
+    width: 100%;
+    height: 4px;
+    background: #333333; 
+    border-radius: 2px;
+  }
+
+  .toggle-btn {
+    transition: all 0.2s ease;
+  }
+  .toggle-btn.active {
+    background-color: #1d4ed8;
+    color: white;
+    border-color: #1e40af;
+  }
+  .toggle-btn.active.earnings-mode {
+    background-color: #1d4ed8;
+    color: white;
+    border-color: #1e40af;
+  }
+  
+  .icon-btn {
+    transition: color 0.2s, background-color 0.2s;
+  }
+  .icon-btn.active {
+    color: #60a5fa; 
+  }
+  .icon-btn.active:hover {
+    color: #93c5fd;
+  }
+  .icon-btn:hover {
+    background-color: #333;
+    color: white;
+  }
+  
+  /* --- SWITCH TOGGLE STYLES --- */
+  .switch {
+    position: relative;
+    display: inline-block;
+    width: 32px;
+    height: 18px;
+  }
+  .switch input { 
+    opacity: 0;
+    width: 0;
+    height: 0;
+  }
+  .switch .slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: #333;
+    transition: .3s;
+    border-radius: 20px;
+  }
+  .switch .slider:before {
+    position: absolute;
+    content: "";
+    height: 12px;
+    width: 12px;
+    left: 3px;
+    bottom: 3px;
+    background-color: white;
+    transition: .3s;
+    border-radius: 50%;
+  }
+  .switch input:checked + .slider {
+    background-color: #10b981;
+  }
+  .switch input:checked + .slider:before {
+    transform: translateX(14px);
+  }
+  
+  /* --- VISUAL VIEW PANEL STYLES --- */
+  .interactive-card {
+    pointer-events: auto;
+    background: rgba(20, 20, 20, 0.85);
+    backdrop-filter: blur(16px);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: 0 4px 30px rgba(0, 0, 0, 0.3);
+    transition: transform 0.2s ease, border-color 0.2s;
+  }
+  .interactive-card:hover {
+    border-color: rgba(255, 255, 255, 0.15);
+  }
+
+  /* --- TOAST NOTIFICATION STYLES --- */
+  .toast {
+    pointer-events: auto;
+    padding: 1rem;
+    border-radius: 0.5rem;
+    background-color: #1E1E1E;
+    border: 1px solid #333333;
+    border-left-width: 4px;
+    animation: toastSlideIn 0.3s ease-out;
+  }
+  
+  @keyframes toastSlideIn {
+    from {
+      opacity: 0;
+      transform: translateX(-20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(0);
+    }
+  }
+  
+  .toast-removing {
+    animation: toastSlideOut 0.3s ease-in forwards;
+  }
+  
+  @keyframes toastSlideOut {
+    from {
+      opacity: 1;
+      transform: translateX(0);
+    }
+    to {
+      opacity: 0;
+      transform: translateX(-20px);
+    }
+  }
+  
+  .toast-success {
+    border-left-color: #10b981;
+  }
+  .toast-success .toast-icon {
+    color: #10b981;
+  }
+  
+  .toast-error {
+    border-left-color: #ef4444;
+  }
+  .toast-error .toast-icon {
+    color: #ef4444;
+  }
+  
+  .toast-warning {
+    border-left-color: #f59e0b;
+  }
+  .toast-warning .toast-icon {
+    color: #f59e0b;
+  }
+  
+  .toast-info {
+    border-left-color: #3b82f6;
+  }
+  .toast-info .toast-icon {
+    color: #3b82f6;
+  }
+  
+  .toast-loading {
+    border-left-color: #9ca3af;
+  }
+  .toast-loading .toast-icon {
+    color: #9ca3af;
+  }
+  
+  .toast-close {
+    color: #9ca3af;
+    transition: color 0.2s;
+    cursor: pointer;
+  }
+  .toast-close:hover {
+    color: #ffffff;
+  }
+  
+  .toast-progress {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    height: 3px;
+    background: currentColor;
+    opacity: 0.4;
+    border-radius: 0 0 0.5rem 0.5rem;
+  }
+  
+  .toast-success .toast-progress { background-color: #10b981; }
+  .toast-error .toast-progress { background-color: #ef4444; }
+  .toast-warning .toast-progress { background-color: #f59e0b; }
+  .toast-info .toast-progress { background-color: #3b82f6; }
+  .toast-loading .toast-progress { background-color: #9ca3af; }
+}
