@@ -105,12 +105,54 @@
                     <input type="checkbox" id="rememberPrivateKey" class="w-4 h-4 rounded border-[#333333] bg-[#121212] text-blue-600 focus:ring-blue-500 focus:ring-offset-0">
                     <label for="rememberPrivateKey" class="text-sm text-gray-400">Remember this key for future sessions</label>
                 </div>
+
+                <!-- Password fields (shown when Remember is checked) -->
+                <div id="encryptionPasswordSection" class="hidden space-y-3 pt-2 border-t border-[#333333]">
+                    <p class="text-xs text-gray-500">Create a password to encrypt your key locally. You'll need this password to unlock your wallet in future sessions.</p>
+                    <div>
+                        <label for="encryptionPassword" class="block text-sm font-medium text-gray-400 mb-2">Encryption Password</label>
+                        <input type="password" id="encryptionPassword" placeholder="Create a password" class="w-full p-3 bg-[#121212] border border-[#333333] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-[#555555] text-sm">
+                    </div>
+                    <div>
+                        <label for="encryptionPasswordConfirm" class="block text-sm font-medium text-gray-400 mb-2">Confirm Password</label>
+                        <input type="password" id="encryptionPasswordConfirm" placeholder="Confirm password" class="w-full p-3 bg-[#121212] border border-[#333333] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-[#555555] text-sm">
+                    </div>
+                </div>
             </div>
 
             <div class="mt-6 flex gap-4">
                 <button id="pkModalCancel" class="w-full bg-[#444444] hover:bg-[#555555] text-white font-bold py-3 px-4 rounded-lg transition-colors">Cancel</button>
                 <button id="pkModalConnect" class="w-full bg-blue-800 hover:bg-blue-900 text-white font-bold py-3 px-4 rounded-lg transition-colors flex justify-center items-center">Connect</button>
             </div>
+        </div>
+    </div>
+
+    <!-- Unlock Wallet Modal -->
+    <div id="unlockWalletModal" class="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4 z-50 hidden">
+        <div class="bg-[#1E1E1E] rounded-lg p-8 max-w-sm w-full text-gray-300 border border-[#333333] shadow-2xl">
+            <div class="flex items-center justify-center mb-4">
+                <div class="bg-blue-900/30 p-3 rounded-full">
+                    <svg class="w-8 h-8 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>
+                    </svg>
+                </div>
+            </div>
+            <h2 class="text-xl font-bold mb-2 text-white text-center">Unlock Wallet</h2>
+            <p class="text-sm text-gray-400 text-center mb-6">Enter your password to unlock your saved wallet.</p>
+            
+            <div class="space-y-4">
+                <div>
+                    <input type="password" id="unlockPassword" placeholder="Enter your password" class="w-full p-3 bg-[#121212] border border-[#333333] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-[#555555] text-sm">
+                    <p id="unlockError" class="text-red-400 text-xs mt-2 hidden">Incorrect password. Please try again.</p>
+                </div>
+            </div>
+
+            <div class="mt-6 flex gap-4">
+                <button id="unlockCancel" class="w-full bg-[#444444] hover:bg-[#555555] text-white font-bold py-3 px-4 rounded-lg transition-colors">Cancel</button>
+                <button id="unlockConfirm" class="w-full bg-blue-800 hover:bg-blue-900 text-white font-bold py-3 px-4 rounded-lg transition-colors flex justify-center items-center">Unlock</button>
+            </div>
+            
+            <button id="unlockForget" class="w-full text-gray-500 hover:text-gray-400 text-sm mt-4 transition-colors">Forget saved wallet</button>
         </div>
     </div>
 
@@ -237,7 +279,7 @@
 
     <!-- Autostaker Panel (Side Panel with Overlay) -->
     <div id="autostakerOverlay" class="fixed inset-0 bg-black/50 z-40" style="display: none !important;"></div>
-    <div id="autostakerModal" class="fixed top-0 right-0 h-full bg-[#1E1E1E] border-l border-[#333333] shadow-2xl flex flex-col z-50 overflow-hidden" style="display: none !important; width: 384px;">
+    <div id="autostakerModal" class="fixed top-0 right-0 h-full w-96 bg-[#1E1E1E] border-l border-[#333333] shadow-2xl flex flex-col z-50 overflow-hidden" style="display: none !important;">
         <!-- Panel Header -->
         <div class="px-4 py-3 border-b border-[#333333] flex items-center justify-between bg-[#1E1E1E] flex-shrink-0">
             <div class="flex items-center gap-2 min-w-0">
@@ -367,7 +409,7 @@
                         <input type="text" id="autostaker-sponsorship-search" placeholder="Search sponsorships..." class="w-full p-2.5 text-sm bg-[#121212] border border-[#2a2a2a] rounded-lg text-white placeholder-gray-600 focus:outline-none focus:ring-1 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all">
                     </div>
 
-                    <div id="autostaker-sponsorships-list" class="space-y-3 max-h-[60vh] overflow-y-auto pr-1">
+                    <div id="autostaker-sponsorships-list" class="space-y-3 pb-4">
                         <div class="text-center py-8 text-gray-500 text-sm">
                             Loading sponsorships...
                         </div>
@@ -381,7 +423,7 @@
                         <button id="autostaker-clear-log" class="text-xs text-gray-500 hover:text-gray-300">Clear</button>
                     </div>
 
-                    <div id="autostaker-log-list" class="space-y-1 max-h-[70vh] overflow-y-auto text-xs">
+                    <div id="autostaker-log-list" class="space-y-1 text-xs pb-4">
                         <div class="text-center py-6 text-gray-500">
                             No activity yet. Start the bot to see logs.
                         </div>

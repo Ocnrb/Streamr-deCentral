@@ -86,14 +86,15 @@ const PK_SALT_KEY = 'pk_salt';
 const PK_IV_KEY = 'pk_iv';
 
 /**
- * Generate a cryptographic key from a salt using PBKDF2
+ * Generate a cryptographic key from user password using PBKDF2
+ * @param {string} password - User's encryption password
+ * @param {Uint8Array} salt - Random salt
  */
-async function deriveKey(salt) {
+async function deriveKeyFromPassword(password, salt) {
     const encoder = new TextEncoder();
-    // Use a fixed passphrase combined with browser fingerprint-like data
     const baseKey = await crypto.subtle.importKey(
         'raw',
-        encoder.encode('streamr-explorer-pk-' + navigator.userAgent.slice(0, 50)),
+        encoder.encode(password),
         'PBKDF2',
         false,
         ['deriveKey']
@@ -114,14 +115,16 @@ async function deriveKey(salt) {
 }
 
 /**
- * Encrypt private key for storage
+ * Encrypt private key for storage using user's password
+ * @param {string} privateKey - The private key to encrypt
+ * @param {string} password - User's encryption password
  */
-async function encryptPrivateKey(privateKey) {
+async function encryptPrivateKey(privateKey, password) {
     try {
         const encoder = new TextEncoder();
         const salt = crypto.getRandomValues(new Uint8Array(16));
         const iv = crypto.getRandomValues(new Uint8Array(12));
-        const key = await deriveKey(salt);
+        const key = await deriveKeyFromPassword(password, salt);
         
         const encrypted = await crypto.subtle.encrypt(
             { name: 'AES-GCM', iv: iv },
@@ -141,9 +144,11 @@ async function encryptPrivateKey(privateKey) {
 }
 
 /**
- * Decrypt stored private key
+ * Decrypt stored private key using user's password
+ * @param {string} password - User's encryption password
+ * @returns {string|null} Decrypted private key or null if failed
  */
-async function decryptPrivateKey() {
+async function decryptPrivateKey(password) {
     try {
         const encryptedB64 = localStorage.getItem(PK_STORAGE_KEY);
         const saltB64 = localStorage.getItem(PK_SALT_KEY);
@@ -155,7 +160,7 @@ async function decryptPrivateKey() {
         const salt = Uint8Array.from(atob(saltB64), c => c.charCodeAt(0));
         const iv = Uint8Array.from(atob(ivB64), c => c.charCodeAt(0));
         
-        const key = await deriveKey(salt);
+        const key = await deriveKeyFromPassword(password, salt);
         
         const decrypted = await crypto.subtle.decrypt(
             { name: 'AES-GCM', iv: iv },
@@ -165,17 +170,19 @@ async function decryptPrivateKey() {
         
         return new TextDecoder().decode(decrypted);
     } catch (e) {
+        // Don't clear on failure - might be wrong password
         logger.error('Decryption failed:', e);
-        clearStoredPrivateKey();
         return null;
     }
 }
 
 /**
  * Save encrypted private key to localStorage
+ * @param {string} privateKey - The private key to save
+ * @param {string} password - User's encryption password
  */
-async function savePrivateKey(privateKey) {
-    const encrypted = await encryptPrivateKey(privateKey);
+async function savePrivateKey(privateKey, password) {
+    const encrypted = await encryptPrivateKey(privateKey, password);
     if (encrypted) {
         localStorage.setItem(PK_STORAGE_KEY, encrypted.encrypted);
         localStorage.setItem(PK_SALT_KEY, encrypted.salt);
@@ -333,9 +340,9 @@ async function connectAsGuest() {
 /**
  * Connect using a private key
  * @param {string} privateKey - The private key to use
- * @param {boolean} shouldSave - Whether to save the key for future sessions
+ * @param {string|null} encryptionPassword - Password to encrypt and save the key (null = don't save)
  */
-async function connectWithPrivateKey(privateKey, shouldSave = false) {
+async function connectWithPrivateKey(privateKey, encryptionPassword = null) {
     try {
         UI.setLoginModalState('loading', 'privateKey');
         UI.hidePrivateKeyModal();
@@ -362,9 +369,9 @@ async function connectWithPrivateKey(privateKey, shouldSave = false) {
         state.signer = wallet;
         state.myRealAddress = wallet.address;
         
-        // Save encrypted key if requested
-        if (shouldSave) {
-            const saved = await savePrivateKey(formattedKey);
+        // Save encrypted key if requested (password is provided)
+        if (encryptionPassword) {
+            const saved = await savePrivateKey(formattedKey, encryptionPassword);
             if (!saved) {
                 UI.showToast({ type: 'warning', title: 'Key Not Saved', message: 'Could not save the private key. You will need to enter it again next time.', duration: 5000 });
             }
@@ -384,22 +391,30 @@ async function connectWithPrivateKey(privateKey, shouldSave = false) {
 }
 
 /**
- * Auto-connect with stored private key
+ * Unlock wallet with stored encrypted private key
+ * @param {string} password - User's unlock password
+ * @returns {boolean} True if unlock successful
  */
-async function autoConnectWithStoredKey() {
+async function unlockWallet(password) {
     if (!hasStoredPrivateKey()) return false;
     
+    const unlockModal = document.getElementById('unlockWalletModal');
+    
     try {
-        const privateKey = await decryptPrivateKey();
+        const privateKey = await decryptPrivateKey(password);
         if (privateKey) {
-            await connectWithPrivateKey(privateKey, false);
+            // Hide unlock modal
+            if (unlockModal) unlockModal.classList.add('hidden');
+            await connectWithPrivateKey(privateKey, null); // null = don't re-save
             return true;
         }
+        UI.showToast('Senha incorreta', 'error');
+        return false;
     } catch (e) {
-        logger.error('Auto-connect failed:', e);
-        clearStoredPrivateKey();
+        logger.error('Unlock failed:', e);
+        UI.showToast('Erro ao desbloquear: ' + e.message, 'error');
+        return false;
     }
-    return false;
 }
 
 /**
@@ -1721,11 +1736,30 @@ function setupEventListeners() {
         });
     }
 
+    // Encryption password section elements
+    const encryptionPasswordSection = document.getElementById('encryptionPasswordSection');
+    const encryptionPasswordInput = document.getElementById('encryptionPassword');
+    const confirmEncryptionPasswordInput = document.getElementById('encryptionPasswordConfirm');
+
+    // Toggle password section visibility based on remember checkbox
+    if (rememberCheckbox && encryptionPasswordSection) {
+        rememberCheckbox.addEventListener('change', () => {
+            encryptionPasswordSection.classList.toggle('hidden', !rememberCheckbox.checked);
+            if (!rememberCheckbox.checked) {
+                encryptionPasswordInput.value = '';
+                confirmEncryptionPasswordInput.value = '';
+            }
+        });
+    }
+
     if (pkModalCancel) {
         pkModalCancel.addEventListener('click', () => {
             UI.hidePrivateKeyModal();
             privateKeyInput.value = '';
             rememberCheckbox.checked = false;
+            if (encryptionPasswordSection) encryptionPasswordSection.classList.add('hidden');
+            if (encryptionPasswordInput) encryptionPasswordInput.value = '';
+            if (confirmEncryptionPasswordInput) confirmEncryptionPasswordInput.value = '';
         });
     }
 
@@ -1733,21 +1767,49 @@ function setupEventListeners() {
         pkModalConnect.addEventListener('click', async () => {
             const pk = privateKeyInput.value;
             const shouldSave = rememberCheckbox.checked;
+            let encryptionPassword = null;
+
+            if (shouldSave) {
+                const pwd1 = encryptionPasswordInput.value;
+                const pwd2 = confirmEncryptionPasswordInput.value;
+
+                if (!pwd1 || pwd1.length < 6) {
+                    UI.showToast('A senha deve ter pelo menos 6 caracteres', 'error');
+                    return;
+                }
+                if (pwd1 !== pwd2) {
+                    UI.showToast('As senhas não coincidem', 'error');
+                    return;
+                }
+                encryptionPassword = pwd1;
+            }
+
+            // Clear fields
             privateKeyInput.value = '';
             rememberCheckbox.checked = false;
-            await connectWithPrivateKey(pk, shouldSave);
+            if (encryptionPasswordSection) encryptionPasswordSection.classList.add('hidden');
+            if (encryptionPasswordInput) encryptionPasswordInput.value = '';
+            if (confirmEncryptionPasswordInput) confirmEncryptionPasswordInput.value = '';
+
+            await connectWithPrivateKey(pk, encryptionPassword);
         });
     }
 
-    // Allow Enter key to connect
+    // Allow Enter key to connect (from password confirm field when saving, or from private key field)
     if (privateKeyInput) {
         privateKeyInput.addEventListener('keydown', async (e) => {
-            if (e.key === 'Enter') {
+            if (e.key === 'Enter' && !rememberCheckbox.checked) {
                 const pk = privateKeyInput.value;
-                const shouldSave = rememberCheckbox.checked;
                 privateKeyInput.value = '';
-                rememberCheckbox.checked = false;
-                await connectWithPrivateKey(pk, shouldSave);
+                await connectWithPrivateKey(pk, null);
+            }
+        });
+    }
+
+    if (confirmEncryptionPasswordInput) {
+        confirmEncryptionPasswordInput.addEventListener('keydown', async (e) => {
+            if (e.key === 'Enter') {
+                pkModalConnect.click();
             }
         });
     }
@@ -1781,6 +1843,51 @@ function setupEventListeners() {
             }
         }
     });
+
+    // --- Unlock Wallet Modal Listeners ---
+    const unlockWalletModal = document.getElementById('unlockWalletModal');
+    const unlockPasswordInput = document.getElementById('unlockPassword');
+    const unlockConfirmBtn = document.getElementById('unlockConfirm');
+    const unlockCancelBtn = document.getElementById('unlockCancel');
+    const unlockForgetBtn = document.getElementById('unlockForget');
+
+    if (unlockConfirmBtn) {
+        unlockConfirmBtn.addEventListener('click', async () => {
+            const password = unlockPasswordInput.value;
+            if (!password) {
+                UI.showToast('Digite sua senha', 'error');
+                return;
+            }
+            unlockPasswordInput.value = '';
+            await unlockWallet(password);
+        });
+    }
+
+    if (unlockPasswordInput) {
+        unlockPasswordInput.addEventListener('keydown', async (e) => {
+            if (e.key === 'Enter') {
+                unlockConfirmBtn.click();
+            }
+        });
+    }
+
+    if (unlockCancelBtn) {
+        unlockCancelBtn.addEventListener('click', () => {
+            unlockWalletModal.classList.add('hidden');
+            unlockPasswordInput.value = '';
+            UI.setLoginModalState(true);
+        });
+    }
+
+    if (unlockForgetBtn) {
+        unlockForgetBtn.addEventListener('click', () => {
+            clearStoredPrivateKey();
+            unlockWalletModal.classList.add('hidden');
+            unlockPasswordInput.value = '';
+            UI.setLoginModalState(true);
+            UI.showToast('Chave armazenada foi removida', 'success');
+        });
+    }
 
     UI.searchInput.addEventListener('input', (e) => handleSearch(e.target.value));
     document.getElementById('load-more-operators-btn').addEventListener('click', (e) => handleLoadMoreOperators(e.target));
@@ -2000,17 +2107,15 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     });
     
-    // Check for stored private key and auto-connect
+    // Check for stored private key - show unlock modal
     const lastAuthMethod = sessionStorage.getItem('authMethod');
     if (lastAuthMethod === 'privateKey' && hasStoredPrivateKey()) {
-        try {
-            UI.loginModal.classList.remove('hidden');
-            const connected = await autoConnectWithStoredKey();
-            if (connected) {
-                return; // Successfully auto-connected
-            }
-        } catch (e) {
-            logger.error('Auto-connect failed:', e);
+        // Show unlock modal instead of auto-connecting
+        const unlockWalletModal = document.getElementById('unlockWalletModal');
+        if (unlockWalletModal) {
+            unlockWalletModal.classList.remove('hidden');
+            document.getElementById('unlockPassword')?.focus();
+            return;
         }
     }
     
