@@ -1,5 +1,10 @@
 {
   "rewrites": [
+    { "source": "/assets/(.*)", "destination": "/assets/$1" },
+    { "source": "/libs/(.*)", "destination": "/libs/$1" },
+    { "source": "/favicon/(.*)", "destination": "/favicon/$1" },
+    { "source": "/data/(.*)", "destination": "/data/$1" },
+    { "source": "/workers/(.*)", "destination": "/workers/$1" },
     { "source": "/(.*)", "destination": "/index.html" }
   ],
   "headers": [
