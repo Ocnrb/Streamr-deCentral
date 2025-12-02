@@ -1046,12 +1046,17 @@ export function getStreamrClient() {
 
 export async function setupDataPriceStream(onPriceUpdate) {
     dataPriceValueEl.textContent = 'Subscribing...';
+    const mobilePriceEl = document.getElementById('mobile-data-price');
+    if (mobilePriceEl) mobilePriceEl.textContent = '...';
+    
     try {
         if (priceSubscription) await priceSubscription.unsubscribe();
         priceSubscription = await streamrClient.subscribe(DATA_PRICE_STREAM_ID, (message) => {
             if (message && message.bestBid !== undefined) {
                 const price = parseFloat(message.bestBid);
-                dataPriceValueEl.textContent = `$${price.toFixed(4)}`;
+                const priceText = `$${price.toFixed(4)}`;
+                dataPriceValueEl.textContent = priceText;
+                if (mobilePriceEl) mobilePriceEl.textContent = priceText;
                 onPriceUpdate(price);
             }
         });
@@ -1059,6 +1064,7 @@ export async function setupDataPriceStream(onPriceUpdate) {
     } catch (error) {
         console.error("Error setting up DATA price stream:", error);
         dataPriceValueEl.textContent = 'Stream Error';
+        if (mobilePriceEl) mobilePriceEl.textContent = 'Error';
     }
 }
 

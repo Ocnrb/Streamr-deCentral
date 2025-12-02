@@ -4,6 +4,7 @@ import * as UI from './src/ui/ui.js';
 import * as Services from './src/core/services.js';
 import { Router } from './src/core/router.js';
 import * as Autostaker from './src/features/autostaker.js';
+import { navigationController } from './src/ui/navigation.js';
 
 // Lazy-loaded modules
 let RaceLogic = null;
@@ -228,8 +229,6 @@ let state = {
     uiState: {
         isStatsPanelExpanded: false,
         isDelegatorViewActive: true,
-        reputationViewIndex: 0,
-        walletViewIndex: 0,
         isSponsorshipsListViewActive: true,
         isChartUsdView: false, 
     },
@@ -266,8 +265,33 @@ async function initializeApp() {
             state.dataPriceUSD = price;
         });
         
+        // Hide login modal and show main UI
         UI.loginModal.classList.add('hidden');
         UI.mainContainer.classList.remove('hidden');
+        
+        // Show navigation elements after login (with proper responsive classes)
+        const sidebar = document.getElementById('app-sidebar');
+        const mobileHeader = document.getElementById('mobile-header');
+        const desktopHeader = document.getElementById('desktop-header');
+        const bottomNav = document.getElementById('bottom-nav');
+        
+        // Sidebar: hidden on mobile, flex on md+
+        if (sidebar) {
+            sidebar.className = 'hidden md:flex flex-col fixed left-0 top-0 h-full w-[72px] lg:w-72 bg-[#1A1A1A] border-r border-[#2a2a2a] z-40 transition-all duration-300';
+        }
+        // Mobile header: visible on mobile, hidden on md+
+        if (mobileHeader) {
+            mobileHeader.className = 'md:hidden fixed top-0 left-0 right-0 z-30 bg-[#121212]/95 backdrop-blur-md border-b border-[#2a2a2a]';
+        }
+        // Desktop header: hidden on mobile, block on md+
+        if (desktopHeader) {
+            desktopHeader.className = 'hidden md:block fixed top-0 right-0 z-30 bg-[#121212]/95 backdrop-blur-md border-b border-[#2a2a2a] transition-all duration-300';
+            desktopHeader.style.left = ''; // Let CSS control this
+        }
+        // Bottom nav: visible on mobile, hidden on md+
+        if (bottomNav) {
+            bottomNav.className = 'md:hidden fixed bottom-0 left-0 right-0 z-40 bg-[#1A1A1A]/95 backdrop-blur-md border-t border-[#2a2a2a] safe-area-bottom';
+        }
 
         // Initialize router and handle current route
         router.init();
@@ -311,7 +335,7 @@ async function connectWithWallet() {
             return;
         }
 
-        UI.updateWalletUI(state.myRealAddress);
+        navigationController.updateWallet(state.myRealAddress);
         setupWalletListeners();
         await initializeApp();
         sessionStorage.setItem('authMethod', 'metamask');
@@ -332,7 +356,7 @@ async function connectAsGuest() {
     UI.setLoginModalState('loading', 'guest');
     state.myRealAddress = '';
     state.signer = null;
-    UI.updateWalletUI(null); 
+    navigationController.updateWallet(null);
     sessionStorage.removeItem('authMethod');
     await initializeApp();
 }
@@ -377,7 +401,7 @@ async function connectWithPrivateKey(privateKey, encryptionPassword = null) {
             }
         }
         
-        UI.updateWalletUI(state.myRealAddress);
+        navigationController.updateWallet(state.myRealAddress);
         await initializeApp();
         sessionStorage.setItem('authMethod', 'privateKey');
         
@@ -390,6 +414,10 @@ async function connectWithPrivateKey(privateKey, encryptionPassword = null) {
     }
 }
 
+// Track failed unlock attempts
+const MAX_UNLOCK_ATTEMPTS = 5;
+let failedUnlockAttempts = 0;
+
 /**
  * Unlock wallet with stored encrypted private key
  * @param {string} password - User's unlock password
@@ -399,20 +427,68 @@ async function unlockWallet(password) {
     if (!hasStoredPrivateKey()) return false;
     
     const unlockModal = document.getElementById('unlockWalletModal');
+    const unlockError = document.getElementById('unlockError');
     
     try {
         const privateKey = await decryptPrivateKey(password);
         if (privateKey) {
-            // Hide unlock modal
+            // Success - reset counter and hide modal
+            failedUnlockAttempts = 0;
+            if (unlockError) unlockError.classList.add('hidden');
             if (unlockModal) unlockModal.classList.add('hidden');
             await connectWithPrivateKey(privateKey, null); // null = don't re-save
             return true;
         }
-        UI.showToast('Senha incorreta', 'error');
+        
+        // Failed attempt
+        failedUnlockAttempts++;
+        const remainingAttempts = MAX_UNLOCK_ATTEMPTS - failedUnlockAttempts;
+        
+        if (remainingAttempts <= 0) {
+            // Max attempts reached - clear stored key for security
+            clearStoredPrivateKey();
+            failedUnlockAttempts = 0;
+            if (unlockModal) unlockModal.classList.add('hidden');
+            UI.showToast({
+                type: 'error',
+                title: 'Wallet Forgotten',
+                message: 'Too many failed attempts. Stored key has been removed for security.',
+                duration: 8000
+            });
+            UI.setLoginModalState(true);
+            return false;
+        }
+        
+        // Show remaining attempts warning
+        if (unlockError) {
+            unlockError.textContent = `Incorrect password. ${remainingAttempts} attempt${remainingAttempts === 1 ? '' : 's'} remaining.`;
+            unlockError.classList.remove('hidden');
+        }
+        
         return false;
     } catch (e) {
         logger.error('Unlock failed:', e);
-        UI.showToast('Erro ao desbloquear: ' + e.message, 'error');
+        failedUnlockAttempts++;
+        const remainingAttempts = MAX_UNLOCK_ATTEMPTS - failedUnlockAttempts;
+        
+        if (remainingAttempts <= 0) {
+            clearStoredPrivateKey();
+            failedUnlockAttempts = 0;
+            if (unlockModal) unlockModal.classList.add('hidden');
+            UI.showToast({
+                type: 'error',
+                title: 'Wallet Forgotten',
+                message: 'Too many failed attempts. Stored key has been removed for security.',
+                duration: 8000
+            });
+            UI.setLoginModalState(true);
+            return false;
+        }
+        
+        if (unlockError) {
+            unlockError.textContent = `Error: ${e.message}. ${remainingAttempts} attempt${remainingAttempts === 1 ? '' : 's'} remaining.`;
+            unlockError.classList.remove('hidden');
+        }
         return false;
     }
 }
@@ -439,13 +515,19 @@ function logout(clearSavedKey = true) {
         clearStoredPrivateKey();
     }
     
-    // Hide dropdown
-    const dropdown = document.getElementById('wallet-dropdown');
-    if (dropdown) dropdown.classList.add('hidden');
+    // Hide sidebar wallet dropdown
+    const sidebarDropdown = document.getElementById('sidebar-wallet-dropdown');
+    if (sidebarDropdown) sidebarDropdown.classList.add('hidden');
     
     // Reload the page to reset everything
     window.location.reload();
 }
+
+// Expose logout globally for navigation controller
+window.handleLogout = () => logout(true);
+
+// Expose handleAutostakerClick globally for navigation controller
+window.handleAutostakerClick = handleAutostakerClick;
 
 // --- Data Fetching and Rendering Orchestration ---
 
@@ -479,6 +561,7 @@ async function fetchAndRenderOperatorDetails(operatorId) {
     if (state.detailsRefreshInterval) clearInterval(state.detailsRefreshInterval);
 
     state.currentOperatorId = operatorId.toLowerCase();
+    
     state.activeNodes.clear();
     state.unreachableNodes.clear();
     state.chartTimeFrame = 90;
@@ -502,6 +585,16 @@ async function refreshOperatorData(isFirstLoad = false, expectedTxHash = null) {
         state.currentDelegations = data.operator?.delegations || [];
         state.totalDelegatorCount = data.operator?.delegatorCount || 0;
         state.operatorDailyBuckets = data.operatorDailyBuckets || [];
+        
+        // Save operator ID for autostaker quick access - only if user is an agent
+        if (state.myRealAddress && data.operator?.controllers) {
+            const isAgent = data.operator.controllers.some(
+                agent => agent.toLowerCase() === state.myRealAddress.toLowerCase()
+            );
+            if (isAgent) {
+                localStorage.setItem('lastOperatorId', state.currentOperatorId);
+            }
+        }
         
         if (isFirstLoad) {
             let polygonscanTxs = [];
@@ -699,18 +792,6 @@ async function updateMyStakeUI() {
 
 function handleShowOperatorDetails(operatorId) {
     router.navigate(`/operator/${operatorId}`);
-}
-
-function handleShowRace() {
-    router.navigate('/race');
-}
-
-function handleBackToFromRace() {
-    router.navigate('/');
-}
-
-function handleShowVisual() {
-    router.navigate('/visual');
 }
 
 function handleBackFromVisual() {
@@ -1049,7 +1130,8 @@ let autostakerState = {
     intervalMinutes: 5,
     logs: [],
     operatorId: null,  
-    operatorSigner: null  
+    operatorSigner: null,
+    cachedOperatorData: null  // Cached operator data for quick access
 };
 
 // Add log entry to the autostaker
@@ -1119,23 +1201,86 @@ function clearAutostakerLogs() {
 }
 
 async function handleAutostakerClick() {
+    // Check if wallet is connected
     if (!state.signer) {
         UI.showToast({ type: 'warning', title: 'Wallet Required', message: 'Please connect your wallet.' });
         return;
     }
     
-    // For private key connections, we use RPC directly (already on Polygon)
-    // Only check network for MetaMask connections
-    if (sessionStorage.getItem('authMethod') !== 'privateKey') {
-        if (!await Services.checkAndSwitchNetwork()) return;
+    // Check if connected with private key (not MetaMask)
+    const isPrivateKeyConnection = sessionStorage.getItem('authMethod') === 'privateKey';
+    if (!isPrivateKeyConnection) {
+        UI.showToast({ 
+            type: 'warning', 
+            title: 'Private Key Required', 
+            message: 'Autostaker requires a private key connection, not MetaMask.' 
+        });
+        return;
+    }
+    
+    // Get operator ID - prioritize: running bot > saved operator > current view
+    let operatorId = autostakerState.operatorId || localStorage.getItem('lastOperatorId');
+    
+    if (!operatorId) {
+        UI.showToast({ 
+            type: 'info', 
+            title: 'Select Operator', 
+            message: 'Please open your operator page first to use the Autostaker.' 
+        });
+        return;
+    }
+    
+    // If we already have the autostaker running for this operator, just show the panel
+    if (autostakerState.operatorId === operatorId && autostakerState.cachedOperatorData) {
+        autostakerState.config = Autostaker.loadAutostakerConfig(operatorId);
+        UI.populateAutostakerSettings(autostakerState.config);
+        const timeUntil = Autostaker.getTimeUntilNextCollect(autostakerState.config);
+        UI.updateAutoCollectStatus(autostakerState.config, timeUntil);
+        updateBotStatusUI();
+        UI.showAutostakerModal();
+        return;
+    }
+    
+    // If we don't have operator data loaded for this operator, fetch it
+    let controllers;
+    try {
+        UI.showLoader(true);
+        const data = await Services.fetchOperatorDetails(operatorId);
+        controllers = data.operator?.controllers || [];
+        // Cache for autostaker use
+        autostakerState.cachedOperatorData = data.operator;
+    } catch (e) {
+        UI.showLoader(false);
+        UI.showToast({ 
+            type: 'error', 
+            title: 'Error', 
+            message: 'Failed to load operator data.' 
+        });
+        return;
+    } finally {
+        UI.showLoader(false);
+    }
+    
+    // Check if user is an agent for this operator
+    const isAgent = state.myRealAddress && controllers.some(
+        agent => agent.toLowerCase() === state.myRealAddress.toLowerCase()
+    );
+    
+    if (!isAgent) {
+        UI.showToast({ 
+            type: 'warning', 
+            title: 'Agent Required', 
+            message: 'You must be an agent for this operator to use the Autostaker.' 
+        });
+        return;
     }
 
     // Store operator info for global operation
-    autostakerState.operatorId = state.currentOperatorId;
+    autostakerState.operatorId = operatorId;
     autostakerState.operatorSigner = state.signer;
     
     // Load config and show modal
-    autostakerState.config = Autostaker.loadAutostakerConfig(state.currentOperatorId);
+    autostakerState.config = Autostaker.loadAutostakerConfig(operatorId);
     UI.populateAutostakerSettings(autostakerState.config);
     
     // Update auto-collect status display
@@ -1210,8 +1355,6 @@ function updateBotStatusUI() {
     const startBtn = document.getElementById('autostaker-start-bot');
     const panelStatus = document.getElementById('autostaker-panel-status');
     const globalIndicator = document.getElementById('autostaker-global-indicator');
-    const operatorBtn = document.getElementById('autostaker-btn');
-    const operatorBtnText = document.getElementById('autostaker-btn-text');
     
     if (statusText) {
         if (autostakerState.isRunning) {
@@ -1239,22 +1382,6 @@ function updateBotStatusUI() {
             globalIndicator.classList.remove('hidden');
         } else {
             globalIndicator.classList.add('hidden');
-        }
-    }
-    
-    // Operator page button - minimal style with green text/icon when active
-    // Only update styling if button is visible (preserve hidden state)
-    if (operatorBtn) {
-        const isHidden = operatorBtn.classList.contains('hidden');
-        const icon = operatorBtn.querySelector('svg');
-        if (autostakerState.isRunning && autostakerState.operatorId === state.currentOperatorId) {
-            operatorBtn.className = 'bg-[#1E1E1E] hover:bg-[#2a2a2a] border border-green-600/50 text-green-400 font-bold py-2 px-4 rounded-lg transition-colors flex items-center' + (isHidden ? ' hidden' : '');
-            if (operatorBtnText) operatorBtnText.textContent = 'Autostaker';
-            if (icon) icon.setAttribute('class', 'h-5 w-5 mr-2 text-green-400');
-        } else {
-            operatorBtn.className = 'bg-[#1E1E1E] hover:bg-[#2a2a2a] border border-[#333333] text-gray-300 font-bold py-2 px-4 rounded-lg transition-colors flex items-center' + (isHidden ? ' hidden' : '');
-            if (operatorBtnText) operatorBtnText.textContent = 'Autostaker';
-            if (icon) icon.setAttribute('class', 'h-5 w-5 mr-2');
         }
     }
     
@@ -1540,12 +1667,6 @@ function toggleAutostakerBot() {
 }
 
 function setupAutostakerListeners() {
-    // Autostaker button
-    const autostakerBtn = document.getElementById('autostaker-btn');
-    if (autostakerBtn) {
-        autostakerBtn.addEventListener('click', handleAutostakerClick);
-    }
-    
     // Modal close (doesn't stop the bot, just hides panel)
     const closeBtn = document.getElementById('autostaker-modal-close');
     if (closeBtn) {
@@ -1627,6 +1748,9 @@ function setupOperatorStream() {
 // --- Router Setup ---
 function setupRouter() {
     router = new Router();
+    
+    // Make router available globally for navigation controller
+    window.router = router;
 
     // Home route - operators list
     router.addRoute('/', async () => {
@@ -1636,6 +1760,8 @@ function setupRouter() {
         if (VisualLogic) VisualLogic.stop();
         
         UI.displayView('list');
+        navigationController.updateActiveState('operators');
+        navigationController.updatePageTitle('operators');
         state.loadedOperatorCount = 0;
         fetchAndRenderOperatorsList(false, 0, state.searchQuery);
     });
@@ -1646,9 +1772,10 @@ function setupRouter() {
         if (VisualLogic) VisualLogic.stop();
         
         UI.displayView('detail');
-        state.uiState.reputationViewIndex = 0;
-        state.uiState.walletViewIndex = 0;
+        navigationController.updateActiveState('operators');
+        navigationController.updatePageTitle('operators', 'Operator Details');
         state.uiState.isSponsorshipsListViewActive = true;
+        state.uiState.isDelegatorViewActive = true;
         fetchAndRenderOperatorDetails(params.id);
     });
 
@@ -1659,6 +1786,8 @@ function setupRouter() {
         if (VisualLogic) VisualLogic.stop();
         
         UI.displayView('race');
+        navigationController.updateActiveState('race');
+        navigationController.updatePageTitle('race');
         
         try {
             const raceModule = await loadRaceModule();
@@ -1676,6 +1805,10 @@ function setupRouter() {
         if (RaceLogic) RaceLogic.stop();
         
         UI.displayView('visual');
+        navigationController.updateActiveState('visual');
+        navigationController.updatePageTitle('visual');
+        // Hide navigation in visual view (full screen)
+        navigationController.setNavigationVisibility(false);
         
         try {
             const visualModule = await loadVisualModule();
@@ -1814,36 +1947,6 @@ function setupEventListeners() {
         });
     }
 
-    // --- Wallet Dropdown & Logout ---
-    const walletDropdown = document.getElementById('wallet-dropdown');
-    const logoutBtn = document.getElementById('logout-btn');
-
-    UI.walletInfoEl.addEventListener('click', (e) => {
-        if (!state.myRealAddress) {
-            connectWithWallet();
-        } else {
-            // Toggle dropdown when wallet is connected
-            e.stopPropagation();
-            walletDropdown.classList.toggle('hidden');
-        }
-    });
-
-    if (logoutBtn) {
-        logoutBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            logout(true);
-        });
-    }
-
-    // Close dropdown when clicking outside
-    document.addEventListener('click', (e) => {
-        if (walletDropdown && !walletDropdown.classList.contains('hidden')) {
-            if (!e.target.closest('#wallet-info') && !e.target.closest('#wallet-dropdown')) {
-                walletDropdown.classList.add('hidden');
-            }
-        }
-    });
-
     // --- Unlock Wallet Modal Listeners ---
     const unlockWalletModal = document.getElementById('unlockWalletModal');
     const unlockPasswordInput = document.getElementById('unlockPassword');
@@ -1875,6 +1978,9 @@ function setupEventListeners() {
         unlockCancelBtn.addEventListener('click', () => {
             unlockWalletModal.classList.add('hidden');
             unlockPasswordInput.value = '';
+            // Reset error message but keep attempt counter (security)
+            const unlockError = document.getElementById('unlockError');
+            if (unlockError) unlockError.classList.add('hidden');
             UI.setLoginModalState(true);
         });
     }
@@ -1882,39 +1988,20 @@ function setupEventListeners() {
     if (unlockForgetBtn) {
         unlockForgetBtn.addEventListener('click', () => {
             clearStoredPrivateKey();
+            failedUnlockAttempts = 0; // Reset counter when intentionally forgetting
             unlockWalletModal.classList.add('hidden');
             unlockPasswordInput.value = '';
+            const unlockError = document.getElementById('unlockError');
+            if (unlockError) unlockError.classList.add('hidden');
             UI.setLoginModalState(true);
-            UI.showToast('Chave armazenada foi removida', 'success');
+            UI.showToast({ type: 'success', title: 'Wallet Forgotten', message: 'Stored key has been removed.' });
         });
     }
 
     UI.searchInput.addEventListener('input', (e) => handleSearch(e.target.value));
     document.getElementById('load-more-operators-btn').addEventListener('click', (e) => handleLoadMoreOperators(e.target));
-    
-    document.getElementById('back-to-list-btn').addEventListener('click', () => {
-        // Hide autostaker panel but don't stop the bot
-        UI.hideAutostakerModal();
-        router.navigate('/');
-    });
-
-    // --- RACE LISTENERS ---
-    const raceBtn = document.getElementById('race-view-btn');
-    if (raceBtn) {
-        raceBtn.addEventListener('click', handleShowRace);
-    }
-
-    const raceBackBtn = document.getElementById('race-back-to-list-btn');
-    if (raceBackBtn) {
-        raceBackBtn.addEventListener('click', handleBackToFromRace);
-    }
 
     // --- VISUAL VIEW LISTENERS ---
-    const visualBtn = document.getElementById('visual-view-btn');
-    if (visualBtn) {
-        visualBtn.addEventListener('click', handleShowVisual);
-    }
-
     const visualBackBtn = document.getElementById('vis-btn-back');
     if (visualBackBtn) {
         visualBackBtn.addEventListener('click', handleBackFromVisual);
@@ -1925,12 +2012,15 @@ function setupEventListeners() {
     document.getElementById('stake-modal-cancel').addEventListener('click', () => UI.stakeModal.classList.add('hidden'));
     document.getElementById('operator-settings-modal-cancel').addEventListener('click', () => UI.operatorSettingsModal.classList.add('hidden'));
     
-    // Settings
-    document.getElementById('settings-btn').addEventListener('click', () => {
+    // Settings - both desktop header and sidebar buttons
+    const openSettings = () => {
         UI.theGraphApiKeyInput.value = localStorage.getItem('the-graph-api-key') || '';
         document.getElementById('etherscan-api-key-input').value = localStorage.getItem('etherscan-api-key') || '';
         UI.settingsModal.classList.remove('hidden');
-    });
+    };
+    
+    document.getElementById('sidebar-settings-btn')?.addEventListener('click', openSettings);
+    
     document.getElementById('settings-cancel-btn').addEventListener('click', () => UI.settingsModal.classList.add('hidden'));
     document.getElementById('settings-save-btn').addEventListener('click', () => {
         const newGraphKey = UI.theGraphApiKeyInput.value.trim();
@@ -1974,20 +2064,101 @@ function setupEventListeners() {
         if (target.id === 'edit-operator-settings-btn') handleEditOperatorSettingsClick();
         
         if (target.closest('#toggle-stats-btn')) UI.toggleStatsPanel(false, state.uiState);
-        if (target.id === 'toggle-delegator-view-btn') {
-            UI.toggleDelegatorQueueView(state.currentOperatorData, state.uiState);
-            if(state.uiState.isDelegatorViewActive) {
+        
+        // Delegator Pills Tabs
+        const delegatorTab = target.closest('#delegator-tabs button');
+        if (delegatorTab) {
+            const tab = delegatorTab.dataset.tab;
+            const tabs = document.querySelectorAll('#delegator-tabs button');
+            tabs.forEach(t => {
+                t.classList.remove('bg-blue-800', 'text-white');
+                t.classList.add('text-gray-400');
+            });
+            delegatorTab.classList.add('bg-blue-800', 'text-white');
+            delegatorTab.classList.remove('text-gray-400');
+            
+            document.getElementById('delegators-content').classList.toggle('hidden', tab !== 'delegators');
+            document.getElementById('queue-content').classList.toggle('hidden', tab !== 'queue');
+            state.uiState.isDelegatorViewActive = (tab === 'delegators');
+            if (tab === 'delegators') {
                 UI.updateDelegatorsSection(state.currentDelegations, state.totalDelegatorCount);
             }
         }
-        if (target.id === 'toggle-reputation-view-btn') UI.toggleReputationView(false, state.uiState);
-        if (target.id === 'toggle-wallets-view-btn') UI.toggleWalletsView(false, state.uiState);
-        if (target.id === 'toggle-sponsorship-view-btn') {
-            UI.toggleSponsorshipsView(state.uiState, state.currentOperatorData);
-            if (!state.uiState.isSponsorshipsListViewActive) {
-                 UI.renderSponsorshipsHistory(state.sponsorshipHistory);
+        
+        // Sponsorship Pills Tabs
+        const sponsorshipTab = target.closest('#sponsorship-tabs button');
+        if (sponsorshipTab) {
+            const tab = sponsorshipTab.dataset.tab;
+            const tabs = document.querySelectorAll('#sponsorship-tabs button');
+            tabs.forEach(t => {
+                t.classList.remove('bg-blue-800', 'text-white');
+                t.classList.add('text-gray-400');
+            });
+            sponsorshipTab.classList.add('bg-blue-800', 'text-white');
+            sponsorshipTab.classList.remove('text-gray-400');
+            
+            document.getElementById('sponsorships-list-content').classList.toggle('hidden', tab !== 'list');
+            document.getElementById('sponsorships-history-content').classList.toggle('hidden', tab !== 'history');
+            state.uiState.isSponsorshipsListViewActive = (tab === 'list');
+            if (tab === 'history') {
+                UI.renderSponsorshipsHistory(state.sponsorshipHistory);
             }
         }
+        
+        // Wallets Pills Tabs
+        const walletsTab = target.closest('#wallets-tabs button');
+        if (walletsTab) {
+            const tab = walletsTab.dataset.tab;
+            const tabs = document.querySelectorAll('#wallets-tabs button');
+            tabs.forEach(t => {
+                t.classList.remove('bg-blue-800', 'text-white');
+                t.classList.add('text-gray-400');
+            });
+            walletsTab.classList.add('bg-blue-800', 'text-white');
+            walletsTab.classList.remove('text-gray-400');
+            
+            document.getElementById('agents-content').classList.toggle('hidden', tab !== 'agents');
+            document.getElementById('nodes-content').classList.toggle('hidden', tab !== 'nodes');
+        }
+        
+        // Reputation Dropdown Toggle
+        if (target.closest('#reputation-dropdown-btn')) {
+            const menu = document.getElementById('reputation-dropdown-menu');
+            menu.classList.toggle('hidden');
+        }
+        
+        // Reputation Dropdown Options
+        const reputationOption = target.closest('#reputation-dropdown-menu button');
+        if (reputationOption) {
+            const view = reputationOption.dataset.view;
+            const wrapper = document.getElementById('reputation-content-wrapper');
+            const { slashesCount, flagsAgainstCount, flagsByCount } = wrapper.dataset;
+            
+            // Update dropdown button text
+            const texts = {
+                'slashing': `Slashing Events (${slashesCount})`,
+                'flags-against': `Flags Against (${flagsAgainstCount})`,
+                'flags-by': `Flags Initiated (${flagsByCount})`
+            };
+            document.getElementById('reputation-dropdown-text').textContent = texts[view];
+            
+            // Update menu item styles
+            document.querySelectorAll('#reputation-dropdown-menu button').forEach(btn => {
+                btn.classList.remove('bg-blue-800/30', 'text-white');
+                btn.classList.add('text-gray-300');
+            });
+            reputationOption.classList.add('bg-blue-800/30', 'text-white');
+            reputationOption.classList.remove('text-gray-300');
+            
+            // Show/hide content
+            document.getElementById('slashing-content').classList.toggle('hidden', view !== 'slashing');
+            document.getElementById('flags-against-content').classList.toggle('hidden', view !== 'flags-against');
+            document.getElementById('flags-by-content').classList.toggle('hidden', view !== 'flags-by');
+            
+            // Close dropdown
+            document.getElementById('reputation-dropdown-menu').classList.add('hidden');
+        }
+        
         if (target.closest('.toggle-vote-list-btn')) UI.toggleVoteList(target.closest('.toggle-vote-list-btn').dataset.flagId);
 
         // Chart Timeframe

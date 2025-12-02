@@ -16,7 +16,6 @@ export const raceView = document.getElementById('race-view');
 export const visualView = document.getElementById('visual-view'); 
 export const customTooltip = document.getElementById('custom-tooltip');
 export const loaderOverlay = document.getElementById('loader-overlay');
-export const walletInfoEl = document.getElementById('wallet-info');
 export const dataPriceValueEl = document.getElementById('data-price-value');
 export const transactionModal = document.getElementById('transactionModal');
 export const stakeModal = document.getElementById('stakeModal');
@@ -331,28 +330,20 @@ export function hidePrivateKeyModal() {
     }
 }
 
-export function updateWalletUI(address) {
-    if (address) {
-        walletInfoEl.innerHTML = `
-            <svg class="w-5 h-5 text-green-400" fill="currentColor" viewBox="0 0 20 20">
-                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
-            </svg>
-            <span>${address.substring(0, 6)}...${address.substring(address.length - 4)}</span>`;
-        walletInfoEl.className = 'bg-[#1E1E1E] border border-[#333333] text-white p-3 rounded-lg shadow-lg text-sm flex items-center gap-2';
-    } else {
-        walletInfoEl.innerHTML = `
-            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"></path></svg>`;
-        walletInfoEl.className = 'bg-[#1E1E1E] border border-[#333333] text-gray-400 hover:text-white p-3 rounded-lg shadow-lg text-sm flex items-center justify-center cursor-pointer transition-colors';
-    }
-    walletInfoEl.classList.remove('hidden'); 
-}
-
 export function displayView(view) {
     // Hide all views first
     operatorListView.style.display = 'none';
     operatorDetailView.style.display = 'none';
     if (raceView) raceView.style.display = 'none';
     if (visualView) visualView.style.display = 'none';
+
+    // Show/hide navigation based on view (visual is fullscreen)
+    const bottomNav = document.getElementById('bottom-nav');
+    const mobileHeader = document.getElementById('mobile-header');
+    const isFullscreenView = view === 'visual';
+    
+    if (bottomNav) bottomNav.style.display = isFullscreenView ? 'none' : '';
+    if (mobileHeader) mobileHeader.style.display = isFullscreenView ? 'none' : '';
 
     if (view === 'list') {
         operatorListView.style.display = 'block';
@@ -502,15 +493,15 @@ function createOperatorCardHtml(op) {
     const apyColorClass = roundedApy === 0 ? 'text-red-400' : 'text-green-400';
 
     return `
-     <div class="bg-[#1E1E1E] p-5 rounded-xl border border-[#333333] card flex flex-col items-center text-center" data-operator-id="${op.id}">
-         <img src="${imageUrl || placeholderUrl}" loading="lazy" onerror="this.src='${placeholderUrl}'; this.onerror=null;" alt="Operator Avatar" class="w-16 h-16 rounded-full border-2 border-[#333333] object-cover mb-4" ${description ? `data-tooltip-content="${escapeHtml(description)}"` : ''}>
+     <div class="operator-card bg-[#1E1E1E] p-5 rounded-xl border border-[#333333] card flex flex-col items-center text-center" data-operator-id="${op.id}">
+         <img src="${imageUrl || placeholderUrl}" loading="lazy" onerror="this.src='${placeholderUrl}'; this.onerror=null;" alt="Operator Avatar" class="avatar-container w-16 h-16 rounded-full border-2 border-[#333333] object-cover mb-4" ${description ? `data-tooltip-content="${escapeHtml(description)}"` : ''}>
          <div class="w-full">
-             <h3 class="font-bold text-lg text-white truncate" title="${safeOperatorName}">${safeOperatorName}</h3>
+             <h3 class="operator-name font-bold text-lg text-white truncate" title="${safeOperatorName}">${safeOperatorName}</h3>
              ${name ? `<div class="font-mono text-xs text-gray-500 truncate mt-1">${createAddressLink(op.id)}</div>` : ''}
          </div>
-         <div class="mt-4 pt-4 border-t border-[#333333] w-full text-left space-y-2 text-sm">
+         <div class="metrics-row mt-4 pt-4 border-t border-[#333333] w-full text-left space-y-2 text-sm">
              <p><strong class="text-gray-400">APY:</strong> <span class="font-mono ${apyColorClass}" data-tooltip-content="Sponsorships: ${sponsorshipsCount}">${roundedApy}%</span></p>
-             <div><strong class="text-gray-400">Total Staked:</strong> <span class="font-mono text-white block" data-tooltip-value="${totalStakedData}">${formatBigNumber(totalStakedData)} DATA</span></div>
+             <div><strong class="text-gray-400">Stake:</strong> <span class="font-mono text-white block" data-tooltip-value="${totalStakedData}">${formatBigNumber(totalStakedData)} DATA</span></div>
              <p><strong class="text-gray-400">Delegators:</strong> <span class="font-mono text-white">${op.delegatorCount > 0 ? op.delegatorCount - 1 : 0}</span></p>
          </div>
      </div>`;
@@ -559,7 +550,7 @@ export function updateDelegatorsSection(delegations, totalDelegatorCount) {
 
     footerEl.innerHTML = '';
     if (delegations.length < (totalDelegatorCount - 1)) {
-        footerEl.innerHTML = `<button id="load-more-delegators-btn" class="w-full bg-[#2C2C2C] hover:bg-[#3A3A3A] text-white font-bold py-2 px-4 rounded-lg transition-colors flex items-center justify-center">Load More</button>`;
+        footerEl.innerHTML = `<div class="flex justify-center"><button id="load-more-delegators-btn" class="bg-[#2C2C2C] hover:bg-[#3A3A3A] text-white font-medium py-2.5 px-8 rounded-lg transition-colors text-sm">Load More</button></div>`;
     }
 }
 
@@ -879,31 +870,30 @@ export function renderOperatorDetails(data, globalState) {
     ` : '';
 
     const headerStatsHtml = `
-        <div class="detail-section px-6 pt-6 pb-2">
-            <div class="flex items-center gap-6">
-                <img src="${imageUrl || placeholderUrl}" loading="lazy" onerror="this.src='${placeholderUrl}';" alt="Operator Avatar" class="w-20 h-20 rounded-full border-2 border-[#333333] flex-shrink-0 object-cover" ${description ? `data-tooltip-content="${escapeHtml(description)}"` : ''}>
+        <div class="detail-section px-4 sm:px-6 pt-4 sm:pt-6 pb-2">
+            <div class="flex items-start gap-4 sm:gap-6">
+                <img src="${imageUrl || placeholderUrl}" loading="lazy" onerror="this.src='${placeholderUrl}';" alt="Operator Avatar" class="w-14 h-14 sm:w-20 sm:h-20 rounded-full border-2 border-[#333333] flex-shrink-0 object-cover" ${description ? `data-tooltip-content="${escapeHtml(description)}"` : ''}>
                 <div class="flex-1 min-w-0">
-                    <div class="flex items-start md:items-center justify-between flex-col md:flex-row gap-4">
-                        <div class="min-w-0">
-                            <h2 class="text-3xl font-bold text-white break-words" ${description ? `data-tooltip-content="${escapeHtml(description)}"` : ''}>${safeOperatorName}</h2>
-                            ${name ? `<div class="font-mono text-sm text-gray-400 mt-1 break-words">${createAddressLink(op.id)}</div>` : ''}
-                        </div>
-                        <div class="flex-shrink-0 text-right"><p class="text-sm text-gray-400 font-semibold mb-1">APY</p><p class="text-4xl font-extrabold text-green-400 whitespace-nowrap mb-4">${Math.round(apy * 100)}%</p></div>
-                    </div>
+                    <h2 class="text-lg sm:text-2xl lg:text-3xl font-bold text-white break-words" ${description ? `data-tooltip-content="${escapeHtml(description)}"` : ''}>${safeOperatorName}</h2>
+                    ${name ? `<div class="font-mono text-xs sm:text-sm text-gray-400 mt-1 break-all">${createAddressLink(op.id)}</div>` : ''}
+                </div>
+                <div class="flex-shrink-0 text-right">
+                    <p class="text-xs sm:text-sm text-gray-400 font-semibold mb-1">APY</p>
+                    <p class="text-2xl sm:text-3xl lg:text-4xl font-extrabold text-green-400 whitespace-nowrap">${Math.round(apy * 100)}%</p>
                 </div>
             </div>
-            <div class="grid grid-cols-2 md:grid-cols-4 gap-6 mt-6">
-                <div><p class="text-sm text-gray-400">Stake (DATA)</p><p id="header-stat-stake" class="text-2xl font-semibold text-white"></p></div>
-                <div><p class="text-sm text-gray-400">Total Earnings (DATA)</p><p id="header-stat-earnings" class="text-2xl font-semibold text-white"></p></div>
-                <div><p class="text-sm text-gray-400">% Owner's Cut</p><p id="header-stat-cut" class="text-2xl font-semibold text-white"></p></div>
-                <div><p class="text-sm text-gray-400">Nodes</p><p id="active-nodes-stats-value" class="text-2xl font-semibold text-white">0</p></div>
+            <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6 mt-4 sm:mt-6">
+                <div><p class="text-xs sm:text-sm text-gray-400">Stake (DATA)</p><p id="header-stat-stake" class="text-lg sm:text-2xl font-semibold text-white"></p></div>
+                <div><p class="text-xs sm:text-sm text-gray-400">Total Earnings (DATA)</p><p id="header-stat-earnings" class="text-lg sm:text-2xl font-semibold text-white"></p></div>
+                <div><p class="text-xs sm:text-sm text-gray-400">% Owner's Cut</p><p id="header-stat-cut" class="text-lg sm:text-2xl font-semibold text-white"></p></div>
+                <div><p class="text-xs sm:text-sm text-gray-400">Nodes</p><p id="active-nodes-stats-value" class="text-lg sm:text-2xl font-semibold text-white">0</p></div>
             </div>
-            <div id="extended-stats" class="hidden mt-6">
-                <div class="grid grid-cols-2 md:grid-cols-4 gap-6">
-                    <div><p class="text-sm text-gray-400">Total Distributed (DATA)</p><p id="extended-stat-distributed" class="text-2xl font-semibold text-white"></p></div>
-                    <div><p class="text-sm text-gray-400">Owner's Earnings from Cut (DATA)</p><p id="extended-stat-owner-cut" class="text-2xl font-semibold text-white"></p></div>
-                    <div><p class="text-sm text-gray-400">Deployed Stake (DATA)</p><p id="extended-stat-deployed" class="text-2xl font-semibold text-white"></p></div>
-                    <div><p class="text-sm text-gray-400">% Owner's Stake</p><p id="extended-stat-owner-stake" class="text-2xl font-semibold text-white"></p></div>
+            <div id="extended-stats" class="hidden mt-4 sm:mt-6">
+                <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6">
+                    <div><p class="text-xs sm:text-sm text-gray-400">Total Distributed (DATA)</p><p id="extended-stat-distributed" class="text-lg sm:text-2xl font-semibold text-white"></p></div>
+                    <div><p class="text-xs sm:text-sm text-gray-400">Owner's Earnings from Cut (DATA)</p><p id="extended-stat-owner-cut" class="text-lg sm:text-2xl font-semibold text-white"></p></div>
+                    <div><p class="text-xs sm:text-sm text-gray-400">Deployed Stake (DATA)</p><p id="extended-stat-deployed" class="text-lg sm:text-2xl font-semibold text-white"></p></div>
+                    <div><p class="text-xs sm:text-sm text-gray-400">% Owner's Stake</p><p id="extended-stat-owner-stake" class="text-lg sm:text-2xl font-semibold text-white"></p></div>
                 </div>
             </div>
             <div class="mt-4 text-center"><button id="toggle-stats-btn" class="text-gray-400 hover:text-white transition"><svg id="stats-arrow" class="w-6 h-6 mx-auto transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19 9l-7 7-7-7"></path></svg></button></div>
@@ -930,22 +920,18 @@ export function renderOperatorDetails(data, globalState) {
             </div>
         </div>
 
-        <div id="my-stake-section" class="detail-section p-6 hidden">
-             <h3 class="text-xl font-semibold text-white mb-4">Your Stake</h3>
-             <div class="flex items-center justify-between">
-                 <div><p class="text-3xl font-semibold text-white" id="my-stake-value" data-tooltip-value="0">Loading...</p></div>
-                 <div class="flex gap-4">
-                     <button id="delegate-btn" class="bg-blue-800 hover:bg-blue-900 text-white font-bold py-2 px-6 rounded-lg transition-colors">Delegate</button>
-                     <button id="undelegate-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-lg transition-colors">Undelegate</button>
+        <div id="my-stake-section" class="detail-section p-4 sm:p-6 hidden">
+             <h3 class="text-lg sm:text-xl font-semibold text-white mb-4">Your Stake</h3>
+             <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                 <div><p class="text-2xl sm:text-3xl font-semibold text-white" id="my-stake-value" data-tooltip-value="0">Loading...</p></div>
+                 <div class="flex gap-2 sm:gap-4">
+                     <button id="delegate-btn" class="flex-1 sm:flex-none bg-blue-800 hover:bg-blue-900 text-white font-bold py-2.5 px-4 sm:px-6 rounded-lg transition-colors text-sm sm:text-base">Delegate</button>
+                     <button id="undelegate-btn" class="flex-1 sm:flex-none bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-4 sm:px-6 rounded-lg transition-colors text-sm sm:text-base">Undelegate</button>
                  </div>
              </div>
         </div>`;
 
     const isAgent = globalState.myRealAddress && op.controllers?.some(agent => agent.toLowerCase() === globalState.myRealAddress.toLowerCase());
-
-    // Show/hide Autostaker button - only for private key connections when user is an agent of this operator
-    const isPrivateKeyConnection = sessionStorage.getItem('authMethod') === 'privateKey';
-    showAutostakerButton(isAgent && isPrivateKeyConnection);
 
     const sponsorshipsHtml = op.stakes?.length > 0 ? op.stakes.map(stake => {
         const sp = stake.sponsorship;
@@ -1061,14 +1047,18 @@ export function renderOperatorDetails(data, globalState) {
 
     const listsHtml = `
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mt-8">
-            <div class="detail-section p-6">
-                <div class="flex justify-between items-center mb-4">
-                    <h3 id="delegator-queue-title" class="text-xl font-semibold text-white">Delegators</h3>
-                    <button id="toggle-delegator-view-btn" title="Switch View" class="text-gray-400 hover:text-white p-1">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                          <path stroke-linecap="round" stroke-linejoin="round" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M5 7h14" />
-                        </svg>
-                    </button>
+            <!-- Delegators Card with Pills -->
+            <div class="detail-section p-4 sm:p-6">
+                <div class="flex items-center justify-between gap-3 mb-4">
+                    <h3 class="text-lg sm:text-xl font-semibold text-white">Delegations</h3>
+                    <div id="delegator-tabs" class="flex bg-[#2C2C2C] p-1 rounded-lg flex-shrink-0">
+                        <button data-tab="delegators" class="px-3 py-1.5 text-xs font-medium rounded-md bg-blue-800 text-white transition-colors">
+                            Delegators <span class="opacity-70">(${op.delegatorCount > 0 ? op.delegatorCount - 1 : 0})</span>
+                        </button>
+                        <button data-tab="queue" class="px-3 py-1.5 text-xs font-medium rounded-md text-gray-400 hover:text-white transition-colors">
+                            Queue <span class="opacity-70">(${op.queueEntries?.length || 0})</span>
+                        </button>
+                    </div>
                 </div>
                 <div id="delegators-content"><ul id="delegators-list" class="max-h-96 overflow-y-auto pr-2"></ul><div id="delegators-footer" class="mt-4"></div></div>
                 <div id="queue-content" class="hidden">
@@ -1076,35 +1066,52 @@ export function renderOperatorDetails(data, globalState) {
                     <ul class="max-h-96 overflow-y-auto pr-2">${queueHtml}</ul>
                 </div>
             </div>
-            <div class="detail-section p-6">
-                <div class="flex justify-between items-center mb-4">
-                    <h3 id="sponsorships-title" class="text-xl font-semibold text-white">Sponsorships (${op.stakes?.length || 0})</h3>
-                    <div class="flex items-center gap-2">
-                        <button id="toggle-sponsorship-view-btn" title="Switch View" class="text-gray-400 hover:text-white p-1">
-                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                              <path stroke-linecap="round" stroke-linejoin="round" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M5 7h14" />
-                            </svg>
+
+            <!-- Sponsorships Card with Pills -->
+            <div class="detail-section p-4 sm:p-6">
+                <div class="flex items-center justify-between gap-3 mb-4">
+                    <h3 class="text-lg sm:text-xl font-semibold text-white">Sponsorships</h3>
+                    <div id="sponsorship-tabs" class="flex bg-[#2C2C2C] p-1 rounded-lg flex-shrink-0">
+                        <button data-tab="list" class="px-3 py-1.5 text-xs font-medium rounded-md bg-blue-800 text-white transition-colors">
+                            Active <span class="opacity-70">(${op.stakes?.length || 0})</span>
+                        </button>
+                        <button data-tab="history" class="px-3 py-1.5 text-xs font-medium rounded-md text-gray-400 hover:text-white transition-colors">
+                            History
                         </button>
                     </div>
                 </div>
                 <div id="sponsorships-list-content">
                     <ul class="max-h-96 overflow-y-auto pr-2">${sponsorshipsHtml}</ul>
-                    <div class="mt-4">
-                        ${op.stakes?.length > 0 ? `<button id="collect-all-earnings-btn" class="w-full bg-blue-800 hover:bg-blue-900 text-white font-bold py-2 px-4 rounded-lg text-sm">Collect All</button>` : ''}
+                    <div class="mt-4 flex justify-center">
+                        ${op.stakes?.length > 0 ? `<button id="collect-all-earnings-btn" class="bg-blue-800 hover:bg-blue-900 text-white font-medium py-2.5 px-8 rounded-lg text-sm">Collect All</button>` : ''}
                     </div>
                 </div>
                 <div id="sponsorships-history-content" class="hidden">
                     <ul id="sponsorships-history-list" class="max-h-96 overflow-y-auto pr-2"></ul>
                 </div>
             </div>
-            <div class="detail-section p-6 lg:col-span-2">
-                <div class="flex justify-between items-center mb-4">
-                    <h3 id="reputation-title" class="text-xl font-semibold text-white">Slashing Events</h3>
-                    <button id="toggle-reputation-view-btn" title="Switch View" class="text-gray-400 hover:text-white p-1">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                          <path stroke-linecap="round" stroke-linejoin="round" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M5 7h14" />
-                        </svg>
-                    </button>
+
+            <!-- Reputation Card with Dropdown -->
+            <div class="detail-section p-4 sm:p-6 lg:col-span-2">
+                <div class="flex items-center justify-between gap-3 mb-4">
+                    <h3 class="text-lg sm:text-xl font-semibold text-white">Reputation</h3>
+                    <div class="relative flex-shrink-0">
+                        <button id="reputation-dropdown-btn" class="flex items-center gap-2 bg-[#2C2C2C] px-3 py-1.5 rounded-lg text-xs font-medium text-white hover:bg-[#3C3C3C] transition-colors min-w-[160px] justify-between">
+                            <span id="reputation-dropdown-text">Slashing Events (${slashingEvents.length})</span>
+                            <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                        </button>
+                        <div id="reputation-dropdown-menu" class="hidden absolute right-0 mt-1 w-48 bg-[#2C2C2C] border border-[#444444] rounded-lg shadow-xl z-20 overflow-hidden">
+                            <button data-view="slashing" class="w-full px-3 py-2 text-left text-xs text-white hover:bg-[#3C3C3C] transition-colors bg-blue-800/30">
+                                Slashing Events <span class="opacity-70">(${slashingEvents.length})</span>
+                            </button>
+                            <button data-view="flags-against" class="w-full px-3 py-2 text-left text-xs text-gray-300 hover:bg-[#3C3C3C] transition-colors">
+                                Flags Against <span class="opacity-70">(${flagsAgainst?.length || 0})</span>
+                            </button>
+                            <button data-view="flags-by" class="w-full px-3 py-2 text-left text-xs text-gray-300 hover:bg-[#3C3C3C] transition-colors">
+                                Flags Initiated <span class="opacity-70">(${flagsAsFlagger?.length || 0})</span>
+                            </button>
+                        </div>
+                    </div>
                 </div>
                 <div id="reputation-content-wrapper" 
                     data-slashes-count="${slashingEvents.length}" 
@@ -1115,14 +1122,19 @@ export function renderOperatorDetails(data, globalState) {
                     <div id="flags-by-content" class="hidden"><ul class="max-h-96 overflow-y-auto pr-2">${flagsByHtml}</ul></div>
                 </div>
             </div>
-            <div class="detail-section p-6 lg:col-span-2">
-                <div class="flex justify-between items-center mb-4">
-                    <h3 id="wallets-title" class="text-xl font-semibold text-white">Agents</h3>
-                    <button id="toggle-wallets-view-btn" title="Switch View" class="text-gray-400 hover:text-white p-1">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                          <path stroke-linecap="round" stroke-linejoin="round" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M5 7h14" />
-                        </svg>
-                    </button>
+
+            <!-- Wallets Card with Pills -->
+            <div class="detail-section p-4 sm:p-6 lg:col-span-2">
+                <div class="flex items-center justify-between gap-3 mb-4">
+                    <h3 class="text-lg sm:text-xl font-semibold text-white">Wallets</h3>
+                    <div id="wallets-tabs" class="flex bg-[#2C2C2C] p-1 rounded-lg flex-shrink-0">
+                        <button data-tab="agents" class="px-3 py-1.5 text-xs font-medium rounded-md bg-blue-800 text-white transition-colors">
+                            Agents <span class="opacity-70">(${op.controllers?.length || 0})</span>
+                        </button>
+                        <button data-tab="nodes" class="px-3 py-1.5 text-xs font-medium rounded-md text-gray-400 hover:text-white transition-colors">
+                            Nodes <span class="opacity-70">(${op.nodes?.length || 0})</span>
+                        </button>
+                    </div>
                 </div>
                 <div id="agents-content" data-agents-count="${op.controllers?.length || 0}"><ul class="max-h-96 overflow-y-auto pr-2">${agentsHtml}</ul></div>
                 <div id="nodes-content" class="hidden" data-nodes-count="${op.nodes?.length || 0}"><ul class="max-h-96 overflow-y-auto pr-2">${nodesHtml}</ul></div>
@@ -1158,12 +1170,6 @@ export function renderOperatorDetails(data, globalState) {
     updateDelegatorsSection(globalState.currentDelegations, globalState.totalDelegatorCount);
 
     toggleStatsPanel(true, globalState.uiState);
-    if (!globalState.uiState.isDelegatorViewActive) {
-        toggleDelegatorQueueView(op, globalState.uiState);
-    }
-    toggleReputationView(true, globalState.uiState);
-    toggleWalletsView(true, globalState.uiState);
-    toggleSponsorshipsView(globalState.uiState, op, true);
 
     // Initialize the Leaflet map
     initLeafletMap('node-map-container');
@@ -1256,84 +1262,8 @@ export function toggleStatsPanel(isRefresh, uiState) {
     }
 }
 
-export function toggleDelegatorQueueView(operatorData, uiState) {
-    uiState.isDelegatorViewActive = !uiState.isDelegatorViewActive;
-    const delegatorsContent = document.getElementById('delegators-content');
-    const queueContent = document.getElementById('queue-content');
-    const title = document.getElementById('delegator-queue-title');
-    if (!operatorData) return;
-
-    delegatorsContent.classList.toggle('hidden');
-    queueContent.classList.toggle('hidden');
-    title.textContent = uiState.isDelegatorViewActive
-        ? `Delegators (${operatorData.delegatorCount > 0 ? operatorData.delegatorCount - 1 : 0})`
-        : `Undelegation Queue (${operatorData.queueEntries?.length || 0})`;
-}
-
 export function toggleVoteList(flagId) {
     document.getElementById(`votes-${flagId}`)?.classList.toggle('hidden');
-}
-
-export function toggleReputationView(isRefresh, uiState) {
-    if (!isRefresh) uiState.reputationViewIndex = (uiState.reputationViewIndex + 1) % 3;
-    const wrapper = document.getElementById('reputation-content-wrapper');
-    if (!wrapper) return;
-
-    const titleEl = document.getElementById('reputation-title');
-    const { slashesCount, flagsAgainstCount, flagsByCount } = wrapper.dataset;
-
-    Object.values(wrapper.children).forEach(child => child.classList.add('hidden'));
-
-    if (uiState.reputationViewIndex === 0) {
-        titleEl.textContent = `Slashing Events (${slashesCount})`;
-        wrapper.children[0].classList.remove('hidden');
-    } else if (uiState.reputationViewIndex === 1) {
-        titleEl.textContent = `Flags Against Operator (${flagsAgainstCount})`;
-        wrapper.children[1].classList.remove('hidden');
-    } else {
-        titleEl.textContent = `Flags Initiated by Operator (${flagsByCount})`;
-        wrapper.children[2].classList.remove('hidden');
-    }
-}
-
-export function toggleWalletsView(isRefresh, uiState) {
-    if (!isRefresh) uiState.walletViewIndex = (uiState.walletViewIndex + 1) % 2;
-    const agentsContent = document.getElementById('agents-content');
-    const nodesContent = document.getElementById('nodes-content');
-    if (!agentsContent || !nodesContent) return;
-
-    const titleEl = document.getElementById('wallets-title');
-    const { agentsCount } = agentsContent.dataset;
-    const { nodesCount } = nodesContent.dataset;
-
-    agentsContent.classList.add('hidden');
-    nodesContent.classList.add('hidden');
-
-    if (uiState.walletViewIndex === 0) {
-        titleEl.textContent = `Agents (${agentsCount})`;
-        agentsContent.classList.remove('hidden');
-    } else {
-        titleEl.textContent = `Node Wallets (${nodesCount})`;
-        nodesContent.classList.remove('hidden');
-    }
-}
-
-export function toggleSponsorshipsView(uiState, operatorData, isRefresh = false) {
-    if (!isRefresh) {
-        uiState.isSponsorshipsListViewActive = !uiState.isSponsorshipsListViewActive;
-    }
-    const listContent = document.getElementById('sponsorships-list-content');
-    const historyContent = document.getElementById('sponsorships-history-content');
-    const title = document.getElementById('sponsorships-title');
-
-    if (!listContent || !historyContent || !title || !operatorData) return;
-
-    listContent.classList.toggle('hidden', !uiState.isSponsorshipsListViewActive);
-    historyContent.classList.toggle('hidden', uiState.isSponsorshipsListViewActive);
-
-    title.textContent = uiState.isSponsorshipsListViewActive
-        ? `Sponsorships (${operatorData.stakes?.length || 0})`
-        : 'History';
 }
 
 export function updateChartTimeframeButtons(days, isUsdView) {
@@ -1557,7 +1487,6 @@ function addNodeToMap(location, host, nodeId) {
 
 // Lazy-loaded references (get them when needed, not at module load time)
 let _autostakerModal = null;
-let _autostakerBtn = null;
 
 function getAutostakerModal() {
     if (!_autostakerModal) {
@@ -1566,66 +1495,7 @@ function getAutostakerModal() {
     return _autostakerModal;
 }
 
-function getAutostakerBtn() {
-    if (!_autostakerBtn) {
-        _autostakerBtn = document.getElementById('autostaker-btn');
-    }
-    return _autostakerBtn;
-}
-
 let currentAutostakerTab = 'settings';
-
-/**
- * Show the Autostaker button if user is an agent
- * @param {boolean} isAgent - Whether the current user is an agent for this operator
- * @param {boolean} isActive - Whether the autostaker bot is currently active for this operator
- */
-export function showAutostakerButton(isAgent, isActive = false) {
-    const btn = getAutostakerBtn();
-    const btnText = document.getElementById('autostaker-btn-text');
-    if (btn) {
-        if (isAgent) {
-            btn.classList.remove('hidden');
-            // Update button style based on active state - minimal style with green text/icon when active
-            const icon = btn.querySelector('svg');
-            if (isActive) {
-                btn.className = 'bg-[#1E1E1E] hover:bg-[#2a2a2a] border border-green-600/50 text-green-400 font-bold py-2 px-4 rounded-lg transition-colors flex items-center';
-                if (btnText) btnText.textContent = 'Autostaker';
-                // Make icon green
-                if (icon) icon.setAttribute('class', 'h-5 w-5 mr-2 text-green-400');
-            } else {
-                btn.className = 'bg-[#1E1E1E] hover:bg-[#2a2a2a] border border-[#333333] text-gray-300 font-bold py-2 px-4 rounded-lg transition-colors flex items-center';
-                if (btnText) btnText.textContent = 'Autostaker';
-                // Reset icon color
-                if (icon) icon.setAttribute('class', 'h-5 w-5 mr-2');
-            }
-        } else {
-            // Ensure button is hidden by setting the full className with hidden class
-            btn.className = 'bg-[#1E1E1E] hover:bg-[#2a2a2a] border border-[#333333] text-gray-300 font-bold py-2 px-4 rounded-lg transition-colors flex items-center hidden';
-        }
-    }
-}
-
-/**
- * Update Autostaker button active state
- * @param {boolean} isActive - Whether the autostaker bot is currently active
- */
-export function updateAutostakerButtonState(isActive) {
-    const btn = getAutostakerBtn();
-    const btnText = document.getElementById('autostaker-btn-text');
-    if (btn && !btn.classList.contains('hidden')) {
-        const icon = btn.querySelector('svg');
-        if (isActive) {
-            btn.className = 'bg-[#1E1E1E] hover:bg-[#2a2a2a] border border-green-600/50 text-green-400 font-bold py-2 px-4 rounded-lg transition-colors flex items-center';
-            if (btnText) btnText.textContent = 'Autostaker';
-            if (icon) icon.setAttribute('class', 'h-5 w-5 mr-2 text-green-400');
-        } else {
-            btn.className = 'bg-[#1E1E1E] hover:bg-[#2a2a2a] border border-[#333333] text-gray-300 font-bold py-2 px-4 rounded-lg transition-colors flex items-center';
-            if (btnText) btnText.textContent = 'Autostaker';
-            if (icon) icon.setAttribute('class', 'h-5 w-5 mr-2');
-        }
-    }
-}
 
 /**
  * Open the Autostaker modal

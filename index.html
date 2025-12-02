@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <base href="/">
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://unpkg.com https://d3js.org; style-src 'self' 'unsafe-inline' https://unpkg.com https://fonts.googleapis.com; img-src 'self' data: https:; font-src 'self' https://fonts.gstatic.com; connect-src 'self' https://gateway.thegraph.com https://gateway-arbitrum.network.thegraph.com https://polygon-rpc.com https://polygon.drpc.org https://polygon-bor-rpc.publicnode.com https://api.etherscan.io https://unpkg.com https://rpc-mainnet.matic.quiknode.pro wss://*.streamr.network wss://*.streamr.network:* wss://*.streamr-nodes.xyz wss://*.streamr-nodes.xyz:* https://ipfs.io https://placehold.co;">
-    <title>Streamr Operators</title>
+    <title>Streamr deCentral</title>
 
     <link rel="apple-touch-icon" sizes="180x180" href="/favicon/apple-touch-icon.png">
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon/favicon-32x32.png">
@@ -37,12 +37,12 @@
 </head>
 <body class="text-gray-200">
 
-    <!-- Login Modal -->
-    <div id="loginModal" class="fixed inset-0 bg-[#121212] flex items-center justify-center p-4 z-50 hidden">
+    <!-- Login Modal (visible by default until user logs in) -->
+    <div id="loginModal" class="fixed inset-0 bg-[#121212] flex items-center justify-center p-4 z-50">
         <div class="bg-[#1E1E1E] rounded-lg p-8 max-w-sm w-full text-gray-300 text-center shadow-2xl border border-[#333333]">
             
             <div id="walletLoginView">
-                <h2 class="text-2xl font-bold mb-4 text-white">Streamr Deck</h2>
+                <h2 class="text-2xl font-bold mb-4 text-white">Streamr deCentral</h2>
                 <p class="mb-6 text-gray-400">Connect your wallet for full functionality, or continue as a guest to explore.</p>
                 <button id="connectWalletBtn" class="w-full bg-blue-800 hover:bg-blue-900 text-white font-bold py-3 px-4 rounded-lg transition-colors mb-4 flex items-center justify-center gap-2">
                     <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"></path></svg>
@@ -131,14 +131,10 @@
     <div id="unlockWalletModal" class="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4 z-50 hidden">
         <div class="bg-[#1E1E1E] rounded-lg p-8 max-w-sm w-full text-gray-300 border border-[#333333] shadow-2xl">
             <div class="flex items-center justify-center mb-4">
-                <div class="bg-blue-900/30 p-3 rounded-full">
-                    <svg class="w-8 h-8 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>
-                    </svg>
-                </div>
+                <img src="assets/locked_icon.png" alt="Unlock" class="w-24 h-24">
             </div>
-            <h2 class="text-xl font-bold mb-2 text-white text-center">Unlock Wallet</h2>
-            <p class="text-sm text-gray-400 text-center mb-6">Enter your password to unlock your saved wallet.</p>
+            <h2 class="text-xl font-bold mb-2 text-white text-center">Unlock Streamr deCentral</h2>
+            <p class="text-sm text-gray-400 text-center mb-6">Enter your password to unlock.</p>
             
             <div class="space-y-4">
                 <div>
@@ -161,9 +157,9 @@
     </div>
 
     <!-- Transaction Modal -->
-    <div id="transactionModal" class="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4 z-50 hidden">
-        <div class="bg-[#1E1E1E] rounded-lg p-8 max-w-md w-full text-gray-300 border border-[#333333] shadow-2xl">
-            <h2 id="tx-modal-title" class="text-2xl font-bold mb-4 text-white">Delegate to Operator</h2>
+    <div id="transactionModal" class="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-3 sm:p-4 z-50 hidden">
+        <div class="bg-[#1E1E1E] rounded-lg p-5 sm:p-8 max-w-md w-full text-gray-300 border border-[#333333] shadow-2xl max-h-[90vh] overflow-y-auto">
+            <h2 id="tx-modal-title" class="text-xl sm:text-2xl font-bold mb-3 sm:mb-4 text-white">Delegate to Operator</h2>
             
             <div id="tx-modal-input-section">
                 <p id="tx-modal-description" class="mb-4 text-gray-400">Enter the amount of DATA to delegate.</p>
@@ -193,9 +189,9 @@
     </div>
 
     <!-- Stake Management Modal -->
-    <div id="stakeModal" class="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4 z-50 hidden">
-        <div class="bg-[#1E1E1E] rounded-lg p-8 max-w-md w-full text-gray-300 border border-[#333333] shadow-2xl">
-            <h2 id="stake-modal-title" class="text-2xl font-bold mb-4 text-white">Manage Stake</h2>
+    <div id="stakeModal" class="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-3 sm:p-4 z-50 hidden">
+        <div class="bg-[#1E1E1E] rounded-lg p-5 sm:p-8 max-w-md w-full text-gray-300 border border-[#333333] shadow-2xl max-h-[90vh] overflow-y-auto">
+            <h2 id="stake-modal-title" class="text-xl sm:text-2xl font-bold mb-3 sm:mb-4 text-white">Manage Stake</h2>
             
             <div id="stake-modal-input-section">
                 <p id="stake-modal-description" class="mb-4 text-gray-400">Enter the new total stake amount for this sponsorship.</p>
@@ -225,16 +221,16 @@
     </div>
 
     <!-- Settings Modal -->
-    <div id="settingsModal" class="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4 z-50 hidden">
-        <div class="bg-[#1E1E1E] rounded-lg p-8 max-w-md w-full text-gray-300 border border-[#333333] shadow-2xl">
-            <h2 class="text-2xl font-bold mb-4 text-white">Settings</h2>
+    <div id="settingsModal" class="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-3 sm:p-4 z-50 hidden">
+        <div class="bg-[#1E1E1E] rounded-lg p-5 sm:p-8 max-w-md w-full text-gray-300 border border-[#333333] shadow-2xl max-h-[90vh] overflow-y-auto">
+            <h2 class="text-xl sm:text-2xl font-bold mb-3 sm:mb-4 text-white">Settings</h2>
             <div class="space-y-4">
                 <div>
-                    <label for="thegraph-api-key-input" class="block text-sm font-medium text-gray-400 mb-2">The Graph API Key</label>
+                    <label for="thegraph-api-key-input" class="block text-sm font-medium text-gray-400 mb-2"><a href="https://thegraph.com/studio/apikeys/" target="_blank" rel="noopener noreferrer" class="hover:text-white transition-colors underline underline-offset-2">The Graph</a> API Key</label>
                     <input type="text" id="thegraph-api-key-input" placeholder="Enter your The Graph API key" class="w-full p-3 bg-[#121212] border border-[#333333] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-[#555555]">
                 </div>
                 <div>
-                    <label for="etherscan-api-key-input" class="block text-sm font-medium text-gray-400 mb-2">Etherscan API Key</Flabel>
+                    <label for="etherscan-api-key-input" class="block text-sm font-medium text-gray-400 mb-2"><a href="https://etherscan.io/apidashboard" target="_blank" rel="noopener noreferrer" class="hover:text-white transition-colors underline underline-offset-2">Etherscan</a> API Key</label>
                     <input type="text" id="etherscan-api-key-input" placeholder="Enter your Etherscan API key" class="w-full p-3 bg-[#121212] border border-[#333333] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-[#555555]">
                 </div>
             </div>
@@ -246,9 +242,9 @@
     </div>
 
     <!-- Operator Settings Modal -->
-    <div id="operatorSettingsModal" class="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4 z-50 hidden">
-        <div class="bg-[#1E1E1E] rounded-lg p-8 max-w-md w-full text-gray-300 border border-[#333333] shadow-2xl">
-            <h2 id="operator-settings-modal-title" class="text-2xl font-bold mb-4 text-white">Operator Settings</h2>
+    <div id="operatorSettingsModal" class="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-3 sm:p-4 z-50 hidden">
+        <div class="bg-[#1E1E1E] rounded-lg p-5 sm:p-8 max-w-md w-full text-gray-300 border border-[#333333] shadow-2xl max-h-[90vh] overflow-y-auto">
+            <h2 id="operator-settings-modal-title" class="text-xl sm:text-2xl font-bold mb-3 sm:mb-4 text-white">Operator Settings</h2>
             
             <div id="operator-settings-modal-input-section">
                 <div class="space-y-4">
@@ -279,18 +275,18 @@
 
     <!-- Autostaker Panel (Side Panel with Overlay) -->
     <div id="autostakerOverlay" class="fixed inset-0 bg-black/50 z-40" style="display: none !important;"></div>
-    <div id="autostakerModal" class="fixed top-0 right-0 h-full w-96 bg-[#1E1E1E] border-l border-[#333333] shadow-2xl flex flex-col z-50 overflow-hidden" style="display: none !important;">
+    <div id="autostakerModal" class="fixed top-0 right-0 h-full w-full sm:w-96 bg-[#1E1E1E] border-l border-[#333333] shadow-2xl flex flex-col z-50 overflow-hidden" style="display: none !important;">
         <!-- Panel Header -->
-        <div class="px-4 py-3 border-b border-[#333333] flex items-center justify-between bg-[#1E1E1E] flex-shrink-0">
+        <div class="px-4 py-3 border-b border-[#333333] flex items-center justify-between bg-[#1E1E1E] flex-shrink-0 safe-area-top">
             <div class="flex items-center gap-2 min-w-0">
                 <svg class="w-5 h-5 text-blue-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
                 </svg>
                 <h2 class="text-lg font-bold text-white truncate">Autostaker</h2>
-                <span id="autostaker-panel-status" class="ml-2 px-4 py-1.5 text-xs rounded-full bg-gray-700 text-gray-400 flex-shrink-0">Stopped</span>
+                <span id="autostaker-panel-status" class="ml-2 px-3 sm:px-4 py-1 sm:py-1.5 text-xs rounded-full bg-gray-700 text-gray-400 flex-shrink-0">Stopped</span>
             </div>
-            <button id="autostaker-modal-close" class="text-gray-400 hover:text-white transition-colors p-1 flex-shrink-0">
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <button id="autostaker-modal-close" class="text-gray-400 hover:text-white transition-colors p-2 -mr-1 flex-shrink-0">
+                <svg class="w-6 h-6 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
                 </svg>
             </button>
@@ -436,67 +432,309 @@
     <div id="loader-overlay" class="fixed inset-0 bg-[#121212] bg-opacity-75 flex items-center justify-center z-50 hidden">
         <div class="loader rounded-full border-8 border-t-8 border-[#555555] border-t-transparent h-24 w-24"></div>
     </div>
-    
-    <header class="container mx-auto p-4 md:p-8 flex flex-wrap justify-between items-center gap-4">
-        <div class="flex-grow">
-            <h1 class="text-3xl md:text-5xl font-bold text-white mb-2">Streamr Deck</h1>
-            <p class="text-md text-gray-400">Your command center for Streamr network operations.</p>
+
+    <!-- ===== SIDEBAR (Desktop) - hidden until login ===== -->
+    <aside id="app-sidebar" class="hidden flex-col fixed left-0 top-0 h-full w-[72px] lg:w-72 bg-[#1A1A1A] border-r border-[#2a2a2a] z-40 transition-all duration-300">
+        <!-- Logo -->
+        <div id="sidebar-logo" class="h-14 flex items-center justify-center lg:justify-start border-b border-[#2a2a2a]">
+            <img src="/favicon/favicon.ico" alt="" class="w-11 h-11 min-w-[40px] min-h-[40px] flex-shrink-0 object-contain">
+            <span class="hidden lg:block ml-3 text-lg font-bold text-white whitespace-nowrap" style="margin-right: 8px;">Streamr deCentral</span>
         </div>
-        <div class="flex items-center justify-center lg:justify-end gap-2 flex-wrap">
-            <div id="data-price-box" class="bg-[#1E1E1E] border border-[#333333] text-white p-3 rounded-lg shadow-lg text-sm flex items-center gap-2">
-                <span>DATA Price:</span>
-                <span id="data-price-value" class="font-bold text-green-400">Loading...</span>
-            </div>
-            <div class="relative">
-                <div id="wallet-info" class="bg-[#1E1E1E] border border-[#333333] text-white p-3 rounded-lg shadow-lg text-sm hidden items-center gap-2 cursor-pointer">
+        
+        <!-- Navigation -->
+        <nav class="flex-1 py-3 overflow-y-auto">
+            <div class="px-2 space-y-0.5">
+                
+                <!-- Section: Explore -->
+                <div class="px-3 pt-2 pb-1">
+                    <span class="hidden lg:block text-[10px] font-semibold text-gray-600 uppercase tracking-widest">Explore</span>
                 </div>
-                <!-- Wallet Dropdown Menu -->
-                <div id="wallet-dropdown" class="absolute right-0 top-full mt-2 bg-[#1E1E1E] border border-[#333333] rounded-lg shadow-xl z-50 hidden min-w-[160px]">
-                    <button id="logout-btn" class="w-full px-4 py-3 text-left text-gray-300 hover:bg-[#333333] hover:text-white transition-colors rounded-lg flex items-center gap-2">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path>
+                
+                <!-- Operators -->
+                <a href="/" data-nav="operators" class="nav-link group flex items-center gap-3 px-3 py-2.5 rounded-md text-gray-400 hover:text-white hover:bg-white/[0.03] transition-all duration-200">
+                    <img src="/assets/operator_icon.png" alt="" class="w-6 h-6 flex-shrink-0 opacity-70 group-hover:opacity-100">
+                    <span class="hidden lg:block text-sm font-medium">Operators</span>
+                </a>
+                
+                <!-- Delegators (Coming Soon) -->
+                <a href="#" data-nav="delegators" class="nav-link group flex items-center gap-3 px-3 py-2.5 rounded-md text-gray-600 cursor-not-allowed" title="Coming Soon">
+                    <svg class="w-5 h-5 flex-shrink-0 opacity-40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                        <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
+                        <circle cx="9" cy="7" r="4"/>
+                        <path d="M22 21v-2a4 4 0 0 0-3-3.87"/>
+                        <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+                    </svg>
+                    <span class="hidden lg:block text-sm font-medium">Delegators</span>
+                    <span class="hidden lg:inline-flex ml-auto px-1.5 py-0.5 text-[8px] font-semibold bg-gray-800 text-gray-500 rounded">SOON</span>
+                </a>
+                
+                <!-- Streams (Coming Soon) -->
+                <a href="#" data-nav="streams" class="nav-link group flex items-center gap-3 px-3 py-2.5 rounded-md text-gray-600 cursor-not-allowed" title="Coming Soon">
+                    <svg class="w-5 h-5 flex-shrink-0 opacity-40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                        <path d="M4.9 19.1C1 15.2 1 8.8 4.9 4.9"/>
+                        <path d="M7.8 16.2c-2.3-2.3-2.3-6.1 0-8.5"/>
+                        <circle cx="12" cy="12" r="2"/>
+                        <path d="M16.2 7.8c2.3 2.3 2.3 6.1 0 8.5"/>
+                        <path d="M19.1 4.9C23 8.8 23 15.1 19.1 19"/>
+                    </svg>
+                    <span class="hidden lg:block text-sm font-medium">Streams</span>
+                    <span class="hidden lg:inline-flex ml-auto px-1.5 py-0.5 text-[8px] font-semibold bg-gray-800 text-gray-500 rounded">SOON</span>
+                </a>
+                
+                <!-- Divider -->
+                <div class="my-3 mx-3 border-t border-white/[0.04]"></div>
+                
+                <!-- Section: Visualize -->
+                <div class="px-3 pt-2 pb-1">
+                    <span class="hidden lg:block text-[10px] font-semibold text-gray-600 uppercase tracking-widest">Visualize</span>
+                </div>
+                
+                <!-- Network Map -->
+                <a href="/visual" data-nav="visual" class="nav-link group flex items-center gap-3 px-3 py-2.5 rounded-md text-gray-400 hover:text-white hover:bg-white/[0.03] transition-all duration-200">
+                    <svg class="w-5 h-5 flex-shrink-0 text-blue-400/70 group-hover:text-blue-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                        <circle cx="12" cy="12" r="3"/>
+                        <circle cx="19" cy="6" r="2"/>
+                        <circle cx="5" cy="5" r="2"/>
+                        <circle cx="5" cy="19" r="2"/>
+                        <circle cx="19" cy="19" r="2"/>
+                        <line x1="14.5" y1="10" x2="17.5" y2="7.5"/>
+                        <line x1="9.5" y1="10" x2="6.5" y2="6.5"/>
+                        <line x1="9.5" y1="14" x2="6.5" y2="17.5"/>
+                        <line x1="14.5" y1="14" x2="17.5" y2="17.5"/>
+                    </svg>
+                    <span class="hidden lg:block text-sm font-medium">Network Map</span>
+                </a>
+                
+                <!-- Leaderboard -->
+                <a href="/race" data-nav="race" class="nav-link group flex items-center gap-3 px-3 py-2.5 rounded-md text-gray-400 hover:text-white hover:bg-white/[0.03] transition-all duration-200">
+                    <svg class="w-5 h-5 flex-shrink-0 text-amber-400/70 group-hover:text-amber-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                        <path d="M8 21h8m-4-4v4m-4-8h8m-8 0a4 4 0 0 1-4-4V5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v4a4 4 0 0 1-4 4m-8 0h8"/>
+                    </svg>
+                    <span class="hidden lg:block text-sm font-medium">Leaderboard</span>
+                </a>
+            </div>
+        </nav>
+        
+        <!-- Bottom Section -->
+        <div class="border-t border-[#2a2a2a] p-2">
+            <!-- Autostaker Quick Access -->
+            <button id="sidebar-autostaker-btn" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-400 hover:text-white hover:bg-white/5 transition-all">
+                <svg class="w-5 h-5 flex-shrink-0 text-green-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                </svg>
+                <span class="hidden lg:block text-sm font-medium">Autostaker</span>
+            </button>
+            
+            <!-- Settings -->
+            <button id="sidebar-settings-btn" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-400 hover:text-white hover:bg-white/5 transition-all">
+                <svg class="w-5 h-5 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/>
+                    <circle cx="12" cy="12" r="3"/>
+                </svg>
+                <span class="hidden lg:block text-sm font-medium">Settings</span>
+            </button>
+            
+            <!-- Wallet Info (Sidebar) - with dropdown -->
+            <div class="relative mt-2">
+                <div id="sidebar-wallet" class="flex items-center gap-2 px-3 py-2 rounded-lg bg-[#1E1E1E] border border-[#333] cursor-pointer hover:border-[#444] transition-colors">
+                    <svg id="sidebar-wallet-icon" class="w-5 h-5 flex-shrink-0 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/>
+                    </svg>
+                    <div class="hidden lg:block min-w-0 flex-1">
+                        <div id="sidebar-wallet-address" class="text-sm text-white truncate">Not connected</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </aside>
+    
+    <!-- Wallet Dropdown Menu - positioned outside sidebar to avoid overflow issues -->
+    <div id="sidebar-wallet-dropdown" class="fixed bg-[#1E1E1E] border border-[#333333] rounded-lg shadow-xl z-[60] hidden min-w-[140px]">
+        <button id="sidebar-logout-btn" class="w-full px-4 py-2.5 text-left text-gray-300 hover:bg-[#333333] hover:text-white transition-colors rounded-lg flex items-center gap-2 text-sm">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
+            </svg>
+            Disconnect
+        </button>
+    </div>
+
+    <!-- ===== MOBILE HEADER - hidden until login ===== -->
+    <header id="mobile-header" class="hidden fixed top-0 left-0 right-0 z-30 bg-[#121212]/95 backdrop-blur-md border-b border-[#2a2a2a]">
+        <div class="flex items-center justify-between px-4 h-14">
+            <!-- Page Title -->
+            <div class="flex items-center gap-3">
+                <img src="/favicon/favicon.ico" alt="" class="w-8 h-8 flex-shrink-0">
+                <h1 id="mobile-page-title" class="text-lg font-bold text-white">Operators</h1>
+            </div>
+            
+            <!-- Right Actions -->
+            <div class="flex items-center gap-2">
+                <!-- DATA Price (compact) -->
+                <div class="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-[#1E1E1E] border border-[#333]">
+                    <span class="text-[10px] text-gray-400">DATA:</span>
+                    <span id="mobile-data-price" class="text-xs font-bold text-green-400">--</span>
+                </div>
+                
+                <!-- Wallet Button -->
+                <div class="relative">
+                    <button id="mobile-wallet-btn" class="p-2 rounded-lg bg-[#1E1E1E] border border-[#333] text-gray-400 hover:text-white transition-colors">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/>
                         </svg>
-                        Disconnect
                     </button>
                 </div>
             </div>
-            
-            <!-- Global Autostaker Status Indicator -->
-            <button id="autostaker-global-indicator" class="hidden relative text-gray-400 hover:text-white transition-colors p-3 bg-[#1E1E1E] border border-green-600/50 rounded-lg shadow-lg cursor-pointer hover:bg-[#2a2a2a]" title="Autostaker Running">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
-                </svg>
-                <span class="absolute top-1 right-1 w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
-            </button>
-            
-            <button id="settings-btn" class="text-gray-400 hover:text-white transition-colors p-3 bg-[#1E1E1E] border border-[#333333] rounded-lg shadow-lg">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
-            </button>
         </div>
     </header>
 
+    <!-- ===== DESKTOP HEADER - hidden until login ===== -->
+    <header id="desktop-header" class="hidden fixed top-0 right-0 z-30 bg-[#121212]/95 backdrop-blur-md border-b border-[#2a2a2a] transition-all duration-300 left-[72px] lg:left-72">
+        <div class="flex items-center justify-between px-6 h-14">
+            <!-- Left: Page Title -->
+            <div class="flex items-center gap-2">
+                <h1 id="desktop-page-title" class="text-lg font-semibold text-white">Operators</h1>
+            </div>
+            
+            <!-- Right: DATA Price only -->
+            <div class="flex items-center gap-3">
+                <!-- DATA Price -->
+                <div id="data-price-box" class="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[#1E1E1E] border border-[#333]">
+                    <span class="text-xs text-gray-400">DATA:</span>
+                    <span id="data-price-value" class="text-sm font-bold text-green-400">--</span>
+                </div>
+                
+                <!-- Global Autostaker Status Indicator -->
+                <button id="autostaker-global-indicator" class="hidden relative p-2 rounded-lg bg-[#1E1E1E] border border-green-600/50 text-green-500 hover:bg-[#2a2a2a] transition-colors" title="Autostaker Running">
+                    <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                    </svg>
+                    <span class="absolute top-1 right-1 w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
+                </button>
+            </div>
+        </div>
+    </header>
 
-    <div id="main-container" class="container mx-auto p-4 md:p-8 hidden">
+    <!-- ===== BOTTOM NAVIGATION (Mobile) - hidden until login ===== -->
+    <nav id="bottom-nav" class="hidden fixed bottom-0 left-0 right-0 z-40 bg-[#1A1A1A]/95 backdrop-blur-md border-t border-[#2a2a2a] safe-area-bottom">
+        <div class="flex justify-around items-center h-16 px-2">
+            <!-- Operators -->
+            <a href="/" data-nav="operators" class="bottom-nav-item flex flex-col items-center justify-center gap-1 p-2 min-w-[56px] text-gray-400 transition-colors">
+                <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="3" y="3" width="7" height="7" rx="1"/>
+                    <rect x="14" y="3" width="7" height="7" rx="1"/>
+                    <rect x="3" y="14" width="7" height="7" rx="1"/>
+                    <rect x="14" y="14" width="7" height="7" rx="1"/>
+                </svg>
+                <span class="text-[10px] font-medium">Operators</span>
+            </a>
+            
+            <!-- Delegators (Coming Soon) -->
+            <div class="bottom-nav-item flex flex-col items-center justify-center gap-1 p-2 min-w-[56px] text-gray-600 cursor-not-allowed opacity-50">
+                <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+                    <circle cx="9" cy="7" r="4"/>
+                    <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+                    <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+                </svg>
+                <span class="text-[10px] font-medium">Delegators</span>
+            </div>
+            
+            <!-- Streams (Coming Soon) -->
+            <div class="bottom-nav-item flex flex-col items-center justify-center gap-1 p-2 min-w-[56px] text-gray-600 cursor-not-allowed opacity-50">
+                <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/>
+                    <circle cx="12" cy="12" r="3"/>
+                </svg>
+                <span class="text-[10px] font-medium">Streams</span>
+            </div>
+            
+            <!-- Autostaker -->
+            <button id="bottom-nav-autostaker" class="bottom-nav-item flex flex-col items-center justify-center gap-1 p-2 min-w-[56px] text-gray-400 transition-colors">
+                <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                </svg>
+                <span class="text-[10px] font-medium">Autostaker</span>
+            </button>
+            
+            <!-- More -->
+            <div class="relative">
+                <button id="bottom-nav-more" class="bottom-nav-item flex flex-col items-center justify-center gap-1 p-2 min-w-[56px] text-gray-400 transition-colors">
+                    <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="1"/>
+                        <circle cx="19" cy="12" r="1"/>
+                        <circle cx="5" cy="12" r="1"/>
+                    </svg>
+                    <span class="text-[10px] font-medium">More</span>
+                </button>
+                
+                <!-- More Dropdown Menu -->
+                <div id="bottom-nav-more-menu" class="hidden absolute bottom-full right-0 mb-2 w-48 bg-[#1E1E1E] border border-[#333] rounded-lg shadow-xl overflow-hidden">
+                    <!-- Network Map -->
+                    <a href="/visual" data-nav="visual" class="flex items-center gap-3 px-4 py-3 text-gray-300 hover:bg-[#2a2a2a] transition-colors">
+                        <svg class="w-5 h-5" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="16" cy="16" r="5"/>
+                            <circle cx="25" cy="9" r="2"/>
+                            <circle cx="7" cy="7" r="2"/>
+                            <circle cx="7" cy="25" r="2"/>
+                            <circle cx="25" cy="25" r="2"/>
+                            <line x1="20" y1="13" x2="23" y2="11"/>
+                            <line x1="12" y1="13" x2="9" y2="9"/>
+                            <line x1="12" y1="19" x2="9" y2="23"/>
+                            <line x1="20" y1="19" x2="23" y2="23"/>
+                        </svg>
+                        <span class="text-sm font-medium">Network Map</span>
+                    </a>
+                    
+                    <!-- Leaderboard -->
+                    <a href="/race" data-nav="race" class="flex items-center gap-3 px-4 py-3 text-gray-300 hover:bg-[#2a2a2a] transition-colors">
+                        <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/>
+                            <path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/>
+                            <path d="M4 22h16"/>
+                            <path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/>
+                            <path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/>
+                            <path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/>
+                        </svg>
+                        <span class="text-sm font-medium">Leaderboard</span>
+                    </a>
+                    
+                    <!-- Divider -->
+                    <div class="border-t border-[#333]"></div>
+                    
+                    <!-- Settings -->
+                    <button id="bottom-nav-settings" class="w-full flex items-center gap-3 px-4 py-3 text-gray-300 hover:bg-[#2a2a2a] transition-colors">
+                        <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="3"/>
+                            <path d="M12 1v2m0 18v2M4.22 4.22l1.42 1.42m12.72 12.72l1.42 1.42M1 12h2m18 0h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>
+                        </svg>
+                        <span class="text-sm font-medium">Settings</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </nav>
+    
+    <!-- Overlay to capture clicks when More menu is open (above content, below nav) -->
+    <div id="bottom-nav-overlay" class="hidden fixed inset-0 z-30"></div>
+
+
+    <!-- ===== MAIN CONTAINER ===== -->
+    <div id="main-container" class="hidden pt-16 pb-20 md:pt-16 md:pb-4 md:pl-[72px] lg:pl-60 transition-all duration-300">
         <!-- Operator List View -->
-        <main id="operator-list-view">
-            <div class="mb-6 flex gap-2">
-                <div class="relative flex-grow">
+        <main id="operator-list-view" class="container mx-auto p-4 md:p-6">
+            <!-- Search Bar (simplified - navigation moved to bottom/side nav) -->
+            <div class="mb-6">
+                <div class="relative">
                     <input 
                         type="text" 
                         id="search-input" 
-                        placeholder="Search" 
-                        class="w-full p-4 pl-12 bg-[#1E1E1E] border border-[#333333] rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-[#555555] transition-colors"
+                        placeholder="Search operators..." 
+                        class="w-full h-12 pl-11 pr-4 bg-[#1E1E1E] border border-[#333333] rounded-xl text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all"
                     >
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                     </svg>
                 </div>
-                <button id="visual-view-btn" class="bg-[#1E1E1E] hover:bg-[#333333] border border-[#333333] text-white font-bold p-4 rounded-xl transition-colors flex items-center justify-center" title="Visual">
-                    <svg class="w-6 h-6 text-blue-400" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" stroke-miterlimit="10"><circle cx="16" cy="16" r="6"/><circle cx="25.5" cy="9.5" r="2.5"/><circle cx="5.5" cy="5.5" r="2.5"/><circle cx="5.5" cy="26.5" r="2.5"/><circle cx="25.5" cy="26.5" r="2.5"/><line x1="21.1" y1="13.9" x2="24.4" y2="11.6"/><line x1="10.9" y1="13.9" x2="6.6" y2="7.6"/><line x1="10.9" y1="18.1" x2="6.6" y2="24.4"/><line x1="21.1" y1="18.1" x2="24.4" y2="24.4"/></svg>
-                </button>
-                <button id="race-view-btn" class="bg-[#1E1E1E] hover:bg-[#333333] border border-[#333333] text-white font-bold p-4 rounded-xl transition-colors flex items-center justify-center" title="Stake Race">
-                    <svg class="w-6 h-6 text-yellow-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"></path><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"></path><path d="M4 22h16"></path><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"></path><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"></path><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"></path></svg>
-                </button>
             </div>
             
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6" id="operators-grid">
@@ -509,31 +747,13 @@
         </main>
 
         <!-- Operator Detail View -->
-        <div id="operator-detail-view" class="space-y-8">
-            <div class="flex items-center justify-between flex-wrap gap-4">
-                <button id="back-to-list-btn" class="bg-[#333333] hover:bg-[#444444] text-white font-bold py-2 px-4 rounded-lg transition-colors flex items-center">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clip-rule="evenodd" /></svg>
-                    Back to List
-                </button>
-                <button id="autostaker-btn" class="bg-[#1E1E1E] hover:bg-[#2a2a2a] border border-[#333333] text-gray-300 font-bold py-2 px-4 rounded-lg transition-colors flex items-center hidden">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
-                    </svg>
-                    <span id="autostaker-btn-text">Autostaker</span>
-                </button>
-            </div>
+        <div id="operator-detail-view" class="container mx-auto p-4 md:p-6 space-y-4 md:space-y-8">
             <div id="detail-content">
             </div>
         </div>
 
         <!-- Race View -->
-        <div id="race-view" class="hidden space-y-8">
-            <div>
-                <button id="race-back-to-list-btn" class="bg-[#333333] hover:bg-[#444444] text-white font-bold py-2 px-4 rounded-lg transition-colors flex items-center">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clip-rule="evenodd" /></svg>
-                    Back to List
-                </button>
-            </div>
+        <div id="race-view" class="hidden container mx-auto p-4 md:p-6 space-y-4 md:space-y-8">
             
             <!-- Main Card Container -->
             <div class="w-full bg-[#1E1E1E] rounded-xl border border-[#333333] shadow-2xl flex flex-col relative h-auto">

@@ -1,7 +1,7 @@
 {
-"name": "Streamr Operators",
-"short_name": "Streamr Operators",
-"description": "Explorer and Inspect Operators on the Streamr Network",
+"name": "Streamr deCentral",
+"short_name": "Streamr deCentral",
+"description": "Your Command Center for Streamr network operations.",
 "start_url": "/",
 "display": "standalone",
 "scope": "/",
