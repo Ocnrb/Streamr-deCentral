@@ -970,14 +970,14 @@ export function renderOperatorDetails(data, globalState) {
             const sponsorshipDisplayText = escapeHtml(sp.stream?.id || sp.id);
             sponsorshipHtml = `<p class="text-xs text-gray-400 truncate">Sponsorship: <a href="${sponsorshipUrl}" target="_blank" rel="noopener noreferrer" class="text-gray-300 hover:text-white transition-colors" title="${sponsorshipDisplayText}">${sponsorshipDisplayText}</a></p>`;
         }
+        const slashDate = new Date(slash.date * 1000);
+        const slashDateStr = slashDate.toLocaleDateString() + ', ' + slashDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
         return `
-            <li class="py-2 border-b border-[#333333]">
-                <p class="font-mono text-xs text-red-400 font-semibold" data-tooltip-value="${convertWeiToData(slash.amount)}">${formatBigNumber(convertWeiToData(slash.amount))} DATA</p>
-                <div class="text-xs mt-1 text-gray-400">
-                    <p>Date: ${new Date(slash.date * 1000).toLocaleDateString()}</p>
-                    ${sponsorshipHtml}
-                </div>
+            <li class="py-3 border-b border-[#333333]">
+                <p class="text-xs text-gray-400 mb-1">Date: <span class="text-gray-300">${slashDateStr}</span></p>
+                <p class="text-xs text-gray-400 mb-1">Slash: <span class="font-mono text-red-400 font-semibold" data-tooltip-value="${convertWeiToData(slash.amount)}">${formatBigNumber(convertWeiToData(slash.amount))} DATA</span></p>
+                ${sponsorshipHtml}
             </li>`;
         }).join('') : '<li class="text-gray-500 text-sm">No slashing events recorded.</li>';
 
@@ -1027,7 +1027,8 @@ export function renderOperatorDetails(data, globalState) {
             ? `Flagged by: ${createEntityLink(flag.flagger)}`
             : `Flagged: ${createEntityLink(flag.target)}`;
 			
-		const flagDate = new Date(flag.flaggingTimestamp * 1000).toLocaleString();
+		const flagDateObj = new Date(flag.flaggingTimestamp * 1000);
+		const flagDate = flagDateObj.toLocaleDateString() + ', ' + flagDateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
         return `
             <div class="flex justify-between items-center">
