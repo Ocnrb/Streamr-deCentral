@@ -15,12 +15,17 @@ import {
     POLYGONSCAN_NETWORK,
     POLYGONSCAN_METHOD_IDS,
     VOTE_ON_FLAG_RAW_AMOUNTS,
-    getGraphUrl
+    getGraphUrl,
+    getEtherscanApiKey,
+    buildPolygonscanUrl,
+    STORAGE_KEYS
 } from './constants.js';
 import { showToast, setModalState, txModalAmount, txModalBalanceValue, txModalMinimumValue, stakeModalAmount, stakeModalCurrentStake, stakeModalFreeFunds, dataPriceValueEl, transactionModal, stakeModal, operatorSettingsModal } from '../ui/ui.js';
 import { getFriendlyErrorMessage, convertWeiToData, parseDateFromCsv, parseOperatorMetadata } from './utils.js';
 
-let etherscanApiKey = localStorage.getItem('etherscan-api-key') || 'B8BXCXWR66RI1J2QYQRTT4SPHCC6VYYJHC';
+// Note: etherscanApiKey is now managed via getEtherscanApiKey() from constants.js
+// This variable is kept for backward compatibility with updateEtherscanApiKey()
+let _etherscanApiKeyOverride = null;
 
 let streamrClient = null;
 let priceSubscription = null;
@@ -149,8 +154,17 @@ async function checkGasPriceAndWarn(provider) {
 }
 
 // --- API Key Management ---
+/**
+ * Updates the Etherscan API key in localStorage.
+ * The key will be used by getEtherscanApiKey() from constants.js.
+ * @param {string} newKey - The new API key (empty string uses default fallback)
+ */
 export function updateEtherscanApiKey(newKey) {
-    etherscanApiKey = newKey || 'B8BXCXWR66RI1J2QYQRTT4SPHCC6VYYJHC';
+    if (newKey && newKey.trim() !== '') {
+        localStorage.setItem(STORAGE_KEYS.ETHERSCAN_API_KEY, newKey.trim());
+    } else {
+        localStorage.removeItem(STORAGE_KEYS.ETHERSCAN_API_KEY);
+    }
     console.log("Etherscan API Key updated.");
 }
 
@@ -444,6 +458,10 @@ export async function fetchOperatorDetails(operatorId) {
           operatorDailyBuckets(first: 1000, orderBy: date, orderDirection: asc, where: {operator: "${sanitizedId}"}) {
             date
             valueWithoutEarnings
+            totalDelegatedWei
+            totalUndelegatedWei
+            profitsWei
+            cumulativeEarningsWei
           }
           flagsAgainst: flags(where: {target: "${sanitizedId}"}, orderBy: flaggingTimestamp, orderDirection: desc) {
                 id
@@ -498,22 +516,27 @@ export async function fetchMoreDelegators(operatorId, skip) {
 
 // --- API (Polygonscan) ---
 
-export async function fetchPolygonscanHistory(walletAddress) {
-    if (!etherscanApiKey) {
-        console.warn("Etherscan API Key not set. Skipping transaction history fetch.");
+export async function fetchPolygonscanHistory(walletAddress, offset = 500) {
+    const apiKey = getEtherscanApiKey();
+    if (!apiKey) {
+        console.warn("Etherscan API Key not available. Skipping transaction history fetch.");
         return [];
     }
 
-    const { apiUrl, chainId, nativeToken } = POLYGONSCAN_NETWORK;
-    const page = 1;
-    const offset = 500;
-    const sort = "desc";
+    // Build URLs using centralized helper
+    const txlistUrl = buildPolygonscanUrl({
+        module: 'account',
+        action: 'txlist',
+        address: walletAddress,
+        offset
+    });
     
-    // Add timestamp to prevent caching (cache busting via URL parameter)
-    const cacheBuster = `&_t=${Date.now()}`;
-
-    const txlistUrl = `${apiUrl}?chainid=${chainId}&module=account&action=txlist&address=${walletAddress}&page=${page}&offset=${offset}&sort=${sort}&apikey=${etherscanApiKey}${cacheBuster}`;
-    const tokentxUrl = `${apiUrl}?chainid=${chainId}&module=account&action=tokentx&address=${walletAddress}&page=${page}&offset=${offset}&sort=${sort}&apikey=${etherscanApiKey}${cacheBuster}`;
+    const tokentxUrl = buildPolygonscanUrl({
+        module: 'account',
+        action: 'tokentx',
+        address: walletAddress,
+        offset
+    });
 
     try {
         const [txlistRes, tokentxRes] = await Promise.all([
@@ -532,6 +555,7 @@ export async function fetchPolygonscanHistory(walletAddress) {
 
         const normalTxs = txlistData.result || [];
         const tokenTxs = tokentxData.result || [];
+        const nativeToken = POLYGONSCAN_NETWORK.nativeToken;
 
         const methodIdMap = new Map();
         const processedNormalTxs = normalTxs.map(tx => {

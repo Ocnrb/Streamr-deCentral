@@ -1,4 +1,5 @@
 // navigation.js - Handles navigation UI components (sidebar, bottom nav, headers)
+import { STORAGE_KEYS } from '../core/constants.js';
 
 /**
  * Navigation Controller
@@ -473,10 +474,10 @@ class NavigationController {
         
         // Populate saved values
         if (theGraphInput) {
-            theGraphInput.value = localStorage.getItem('the-graph-api-key') || '';
+            theGraphInput.value = localStorage.getItem(STORAGE_KEYS.GRAPH_API_KEY) || '';
         }
         if (etherscanInput) {
-            etherscanInput.value = localStorage.getItem('etherscan-api-key') || '';
+            etherscanInput.value = localStorage.getItem(STORAGE_KEYS.ETHERSCAN_API_KEY) || '';
         }
         
         if (settingsModal) {

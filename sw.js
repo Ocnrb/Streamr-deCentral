@@ -1,4 +1,4 @@
-const CACHE_NAME = 'streamr-central-cache-v4';
+const CACHE_NAME = 'streamr-central-cache-v5';
 
 // The install event is now simpler. We don't pre-cache a fixed list of URLs.
 // This makes the installation much less likely to fail.

@@ -14,6 +14,8 @@ export const operatorDetailView = document.getElementById('operator-detail-view'
 export const operatorListView = document.getElementById('operator-list-view');
 export const raceView = document.getElementById('race-view'); 
 export const visualView = document.getElementById('visual-view'); 
+export const delegatorsListView = document.getElementById('delegators-list-view'); 
+export const delegatorDetailView = document.getElementById('delegator-detail-view'); 
 export const customTooltip = document.getElementById('custom-tooltip');
 export const loaderOverlay = document.getElementById('loader-overlay');
 export const dataPriceValueEl = document.getElementById('data-price-value');
@@ -336,6 +338,8 @@ export function displayView(view) {
     operatorDetailView.style.display = 'none';
     if (raceView) raceView.style.display = 'none';
     if (visualView) visualView.style.display = 'none';
+    if (delegatorsListView) delegatorsListView.style.display = 'none';
+    if (delegatorDetailView) delegatorDetailView.style.display = 'none';
 
     // Show/hide navigation based on view (visual is fullscreen)
     const bottomNav = document.getElementById('bottom-nav');
@@ -351,6 +355,11 @@ export function displayView(view) {
         if (raceView) raceView.style.display = 'block';
     } else if (view === 'visual') {
         if (visualView) visualView.style.display = 'block';
+    } else if (view === 'delegators-list') {
+        if (delegatorsListView) delegatorsListView.style.display = 'block';
+    } else if (view === 'delegator-detail') {
+        if (delegatorDetailView) delegatorDetailView.style.display = 'block';
+        window.scrollTo(0, 0);
     } else { // 'detail'
         operatorDetailView.style.display = 'block';
         window.scrollTo(0, 0);
@@ -648,6 +657,16 @@ export function renderStakeChart(chartData, isUsdView) {
     const container = document.getElementById('stake-chart-container');
     if (!container) return;
 
+    // Destroy other chart types first
+    if (operatorEarningsChart) {
+        operatorEarningsChart.destroy();
+        operatorEarningsChart = null;
+    }
+    if (operatorFlowChart) {
+        operatorFlowChart.destroy();
+        operatorFlowChart = null;
+    }
+
     if (!chartData || chartData.length === 0) {
         if (stakeHistoryChart) {
             stakeHistoryChart.destroy();
@@ -752,49 +771,344 @@ export function renderStakeChart(chartData, isUsdView) {
         }
     };
 
-    if (!stakeHistoryChart) {
-        container.innerHTML = '<canvas id="stake-history-chart"></canvas>';
-        const canvas = document.getElementById('stake-history-chart');
-        if (!canvas) return;
-        
-        const ctx = canvas.getContext('2d');
-        if (!ctx) return;
+    // Always destroy and recreate to avoid stale data issues
+    if (stakeHistoryChart) {
+        stakeHistoryChart.destroy();
+        stakeHistoryChart = null;
+    }
+    
+    container.innerHTML = '<canvas id="stake-history-chart"></canvas>';
+    const canvas = document.getElementById('stake-history-chart');
+    if (!canvas) return;
+    
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
 
-        stakeHistoryChart = new Chart(ctx, {
-            type: 'line',
-            data: {
-                labels: labels,
-                datasets: [{
-                    label: chartLabel,
-                    data: data,
-                    backgroundColor: createGradient(ctx),
-                    borderColor: '#3b82f6', // Blue-500
+    stakeHistoryChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: chartLabel,
+                data: data,
+                backgroundColor: createGradient(ctx),
+                borderColor: '#3b82f6', // Blue-500
+                borderWidth: 2,
+                pointBackgroundColor: '#3b82f6',
+                pointBorderColor: '#232c45ff', 
+                pointBorderWidth: 0.5,
+                pointRadius: 2.5,
+                pointHoverRadius: 4,
+                tension: 0.25, 
+                fill: true
+            }]
+        },
+        options: chartOptions
+    });
+}
+
+// Operator Earnings Chart instance
+let operatorEarningsChart = null;
+
+/**
+ * Render Operator Earnings Chart (daily bars + cumulative line)
+ */
+export function renderOperatorEarningsChart(labels, dailyData, cumulativeData, isUsdView, currentPrice) {
+    const container = document.getElementById('stake-chart-container');
+    if (!container) return;
+
+    if (operatorEarningsChart) {
+        operatorEarningsChart.destroy();
+        operatorEarningsChart = null;
+    }
+    if (stakeHistoryChart) {
+        stakeHistoryChart.destroy();
+        stakeHistoryChart = null;
+    }
+    if (operatorFlowChart) {
+        operatorFlowChart.destroy();
+        operatorFlowChart = null;
+    }
+
+    if (!labels || labels.length === 0) {
+        container.innerHTML = '<div class="flex items-center justify-center h-full"><p class="text-gray-500">No earnings data available for this timeframe.</p></div>';
+        return;
+    }
+
+    container.innerHTML = '<canvas id="stake-history-chart"></canvas>';
+    const canvas = document.getElementById('stake-history-chart');
+    if (!canvas) return;
+    
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const yAxisPrefix = isUsdView ? '$' : '';
+    const yAxisSuffix = isUsdView ? '' : ' DATA';
+
+    operatorEarningsChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: labels,
+            datasets: [
+                { 
+                    label: 'Daily', 
+                    data: dailyData, 
+                    backgroundColor: 'rgba(59, 130, 246, 0.5)', 
+                    borderRadius: 2, 
+                    yAxisID: 'y',
+                    order: 2
+                },
+                { 
+                    label: 'Total', 
+                    data: cumulativeData, 
+                    type: 'line', 
+                    borderColor: '#3b82f6',
                     borderWidth: 2,
                     pointBackgroundColor: '#3b82f6',
-                    pointBorderColor: '#232c45ff', 
+                    pointBorderColor: '#232c45ff',
                     pointBorderWidth: 0.5,
                     pointRadius: 2.5,
                     pointHoverRadius: 4,
-                    tension: 0.25, 
-                    fill: true
-                }]
+                    tension: 0.25,
+                    fill: false,
+                    yAxisID: 'y1',
+                    order: 1
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: {
+                mode: 'nearest',
+                intersect: true,
             },
-            options: chartOptions
-        });
-    } else {
-        // Update existing chart data
-        stakeHistoryChart.data.labels = labels;
-        stakeHistoryChart.data.datasets[0].data = data;
-        stakeHistoryChart.data.datasets[0].label = chartLabel;
-        
-        // Update scales formatting
-        stakeHistoryChart.options.scales.y.ticks.callback = chartOptions.scales.y.ticks.callback;
-        
-        // Update tooltip callback
-        stakeHistoryChart.options.plugins.tooltip.callbacks.label = chartOptions.plugins.tooltip.callbacks.label;
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    backgroundColor: 'rgba(30, 30, 30, 0.9)',
+                    titleColor: '#ffffff',
+                    bodyColor: '#9ca3af',
+                    borderColor: '#333333',
+                    borderWidth: 1,
+                    padding: 10,
+                    cornerRadius: 8,
+                    displayColors: false,
+                    titleFont: { family: "'Inter', sans-serif", size: 13, weight: '600' },
+                    bodyFont: { family: "'Inter', sans-serif", size: 12 },
+                    callbacks: {
+                        label: (context) => {
+                            const value = context.raw;
+                            const lines = [];
+                            // Format DATA value with appropriate decimals
+                            const formatted = value >= 1000 
+                                ? formatBigNumber(Math.round(value).toString()) 
+                                : value.toFixed(2);
+                            lines.push(`${formatted} DATA`);
+                            // Show USD using live current price
+                            if (currentPrice && currentPrice > 0) {
+                                const usdValue = value * currentPrice;
+                                lines.push(`~$${formatBigNumber(Math.round(usdValue).toString())}`);
+                            }
+                            return lines;
+                        }
+                    }
+                }
+            },
+            scales: {
+                y: {
+                    position: 'left', 
+                    grid: { color: '#333333', borderDash: [4, 4], drawBorder: false }, 
+                    ticks: { 
+                        color: '#6b7280', 
+                        font: { family: "'Inter', sans-serif", size: 11 },
+                        callback: function(value) {
+                            if (value >= 1000000) return yAxisPrefix + (value / 1000000).toFixed(1) + 'M';
+                            if (value >= 1000) return yAxisPrefix + (value / 1000).toFixed(0) + 'K';
+                            return yAxisPrefix + Math.round(value) + yAxisSuffix;
+                        }
+                    }, 
+                    border: { display: false } 
+                },
+                y1: { 
+                    position: 'right', 
+                    beginAtZero: false,
+                    grid: { display: false }, 
+                    ticks: { 
+                        color: '#3b82f6', 
+                        font: { family: "'Inter', sans-serif", size: 11 },
+                        callback: function(value) {
+                            if (value >= 1000000) return yAxisPrefix + (value / 1000000).toFixed(1) + 'M';
+                            if (value >= 1000) return yAxisPrefix + (value / 1000).toFixed(0) + 'K';
+                            return yAxisPrefix + Math.round(value);
+                        }
+                    }, 
+                    border: { display: false } 
+                },
+                x: { 
+                    grid: { display: false }, 
+                    ticks: { 
+                        color: '#6b7280', 
+                        maxTicksLimit: 8, 
+                        maxRotation: 0,
+                        font: { family: "'Inter', sans-serif", size: 11 } 
+                    }, 
+                    border: { display: false } 
+                }
+            }
+        }
+    });
+}
 
-        stakeHistoryChart.update();
+// Operator Flow Chart instance
+let operatorFlowChart = null;
+
+/**
+ * Render Operator Flow Chart (delegated/undelegated bars)
+ */
+export function renderOperatorFlowChart(flowData, isUsdView) {
+    const container = document.getElementById('stake-chart-container');
+    if (!container) return;
+
+    if (operatorFlowChart) {
+        operatorFlowChart.destroy();
+        operatorFlowChart = null;
     }
+    if (stakeHistoryChart) {
+        stakeHistoryChart.destroy();
+        stakeHistoryChart = null;
+    }
+    if (operatorEarningsChart) {
+        operatorEarningsChart.destroy();
+        operatorEarningsChart = null;
+    }
+
+    if (!flowData || flowData.length === 0) {
+        container.innerHTML = '<div class="flex items-center justify-center h-full"><p class="text-gray-500">No flow data available for this timeframe.</p></div>';
+        return;
+    }
+
+    container.innerHTML = '<canvas id="stake-history-chart"></canvas>';
+    const canvas = document.getElementById('stake-history-chart');
+    if (!canvas) return;
+    
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const labels = flowData.map(d => d.label);
+    const delegatedData = flowData.map(d => {
+        if (isUsdView) return d.delegated * d.historicalPrice;
+        return d.delegated;
+    });
+    const undelegatedData = flowData.map(d => {
+        if (isUsdView) return -(d.undelegated * d.historicalPrice);
+        return -d.undelegated;
+    });
+
+    const yAxisPrefix = isUsdView ? '$' : '';
+    const yAxisSuffix = isUsdView ? '' : ' DATA';
+
+    operatorFlowChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: labels,
+            datasets: [
+                { label: '+', data: delegatedData, backgroundColor: '#22c55e', borderRadius: 4 },
+                { label: '-', data: undelegatedData, backgroundColor: '#ef4444', borderRadius: 4 }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: {
+                mode: 'index',
+                intersect: false,
+            },
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    backgroundColor: 'rgba(30, 30, 30, 0.9)',
+                    titleColor: '#ffffff',
+                    bodyColor: '#9ca3af',
+                    borderColor: '#333333',
+                    borderWidth: 1,
+                    padding: 12,
+                    cornerRadius: 8,
+                    displayColors: false,
+                    titleFont: { family: "'Inter', sans-serif", size: 13, weight: '600' },
+                    bodyFont: { family: "'Inter', sans-serif", size: 12 },
+                    callbacks: {
+                        beforeBody: (context) => {
+                            const dataPoint = flowData[context[0].dataIndex];
+                            if (!dataPoint) return [];
+                            
+                            const lines = [];
+                            
+                            // Delegated section
+                            if (dataPoint.delegated > 0) {
+                                lines.push('Delegated:');
+                                const delegatedFormatted = dataPoint.delegated >= 1000 
+                                    ? formatBigNumber(Math.round(dataPoint.delegated).toString())
+                                    : dataPoint.delegated.toFixed(2);
+                                let delegatedLine = `  ${delegatedFormatted} DATA`;
+                                if (dataPoint.historicalPrice > 0) {
+                                    const usdValue = dataPoint.delegated * dataPoint.historicalPrice;
+                                    delegatedLine += `  ~$${formatBigNumber(Math.round(usdValue).toString())}`;
+                                }
+                                lines.push(delegatedLine);
+                            }
+                            
+                            // Undelegated section
+                            if (dataPoint.undelegated > 0) {
+                                lines.push('Undelegated:');
+                                const undelegatedFormatted = dataPoint.undelegated >= 1000 
+                                    ? formatBigNumber(Math.round(dataPoint.undelegated).toString())
+                                    : dataPoint.undelegated.toFixed(2);
+                                let undelegatedLine = `  ${undelegatedFormatted} DATA`;
+                                if (dataPoint.historicalPrice > 0) {
+                                    const usdValue = dataPoint.undelegated * dataPoint.historicalPrice;
+                                    undelegatedLine += `  ~$${formatBigNumber(Math.round(usdValue).toString())}`;
+                                }
+                                lines.push(undelegatedLine);
+                            }
+                            
+                            return lines;
+                        },
+                        label: () => null // Disable default label
+                    }
+                }
+            },
+            scales: {
+                y: { 
+                    stacked: true, 
+                    grid: { color: '#333333', borderDash: [4, 4], drawBorder: false }, 
+                    ticks: { 
+                        color: '#6b7280', 
+                        font: { family: "'Inter', sans-serif", size: 11 },
+                        callback: function(value) {
+                            const absVal = Math.abs(value);
+                            const sign = value < 0 ? '-' : '';
+                            if (absVal >= 1000000) return sign + yAxisPrefix + (absVal / 1000000).toFixed(1) + 'M';
+                            if (absVal >= 1000) return sign + yAxisPrefix + (absVal / 1000).toFixed(0) + 'K';
+                            return sign + yAxisPrefix + Math.round(absVal) + yAxisSuffix;
+                        }
+                    }, 
+                    border: { display: false } 
+                },
+                x: { 
+                    stacked: true, 
+                    grid: { display: false }, 
+                    ticks: { 
+                        color: '#6b7280', 
+                        maxTicksLimit: 8, 
+                        maxRotation: 0,
+                        font: { family: "'Inter', sans-serif", size: 11 } 
+                    }, 
+                    border: { display: false } 
+                }
+            }
+        }
+    });
 }
 
 export function populateOperatorSettingsModal(operatorData) {
@@ -900,19 +1214,40 @@ export function renderOperatorDetails(data, globalState) {
         </div>
         
         <div class="detail-section p-6 mt-8">
-            <div class="flex justify-between items-center mb-4 flex-wrap gap-2">
-                <div class="flex items-center gap-4">
-                     <h3 class="text-xl font-semibold text-white">Stake</h3>
-                     <div id="chart-view-buttons" class="flex items-center gap-1 bg-[#2C2C2C] p-1 rounded-lg">
+            <div class="flex flex-col gap-2 mb-4">
+                <div class="flex justify-between items-center flex-wrap gap-2">
+                    <div class="flex items-center gap-2">
+                        <div class="relative">
+                            <select id="chart-type-select" class="appearance-none bg-[#2C2C2C] border border-[#444] text-white text-sm font-semibold rounded-lg px-4 py-2 pr-8 cursor-pointer hover:bg-[#3a3a3a] focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-colors">
+                                <option value="stake">Stake</option>
+                                <option value="earnings">Earnings</option>
+                                <option value="flow">Flow</option>
+                            </select>
+                            <svg class="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                            </svg>
+                        </div>
+                    </div>
+                    <div id="chart-view-buttons" class="flex items-center gap-1 bg-[#2C2C2C] p-1 rounded-lg">
                         <button data-view="data" class="px-3 py-1 text-xs font-bold rounded-md hover:bg-[#444444] transition">DATA</button>
                         <button data-view="usd" class="px-3 py-1 text-xs font-bold rounded-md hover:bg-[#444444] transition">USD</button>
                     </div>
+                    <span id="chart-info-tooltip" class="relative group cursor-help hidden">
+                        <svg class="w-4 h-4 text-gray-500 hover:text-gray-400 transition-colors" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"/>
+                        </svg>
+                        <span class="absolute bottom-full right-0 mb-2 px-3 py-2 text-xs font-normal text-gray-300 bg-[#1a1a1a] border border-[#333] rounded-lg shadow-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-50">
+                            USD values based on current price
+                        </span>
+                    </span>
                 </div>
-                <div id="chart-timeframe-buttons" class="flex items-center gap-1 bg-[#2C2C2C] p-1 rounded-lg">
-                    <button data-days="30" class="px-3 py-1 text-xs font-bold rounded-md hover:bg-[#444444] transition">30D</button>
-                    <button data-days="90" class="px-3 py-1 text-xs font-bold rounded-md hover:bg-[#444444] transition">90D</button>
-                    <button data-days="365" class="px-3 py-1 text-xs font-bold rounded-md hover:bg-[#444444] transition">1Y</button>
-                    <button data-days="all" class="px-3 py-1 text-xs font-bold rounded-md hover:bg-[#444444] transition">All</button>
+                <div class="flex justify-end">
+                    <div id="chart-timeframe-buttons" class="flex items-center gap-1 bg-[#2C2C2C] p-1 rounded-lg">
+                        <button data-days="30" class="px-3 py-1 text-xs font-bold rounded-md hover:bg-[#444444] transition">30D</button>
+                        <button data-days="90" class="px-3 py-1 text-xs font-bold rounded-md hover:bg-[#444444] transition">90D</button>
+                        <button data-days="365" class="px-3 py-1 text-xs font-bold rounded-md hover:bg-[#444444] transition">1Y</button>
+                        <button data-days="all" class="px-3 py-1 text-xs font-bold rounded-md hover:bg-[#444444] transition">All</button>
+                    </div>
                 </div>
             </div>
             <div id="stake-chart-container" class="h-64">
@@ -1267,7 +1602,7 @@ export function toggleVoteList(flagId) {
     document.getElementById(`votes-${flagId}`)?.classList.toggle('hidden');
 }
 
-export function updateChartTimeframeButtons(days, isUsdView) {
+export function updateChartTimeframeButtons(days, isUsdView, chartType = 'stake') {
     // Timeframe buttons
     const buttons = document.querySelectorAll('#chart-timeframe-buttons button');
     buttons.forEach(button => {
@@ -1280,7 +1615,26 @@ export function updateChartTimeframeButtons(days, isUsdView) {
         }
     });
 
-    // View buttons (DATA/USD)
+    // View buttons (DATA/USD) - only visible for Stake chart
+    const viewButtonsContainer = document.getElementById('chart-view-buttons');
+    if (viewButtonsContainer) {
+        if (chartType === 'stake') {
+            viewButtonsContainer.classList.remove('hidden');
+        } else {
+            viewButtonsContainer.classList.add('hidden');
+        }
+    }
+
+    // Info tooltip - visible for Earnings chart
+    const infoTooltip = document.getElementById('chart-info-tooltip');
+    if (infoTooltip) {
+        if (chartType === 'earnings') {
+            infoTooltip.classList.remove('hidden');
+        } else {
+            infoTooltip.classList.add('hidden');
+        }
+    }
+
     const viewButtons = document.querySelectorAll('#chart-view-buttons button');
     viewButtons.forEach(button => {
         const isActive = (button.dataset.view === 'usd' && isUsdView) || (button.dataset.view === 'data' && !isUsdView);

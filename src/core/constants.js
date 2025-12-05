@@ -148,8 +148,18 @@ export const SUBGRAPH_ID = 'EGWFdhhiWypDuz22Uy7b3F69E9MEkyfU9iAQMttkH5Rj';
 export const DATA_PRICE_STREAM_ID = 'binance-streamr.eth/DATAUSDT/ticker';
 export const POLYGON_RPC_URL = 'https://polygon-rpc.com';
 
-// Default API key fallback
+// ============================================
+// API Keys Configuration
+// ============================================
+// Default API key fallbacks (used when user hasn't configured their own)
 export const DEFAULT_GRAPH_API_KEY = 'd8acda6777ed7cbaccfd3f1102d447f6';
+export const DEFAULT_ETHERSCAN_API_KEY = 'B8BXCXWR66RI1J2QYQRTT4SPHCC6VYYJHC';
+
+// LocalStorage keys for user-configured API keys
+export const STORAGE_KEYS = {
+    GRAPH_API_KEY: 'the-graph-api-key',
+    ETHERSCAN_API_KEY: 'etherscan-api-key'
+};
 
 /**
  * Gets the Graph API URL using user-configured key or default fallback.
@@ -157,9 +167,37 @@ export const DEFAULT_GRAPH_API_KEY = 'd8acda6777ed7cbaccfd3f1102d447f6';
  * @returns {string} The Graph API URL
  */
 export function getGraphUrl() {
-    const storedKey = localStorage.getItem('the-graph-api-key');
+    const storedKey = localStorage.getItem(STORAGE_KEYS.GRAPH_API_KEY);
     const apiKey = storedKey && storedKey.trim() !== '' ? storedKey : DEFAULT_GRAPH_API_KEY;
     return `https://gateway-arbitrum.network.thegraph.com/api/${apiKey}/subgraphs/id/${SUBGRAPH_ID}`;
+}
+
+/**
+ * Gets the Etherscan/Polygonscan API key using user-configured key or default fallback.
+ * This is the single source of truth for Etherscan API access across the app.
+ * @returns {string} The API key
+ */
+export function getEtherscanApiKey() {
+    const storedKey = localStorage.getItem(STORAGE_KEYS.ETHERSCAN_API_KEY);
+    return storedKey && storedKey.trim() !== '' ? storedKey : DEFAULT_ETHERSCAN_API_KEY;
+}
+
+/**
+ * Builds a Polygonscan API URL with the correct API key.
+ * @param {object} params - Query parameters
+ * @param {string} params.module - API module (account, transaction, etc.)
+ * @param {string} params.action - API action (txlist, tokentx, etc.)
+ * @param {string} params.address - Wallet address
+ * @param {number} [params.page=1] - Page number
+ * @param {number} [params.offset=100] - Results per page
+ * @param {string} [params.sort='desc'] - Sort order
+ * @returns {string} Complete API URL
+ */
+export function buildPolygonscanUrl({ module, action, address, page = 1, offset = 100, sort = 'desc' }) {
+    const { apiUrl, chainId } = POLYGONSCAN_NETWORK;
+    const apiKey = getEtherscanApiKey();
+    const cacheBuster = `&_t=${Date.now()}`;
+    return `${apiUrl}?chainid=${chainId}&module=${module}&action=${action}&address=${address}&page=${page}&offset=${offset}&sort=${sort}&apikey=${apiKey}${cacheBuster}`;
 }
 
 export const POLYGONSCAN_NETWORK = {
@@ -192,10 +230,21 @@ export const VOTE_ON_FLAG_RAW_AMOUNTS = new Set([
     "2000000000000000000"
 ]);
 
+// Pagination
 export const DELEGATORS_PER_PAGE = 100;
+export const DELEGATORS_LIST_PAGE_SIZE = 50;
+export const DELEGATOR_TX_HISTORY_LIMIT = 2000;
 export const OPERATORS_PER_PAGE = 20;
 export const MIN_SEARCH_LENGTH = 3;
 export const MAX_STREAM_MESSAGES = 20;
 export const MIN_ADDRESS_SEARCH_LENGTH = 8;
 export const FULL_ADDRESS_LENGTH = 42;
+
+// Chart timeframes for delegator view
+export const DELEGATOR_TIMEFRAMES = {
+    '30': 30,
+    '90': 90,
+    '365': 365,
+    'all': 'all'
+};
 

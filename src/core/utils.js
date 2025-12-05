@@ -116,6 +116,16 @@ export const formatDataWithUsdTooltip = (dataAmountStr, dataPriceUSD) => {
 };
 
 /**
+ * Abbreviate an Ethereum address to a short form.
+ * @param {string} address - The Ethereum address.
+ * @returns {string} The abbreviated address (0x1234...abcd).
+ */
+export const shortAddress = (address) => {
+    if (!address) return '';
+    return `${address.substring(0, 6)}...${address.substring(address.length - 4)}`;
+};
+
+/**
  * Creates an HTML anchor tag for a Polygonscan link.
  * @param {string} address - The Ethereum address.
  * @param {string} [type='address'] - The type of link (e.g., 'address', 'tx').
@@ -278,4 +288,3 @@ export function parseDateFromCsv(dateString) {
     }
 }
 
-// NOTE: getMaticBalance is defined in services.js to avoid duplication

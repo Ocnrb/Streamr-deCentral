@@ -428,8 +428,8 @@
             </div>
         </div>
     
-    <!-- Main Loader Overlay -->
-    <div id="loader-overlay" class="fixed inset-0 bg-[#121212] bg-opacity-75 flex items-center justify-center z-50 hidden">
+    <!-- Main Loader Overlay - positioned to not cover sidebar -->
+    <div id="loader-overlay" class="fixed inset-0 md:left-[72px] lg:left-72 bg-[#121212]/75 flex items-center justify-center z-30 hidden">
         <div class="loader rounded-full border-8 border-t-8 border-[#555555] border-t-transparent h-24 w-24"></div>
     </div>
 
@@ -456,16 +456,10 @@
                     <span class="hidden lg:block text-sm font-medium">Operators</span>
                 </a>
                 
-                <!-- Delegators (Coming Soon) -->
-                <a href="#" data-nav="delegators" class="nav-link group flex items-center gap-3 px-3 py-2.5 rounded-md text-gray-600 cursor-not-allowed" title="Coming Soon">
-                    <svg class="w-5 h-5 flex-shrink-0 opacity-40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                        <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
-                        <circle cx="9" cy="7" r="4"/>
-                        <path d="M22 21v-2a4 4 0 0 0-3-3.87"/>
-                        <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
-                    </svg>
+                <!-- Delegators -->
+                <a href="#" data-nav="delegators" class="nav-link group flex items-center gap-3 px-3 py-2.5 rounded-md hover:bg-white/[0.02] transition-colors text-gray-400">
+                    <img src="/assets/delegator_icon.png" alt="" class="w-6 h-6 flex-shrink-0 opacity-70 group-hover:opacity-100">
                     <span class="hidden lg:block text-sm font-medium">Delegators</span>
-                    <span class="hidden lg:inline-flex ml-auto px-1.5 py-0.5 text-[8px] font-semibold bg-gray-800 text-gray-500 rounded">SOON</span>
                 </a>
                 
                 <!-- Streams (Coming Soon) -->
@@ -619,20 +613,15 @@
         <div class="flex justify-around items-center h-16 px-2">
             <!-- Operators -->
             <a href="/" data-nav="operators" class="bottom-nav-item flex flex-col items-center justify-center gap-1 p-2 min-w-[56px] text-gray-400 transition-colors">
-                <img src="/assets/operator_icon.png" alt="" class="w-6 h-5">
+                <img src="/assets/operator_icon.png" alt="" class="w-6 h-6">
                 <span class="text-[10px] font-medium">Operators</span>
             </a>
             
-            <!-- Delegators (Coming Soon) -->
-            <div class="bottom-nav-item flex flex-col items-center justify-center gap-1 p-2 min-w-[56px] text-gray-600 cursor-not-allowed opacity-50">
-                <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
-                    <circle cx="9" cy="7" r="4"/>
-                    <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
-                    <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
-                </svg>
+            <!-- Delegators   href="/delegators"--> 
+            <a href="#" data-nav="delegators" class="bottom-nav-item flex flex-col items-center justify-center gap-1 p-2 min-w-[56px] text-gray-400 transition-colors">
+                <img src="/assets/delegator_icon.png" alt="" class="w-6 h-6">
                 <span class="text-[10px] font-medium">Delegators</span>
-            </div>
+            </a>
             
             <!-- Streams (Coming Soon) -->
             <div class="bottom-nav-item flex flex-col items-center justify-center gap-1 p-2 min-w-[56px] text-gray-600 cursor-not-allowed opacity-50">
@@ -744,6 +733,278 @@
         <!-- Operator Detail View -->
         <div id="operator-detail-view" class="container mx-auto p-4 md:p-6 space-y-4 md:space-y-8">
             <div id="detail-content">
+            </div>
+        </div>
+
+        <!-- ===== DELEGATORS LIST VIEW ===== -->
+        <div id="delegators-list-view" class="hidden container mx-auto p-4 md:p-6">
+            <!-- Loading State - matches main loader style, doesn't cover sidebar -->
+            <div id="delegators-loading" class="hidden fixed inset-0 md:left-[72px] lg:left-72 bg-[#121212]/75 flex items-center justify-center z-30">
+                <div class="loader rounded-full border-8 border-t-8 border-[#555555] border-t-transparent h-24 w-24"></div>
+            </div>
+
+            <!-- Search Bar (matches operators style) -->
+            <div class="mb-6">
+                <div class="relative">
+                    <input 
+                        type="text" 
+                        id="delegators-search-input" 
+                        placeholder="Search by wallet address..." 
+                        class="w-full h-12 pl-11 pr-4 bg-[#1E1E1E] border border-[#333333] rounded-xl text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all"
+                    >
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                    </svg>
+                </div>
+            </div>
+
+            <!-- Stats & Toggle Row - aligned with table -->
+            <div class="flex items-center justify-between mb-4 px-2">
+                <!-- Left: Stats -->
+                <div class="flex items-center gap-6 text-sm text-gray-500">
+                    <span>Loaded: <strong id="delegators-total-count" class="text-white">0</strong></span>
+                    <span class="relative group">
+                        Total Staked: <strong id="delegators-total-staked" class="text-white">0</strong>
+                        <span class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-2 text-xs font-normal text-gray-300 bg-[#1a1a1a] border border-[#333] rounded-lg shadow-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-50">
+                            Visible
+                        </span>
+                    </span>
+                </div>
+                
+                <!-- Right: Self-delegation Toggle -->
+                <label class="flex items-center gap-2 cursor-pointer group select-none">
+                    <span class="text-xs font-medium text-gray-500 group-hover:text-gray-300 transition-colors whitespace-nowrap">Show self-delegation</span>
+                    <div class="relative">
+                        <input type="checkbox" id="delegators-show-self-delegation" class="sr-only peer">
+                        <div class="w-8 h-4 bg-[#333333] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-blue-600"></div>
+                    </div>
+                </label>
+            </div>
+
+            <!-- Table -->
+            <div class="bg-[#1E1E1E] border border-[#333] rounded-xl overflow-hidden shadow-xl mb-6">
+                <table class="w-full text-left border-collapse">
+                    <thead class="bg-[#252525] text-xs font-semibold text-gray-400 uppercase tracking-wider sticky top-0 z-10">
+                        <tr>
+                            <th class="px-4 md:px-6 py-4 border-b border-[#333]">Address</th>
+                            <th class="px-4 md:px-6 py-4 border-b border-[#333] text-right">Staked</th>
+                            <th class="px-6 py-4 border-b border-[#333] text-center hidden md:table-cell">Operators</th>
+                            <th class="px-6 py-4 border-b border-[#333] text-center hidden md:table-cell">Last Seen</th>
+                        </tr>
+                    </thead>
+                    <tbody id="delegators-leaderboard-body" class="divide-y divide-[#333]">
+                        <!-- Rows injected by JS -->
+                    </tbody>
+                </table>
+
+                <!-- Load More Button -->
+                <div id="delegators-load-more-container" class="hidden p-4 border-t border-[#333] bg-[#1a1a1a] text-center">
+                    <button id="delegators-load-more-btn" onclick="window.DelegatorsLogic?.loadMoreDelegators()" class="px-6 py-2 bg-[#2a2a2a] hover:bg-[#333] text-gray-300 hover:text-white rounded-lg text-sm font-medium transition-all flex items-center gap-2 mx-auto">
+                        <span>Load More</span>
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Empty State -->
+            <div id="delegators-empty-state" class="hidden text-center py-20">
+                <svg class="w-12 h-12 text-gray-600 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                </svg>
+                <p class="text-gray-400 font-medium">No delegators found matching your search.</p>
+                <p class="text-sm text-gray-600 mt-2">Try a different address.</p>
+            </div>
+        </div>
+
+        <!-- ===== DELEGATOR DETAIL VIEW ===== -->
+        <div id="delegator-detail-view" class="hidden container mx-auto p-4 md:p-6 space-y-6">
+            <!-- Header Panel -->
+            <div class="bg-[#1E1E1E] border border-[#333] rounded-xl p-6 md:p-8">
+                <div class="flex justify-between items-start mb-6 flex-wrap gap-4">
+                    <!-- Identity -->
+                    <div class="flex items-center gap-5">
+                        <img id="delegator-detail-avatar" src="" onerror="this.src='https://placehold.co/80x80/1E1E1E/a3a3a3?text=?';" alt="Avatar" class="w-16 h-16 rounded-full border-2 border-[#333] shadow-lg">
+                        <div>
+                            <h2 class="text-2xl font-bold text-white mb-1">Delegator</h2>
+                            <a id="delegator-detail-link" href="#" target="_blank" class="font-mono text-sm text-gray-400 hover:text-white transition-colors">
+                                <span id="delegator-detail-address">--</span>
+                            </a>
+                        </div>
+                    </div>
+
+                    <!-- Last Seen -->
+                    <div class="text-right hidden sm:block">
+                        <p class="text-xs text-gray-500 uppercase tracking-wide font-medium mb-1">Last Seen</p>
+                        <p id="delegator-detail-last-seen" class="text-xl font-bold text-blue-400 tracking-tight">--</p>
+                    </div>
+                </div>
+
+                <!-- Stats Grid -->
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-8">
+                    <div>
+                        <p class="text-[11px] text-gray-500 font-medium uppercase tracking-wide mb-1">Staked</p>
+                        <p id="delegator-detail-stake" class="text-2xl font-bold text-white tracking-tight cursor-pointer">0</p>
+                    </div>
+                    <div>
+                        <p class="text-[11px] text-gray-500 font-medium uppercase tracking-wide mb-1">Initial Delegation</p>
+                        <p id="delegator-detail-initial" class="text-2xl font-bold text-white tracking-tight cursor-pointer">0</p>
+                    </div>
+                    <div>
+                        <p class="text-[11px] text-gray-500 font-medium uppercase tracking-wide mb-1">Total Earnings</p>
+                        <p id="delegator-detail-earnings" class="text-2xl font-bold text-white tracking-tight cursor-pointer">0</p>
+                    </div>
+                    <div>
+                        <p class="text-[11px] text-gray-500 font-medium uppercase tracking-wide mb-1">Active Operators</p>
+                        <p id="delegator-detail-ops-count" class="text-2xl font-bold text-white tracking-tight">0</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Portfolio Chart -->
+            <div class="bg-[#1E1E1E] border border-[#333] rounded-xl p-5 min-h-[400px] flex flex-col relative">
+                <div class="flex justify-between items-center mb-4 z-10 flex-wrap gap-2">
+                    <div class="flex items-center gap-4">
+                        <h3 class="text-base font-bold text-gray-200 flex items-center gap-2">
+                            <svg class="w-5 h-5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+                            </svg>
+                            Total Portfolio Value
+                        </h3>
+                        <div id="delegator-chart-view-buttons" class="flex items-center gap-1 bg-[#2C2C2C] p-1 rounded-lg">
+                            <button data-view="data" class="px-3 py-1 text-xs font-bold rounded-md bg-blue-600 text-white transition">DATA</button>
+                            <button data-view="usd" class="px-3 py-1 text-xs font-bold rounded-md hover:bg-[#444444] text-gray-300 transition">USD</button>
+                        </div>
+                    </div>
+
+                    <!-- Timeframe Buttons -->
+                    <div id="delegator-chart-timeframe-buttons" class="flex items-center gap-1 bg-[#2C2C2C] p-1 rounded-lg">
+                        <button data-delegator-timeframe="30" class="px-3 py-1 text-xs font-bold rounded-md hover:bg-[#444444] text-gray-300 transition">30D</button>
+                        <button data-delegator-timeframe="90" class="px-3 py-1 text-xs font-bold rounded-md hover:bg-[#444444] text-gray-300 transition">90D</button>
+                        <button data-delegator-timeframe="365" class="px-3 py-1 text-xs font-bold rounded-md hover:bg-[#444444] text-gray-300 transition">1Y</button>
+                        <button data-delegator-timeframe="all" class="px-3 py-1 text-xs font-bold rounded-md bg-blue-600 text-white transition shadow-sm">All</button>
+                    </div>
+                </div>
+
+                <!-- Sync Message -->
+                <div id="delegator-portfolio-sync" class="absolute inset-0 flex items-center justify-center bg-[#1E1E1E]/80 z-20 hidden">
+                    <p class="text-gray-400 text-sm animate-pulse">Syncing blockchain history...</p>
+                </div>
+
+                <div class="flex-1 relative w-full z-10 h-64 md:h-80">
+                    <canvas id="delegator-portfolio-chart"></canvas>
+                </div>
+            </div>
+
+            <!-- Charts Row -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <!-- Flow Chart -->
+                <div class="bg-[#1E1E1E] border border-[#333] rounded-xl p-5 min-h-[350px] flex flex-col">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="text-sm font-bold text-gray-200 flex items-center gap-2">
+                            <svg class="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/>
+                            </svg>
+                            Capital Flow
+                        </h3>
+                        <div class="flex gap-4 text-[10px] font-medium uppercase tracking-wide">
+                            <span class="flex items-center gap-1.5 text-gray-500"><div class="w-2 h-2 rounded-full bg-green-500"></div> Delegated</span>
+                            <span class="flex items-center gap-1.5 text-gray-500"><div class="w-2 h-2 rounded-full bg-red-500"></div> Undelegated</span>
+                        </div>
+                    </div>
+                    <div class="flex-1 relative w-full h-64">
+                        <canvas id="delegator-flow-chart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Earnings Chart -->
+                <div class="bg-[#1E1E1E] border border-[#333] rounded-xl p-5 min-h-[350px] flex flex-col">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="text-sm font-bold text-gray-200 flex items-center gap-2">
+                            <svg class="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                            </svg>
+                            Earnings
+                        </h3>
+                        <span class="relative group cursor-help">
+                            <svg class="w-4 h-4 text-gray-500 hover:text-gray-400 transition-colors" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"/>
+                            </svg>
+                            <span class="absolute bottom-full right-0 mb-2 px-3 py-2 text-xs font-normal text-gray-300 bg-[#1a1a1a] border border-[#333] rounded-lg shadow-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-50">
+                                USD values based on current price
+                            </span>
+                        </span>
+                    </div>
+                    <div class="flex-1 relative w-full h-64">
+                        <canvas id="delegator-earnings-chart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Current Delegations Table (inline) -->
+            <div class="bg-[#1E1E1E] border border-[#333] rounded-xl p-5">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-sm font-bold text-gray-200 flex items-center gap-2">
+                        <svg class="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/>
+                        </svg>
+                        Current Delegations
+                    </h3>
+                    <span class="text-xs font-medium text-gray-500 uppercase tracking-wider">Source: The Graph</span>
+                </div>
+                <div class="overflow-x-auto border border-[#333] rounded-lg">
+                    <table class="w-full text-xs text-left">
+                        <thead class="text-[10px] text-gray-500 uppercase bg-[#1E1E1E] font-semibold tracking-wider">
+                            <tr>
+                                <th class="px-6 py-3">Operator</th>
+                                <th class="px-6 py-3 text-right">Delegated</th>
+                                <th class="px-6 py-3 text-right">Current Stake</th>
+                                <th class="px-6 py-3 text-right">Latest Action</th>
+                                <th class="px-6 py-3 text-right text-gray-500">Share %</th>
+                                <th class="px-6 py-3 text-center">Link</th>
+                            </tr>
+                        </thead>
+                        <tbody id="delegator-inline-delegations-body" class="bg-[#1E1E1E]/30 text-gray-300"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Transaction Map (Bubble Chart with Operator Images) -->
+            <div class="bg-[#1E1E1E] border border-[#333] rounded-xl p-5 min-h-[400px] flex flex-col">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-sm font-bold text-gray-200 flex items-center gap-2">
+                        <svg class="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"/>
+                        </svg>
+                        Transaction Map
+                    </h3>
+                    <div class="flex gap-4 text-[10px] font-medium uppercase tracking-wide">
+                        <span class="flex items-center gap-1.5 text-gray-500"><div class="w-2 h-2 rounded-full bg-blue-500"></div> Delegated</span>
+                        <span class="flex items-center gap-1.5 text-gray-500"><div class="w-2 h-2 rounded-full bg-red-500"></div> Undelegated</span>
+                    </div>
+                </div>
+                <div class="flex-1 relative w-full h-80">
+                    <canvas id="delegator-map-chart"></canvas>
+                </div>
+            </div>
+
+            <!-- Data Access Button -->
+            <div class="w-full">
+                <button onclick="window.DelegatorsLogic?.openDataModal('history')" class="group w-full bg-[#1E1E1E] border border-[#333] rounded-xl p-6 hover:bg-[#252525] transition-colors flex items-center gap-4 text-left border-l-4 border-l-transparent hover:border-l-blue-500">
+                    <div class="h-12 w-12 bg-[#2C2C2C] rounded-lg flex items-center justify-center group-hover:bg-[#333] transition-colors">
+                        <svg class="w-6 h-6 text-gray-400 group-hover:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <h3 class="text-base font-bold text-white">Transaction History</h3>
+                        <p class="text-xs text-gray-500 mt-1">Full blockchain ledger (Polygonscan)</p>
+                    </div>
+                    <svg class="ml-auto w-5 h-5 text-gray-600 group-hover:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                    </svg>
+                </button>
             </div>
         </div>
 
@@ -1132,6 +1393,77 @@
                 </div>
             </div>
 
+        </div>
+    </div>
+
+    <!-- ===== DELEGATOR DATA MODAL ===== -->
+    <div id="delegator-data-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 md:p-8">
+        <div class="bg-[#1E1E1E] w-full h-full max-w-6xl rounded-xl border border-[#333] flex flex-col shadow-2xl overflow-hidden relative">
+            <!-- Header -->
+            <div class="p-5 border-b border-[#333] flex justify-between items-center bg-[#1E1E1E] shrink-0">
+                <div class="flex items-center gap-3">
+                    <div class="h-9 w-9 rounded-lg bg-[#2a2a2a] flex items-center justify-center">
+                        <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <h2 id="delegator-modal-title" class="text-lg font-bold text-white">Data Table</h2>
+                        <p class="text-xs text-gray-500">Detailed records</p>
+                    </div>
+                </div>
+                <button onclick="window.DelegatorsLogic?.closeDataModal()" class="p-2 hover:bg-[#2a2a2a] rounded-lg text-gray-400 hover:text-white transition-colors">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                    </svg>
+                </button>
+            </div>
+
+            <!-- Content -->
+            <div class="flex-1 overflow-y-auto bg-[#121212] p-6">
+                <!-- History Content -->
+                <div id="delegator-modal-content-history" class="hidden">
+                    <div class="flex justify-between items-center mb-4">
+                        <span class="text-xs font-medium text-gray-500 uppercase tracking-wider">Source: Polygonscan</span>
+                        <span id="delegator-tx-count" class="text-[10px] font-mono text-gray-400 bg-[#1E1E1E] border border-[#333] px-2 py-1 rounded">0 txs</span>
+                    </div>
+                    <div class="overflow-x-auto border border-[#333] rounded-lg">
+                        <table class="w-full text-xs text-left">
+                            <thead class="text-[10px] text-gray-500 uppercase bg-[#1E1E1E] font-semibold tracking-wider">
+                                <tr>
+                                    <th class="px-6 py-3">Date</th>
+                                    <th class="px-6 py-3">Action</th>
+                                    <th class="px-6 py-3">Operator</th>
+                                    <th class="px-6 py-3 text-right">Value</th>
+                                    <th class="px-6 py-3 text-center">Hash</th>
+                                </tr>
+                            </thead>
+                            <tbody id="delegator-history-table-body" class="bg-[#1E1E1E]/30 text-gray-300"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Delegations Content -->
+                <div id="delegator-modal-content-delegations" class="hidden">
+                    <div class="flex justify-between items-center mb-4">
+                        <span class="text-xs font-medium text-gray-500 uppercase tracking-wider">Source: The Graph</span>
+                    </div>
+                    <div class="overflow-x-auto border border-[#333] rounded-lg">
+                        <table class="w-full text-xs text-left">
+                            <thead class="text-[10px] text-gray-500 uppercase bg-[#1E1E1E] font-semibold tracking-wider">
+                                <tr>
+                                    <th class="px-6 py-3">Operator</th>
+                                    <th class="px-6 py-3 text-right">Current Stake</th>
+                                    <th class="px-6 py-3 text-right">Latest Action</th>
+                                    <th class="px-6 py-3 text-right text-gray-500">Share %</th>
+                                    <th class="px-6 py-3 text-center">Link</th>
+                                </tr>
+                            </thead>
+                            <tbody id="delegator-delegations-table-body" class="bg-[#1E1E1E]/30 text-gray-300"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 
