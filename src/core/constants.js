@@ -41,6 +41,20 @@ export const OPERATOR_CONTRACT_ABI = [
     },
     {
         "inputs": [],
+        "name": "valueWithoutEarnings",
+        "outputs": [ { "internalType": "uint256", "name": "", "type": "uint256" } ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "totalStakedIntoSponsorshipsWei",
+        "outputs": [ { "internalType": "uint256", "name": "", "type": "uint256" } ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
         "name": "queueIsEmpty",
         "outputs": [ { "internalType": "bool", "name": "", "type": "bool" } ],
         "stateMutability": "view",
@@ -91,6 +105,13 @@ export const OPERATOR_CONTRACT_ABI = [
     {
         "inputs": [ { "internalType": "address", "name": "sponsorship", "type": "address" }, { "internalType": "uint256", "name": "targetStakeWei", "type": "uint256" } ],
         "name": "reduceStakeTo",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [ { "internalType": "address", "name": "sponsorship", "type": "address" } ],
+        "name": "unstake",
         "outputs": [],
         "stateMutability": "nonpayable",
         "type": "function"
@@ -218,7 +239,8 @@ export const POLYGONSCAN_METHOD_IDS = {
     "0x6c68c0e1": "Undelegate",
     "0xadc9772e": "Stake",
     "0xa93a019f": "Force Unstake",
-    "0xd1b68611": "Unstake",
+    "0xd1b68611": "Reduce Stake",
+    "0xf2888dbb": "Unstake",
     "0x4a178fe4": "Flag",
 };
 

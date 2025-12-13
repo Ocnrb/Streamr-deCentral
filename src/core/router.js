@@ -9,6 +9,32 @@ export class Router {
         window.addEventListener('popstate', (e) => {
             this.handleRoute(window.location.pathname, false);
         });
+        
+        // Intercept clicks on internal links to use client-side routing
+        document.addEventListener('click', (e) => {
+            // Find if click was on a link or inside a link
+            const link = e.target.closest('a[href]');
+            if (!link) return;
+            
+            const href = link.getAttribute('href');
+            
+            // Skip external links, hash links, and links with target
+            if (!href || 
+                href.startsWith('http') || 
+                href.startsWith('//') || 
+                href.startsWith('#') || 
+                href.startsWith('mailto:') ||
+                link.hasAttribute('target') ||
+                link.hasAttribute('download')) {
+                return;
+            }
+            
+            // Check if it's an internal route (starts with /)
+            if (href.startsWith('/')) {
+                e.preventDefault();
+                this.navigate(href);
+            }
+        });
     }
 
     /**

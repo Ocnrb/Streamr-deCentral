@@ -445,7 +445,7 @@ export async function fetchOperatorDetails(operatorId) {
           operator(id: "${sanitizedId}") {
             id owner valueWithoutEarnings operatorTokenTotalSupplyWei delegatorCount cumulativeEarningsWei cumulativeProfitsWei cumulativeOperatorsCutWei operatorsCutFraction nodes controllers metadataJsonString
             stakes(first: 100) { amountWei sponsorship { id remainingWei spotAPY isRunning stream { id } } }
-            delegations(where: {isSelfDelegation: false}, first: 15, orderBy: _valueDataWei, orderDirection: desc) { id _valueDataWei delegator { id } }
+            delegations(where: {isSelfDelegation: false}, first: 15, orderBy: _valueDataWei, orderDirection: desc) { id _valueDataWei operatorTokenBalanceWei delegator { id } }
             queueEntries(orderBy: date, orderDirection: asc) { id amount delegator { id } date }
           }
           selfDelegation: delegations(where: {operator: "${sanitizedId}", isSelfDelegation: true}, first: 1) { _valueDataWei }
@@ -505,7 +505,7 @@ export async function fetchMoreDelegators(operatorId, skip) {
         query GetMoreDelegators {
             operator(id: "${sanitizedId}") {
                 delegations(where: {isSelfDelegation: false}, first: ${DELEGATORS_PER_PAGE}, skip: ${skip}, orderBy: _valueDataWei, orderDirection: desc) {
-                    id _valueDataWei delegator { id }
+                    id _valueDataWei operatorTokenBalanceWei delegator { id }
                 }
             }
         }`;
@@ -516,8 +516,11 @@ export async function fetchMoreDelegators(operatorId, skip) {
 
 // --- API (Polygonscan) ---
 
-export async function fetchPolygonscanHistory(walletAddress, offset = 500) {
+export async function fetchPolygonscanHistory(walletAddress, offset = 500, sponsorshipAddresses = []) {
     const apiKey = getEtherscanApiKey();
+    
+    // Create a Set of known sponsorship addresses (smart contracts) for quick lookup
+    const sponsorshipSet = new Set(sponsorshipAddresses.map(addr => addr.toLowerCase()));
     if (!apiKey) {
         console.warn("Etherscan API Key not available. Skipping transaction history fetch.");
         return [];
@@ -588,18 +591,73 @@ export async function fetchPolygonscanHistory(walletAddress, offset = 500) {
             tokenTxsByHash.get(tx.hash).push(tx);
         }
 
-const processedTokenTxs = [];
+        const processedTokenTxs = [];
         for (const [txHash, txGroup] of tokenTxsByHash.entries()) {
             
             const baseMethodId = methodIdMap.get(txHash) || "-";
-            let groupMethodId = baseMethodId; 
+            let groupMethodId = baseMethodId;
 
-            if (groupMethodId === "-" && txGroup.length > 1) {
-                const allDirections = txGroup.map(t => t.from.toLowerCase() === walletAddress.toLowerCase() ? "OUT" : "IN");
-                const areAllIn = allDirections.every(d => d === "IN");
-
-                if (areAllIn) {
-                    groupMethodId = "Force Unstake";
+            // ===========================================
+            // INFER METHOD ID FROM TOKEN TRANSFER PATTERNS
+            // (for transactions initiated by other addresses)
+            // ===========================================
+            if (groupMethodId === "-") {
+                const directions = txGroup.map(t => t.from.toLowerCase() === walletAddress.toLowerCase() ? "OUT" : "IN");
+                const hasIn = directions.includes("IN");
+                const hasOut = directions.includes("OUT");
+                const hasOutToTreasury = txGroup.some(t => 
+                    t.from.toLowerCase() === walletAddress.toLowerCase() && 
+                    t.to.toLowerCase() === STREAMR_TREASURY_ADDRESS.toLowerCase()
+                );
+                const allAreIn = directions.every(d => d === "IN");
+                const dataTransfers = txGroup.filter(t => t.tokenSymbol === "DATA");
+                
+                if (txGroup.length > 1) {
+                    // Multiple transfers in same tx
+                    if (hasIn && hasOutToTreasury) {
+                        // IN + OUT to Treasury = Collect Earnings (earnings + protocol tax)
+                        groupMethodId = "Collect Earnings";
+                    } else if (allAreIn && dataTransfers.length > 1) {
+                        // Multiple DATA INs = Force Unstake (slashing payout from multiple sources)
+                        groupMethodId = "Force Unstake";
+                    }
+                } else if (txGroup.length === 1) {
+                    // Single transfer - try to infer from context
+                    const singleTx = txGroup[0];
+                    const singleDirection = directions[0];
+                    const singleIsToTreasury = singleTx.to.toLowerCase() === STREAMR_TREASURY_ADDRESS.toLowerCase();
+                    
+                    if (singleTx.tokenSymbol === "DATA") {
+                        // First check if it's a Vote on Flag (specific amounts)
+                        if (VOTE_ON_FLAG_RAW_AMOUNTS.has(singleTx.value)) {
+                            groupMethodId = "Vote On Flag";
+                        } else if (singleDirection === "OUT" && singleIsToTreasury) {
+                            // OUT to Treasury = Protocol Tax
+                            groupMethodId = "Protocol Tax";
+                        } else if (singleDirection === "IN") {
+                            // Single DATA IN with unknown method
+                            // Check if from address is a known sponsorship (smart contract)
+                            const fromAddress = singleTx.from.toLowerCase();
+                            if (sponsorshipSet.has(fromAddress)) {
+                                // From sponsorship = Collect Earnings
+                                groupMethodId = "Collect Earnings";
+                            } else {
+                                // From normal address (EOA) = Delegate (external user delegating)
+                                groupMethodId = "Delegate";
+                            }
+                        } else if (singleDirection === "OUT" && !singleIsToTreasury) {
+                            // Single DATA OUT without known method
+                            // Check if destination is a known sponsorship (smart contract)
+                            const toAddress = singleTx.to.toLowerCase();
+                            if (sponsorshipSet.has(toAddress)) {
+                                // To sponsorship = Stake
+                                groupMethodId = "Stake";
+                            } else {
+                                // To normal address (EOA) = Undelegate (returning funds to delegator)
+                                groupMethodId = "Undelegate";
+                            }
+                        }
+                    }
                 }
             }
 
@@ -607,53 +665,47 @@ const processedTokenTxs = [];
                 const direction = tx.from.toLowerCase() === walletAddress.toLowerCase() ? "OUT" : "IN";
                 const decimals = parseInt(tx.tokenDecimal) || 18;
                 const amount = parseFloat(tx.value) / Math.pow(10, decimals);
+                const isToTreasury = tx.to.toLowerCase() === STREAMR_TREASURY_ADDRESS.toLowerCase();
                 
                 let finalMethodId = groupMethodId;
 
-                if (
-                    direction === "OUT" &&
-                    tx.tokenSymbol === "DATA" &&
-                    tx.to.toLowerCase() === STREAMR_TREASURY_ADDRESS.toLowerCase()
-                ) {
+                // ===========================================
+                // TRANSACTION CLASSIFICATION RULES (in order of priority)
+                // ===========================================
+
+                // 1. Protocol Tax: any DATA OUT to Treasury address (highest priority)
+                if (direction === "OUT" && tx.tokenSymbol === "DATA" && isToTreasury) {
                     finalMethodId = "Protocol Tax";
                 }
-                else if (
-                    finalMethodId === "-" && 
-                    tx.tokenSymbol === "DATA" &&
-                    VOTE_ON_FLAG_RAW_AMOUNTS.has(tx.value)
-                ) {
+                // 2. Known methods that should keep their name
+                else if (baseMethodId === "Stake") {
+                    finalMethodId = "Stake";
+                }
+                else if (baseMethodId === "Undelegate") {
+                    finalMethodId = "Undelegate";
+                }
+                else if (baseMethodId === "Reduce Stake") {
+                    finalMethodId = "Reduce Stake";
+                }
+                // 3. Collect Earnings (0xe8e658b4) or Unstake (0xf2888dbb): IN = "Collect Earnings"
+                else if ((baseMethodId === "Collect Earnings" || baseMethodId === "Unstake") && direction === "IN" && tx.tokenSymbol === "DATA") {
+                    finalMethodId = "Collect Earnings";
+                }
+                // 4. Unstake/Force Unstake: OUT (not to treasury) - keep method name
+                else if ((baseMethodId === "Unstake" || baseMethodId === "Force Unstake") && direction === "OUT" && !isToTreasury) {
+                    finalMethodId = baseMethodId;
+                }
+                // 5. Delegate (transferAndCall) OUT = "Stake" (staking into sponsorship via transferAndCall)
+                else if (baseMethodId === "Delegate" && direction === "OUT" && tx.tokenSymbol === "DATA" && !isToTreasury) {
+                    finalMethodId = "Stake";
+                }
+                // 6. Delegate/Transfer: IN = "Delegate"
+                else if ((baseMethodId === "Delegate" || baseMethodId === "Transfer") && direction === "IN") {
+                    finalMethodId = "Delegate";
+                }
+                // 7. Vote On Flag: detected by specific raw amounts (fallback)
+                else if (finalMethodId === "-" && tx.tokenSymbol === "DATA" && VOTE_ON_FLAG_RAW_AMOUNTS.has(tx.value)) {
                     finalMethodId = "Vote On Flag";
-                }
-                else if (
-                    (baseMethodId === "Delegate" || baseMethodId === "Transfer") && 
-                    direction === "IN"
-                ) {
-                    finalMethodId = "Delegate";
-                }
-                else if (
-                    finalMethodId === "-" && 
-                    direction === "IN" &&
-                    tx.tokenSymbol === "DATA" &&
-                    txGroup.length === 1 
-                ) {
-                    finalMethodId = "Delegate";
-                }
-                else if (baseMethodId === "Collect Earnings" && direction === "OUT") { 
-                    if (tx.to.toLowerCase() === STREAMR_TREASURY_ADDRESS.toLowerCase()) {
-                        finalMethodId = "Protocol Tax";
-                    } else {
-                        finalMethodId = "Undelegate"; 
-                    }
-                }
-                else if (
-                    (baseMethodId === "Unstake" || baseMethodId === "Force Unstake") && 
-                    direction === "OUT"
-                ) {
-                    if (tx.to.toLowerCase() === STREAMR_TREASURY_ADDRESS.toLowerCase()) {
-                        finalMethodId = "Protocol Tax";
-                    } else {
-                        finalMethodId = "Undelegate"; 
-                    }
                 }
             
                 processedTokenTxs.push({
@@ -742,8 +794,20 @@ export async function manageTransactionModal(show, mode = 'delegate', signer, my
                 txModalMinimumValue.textContent = 'N/A';
             }
         } else {
+            // Calculate balance using real-time exchange rate for undelegate
             const operatorContract = new ethers.Contract(currentOperatorId, OPERATOR_CONTRACT_ABI, provider);
-            balanceWei = await operatorContract.balanceInData(myRealAddress);
+            const [userTokensWei, totalSupplyWei, valueWithoutEarningsWei] = await Promise.all([
+                operatorContract.balanceOf(myRealAddress),
+                operatorContract.totalSupply(),
+                operatorContract.valueWithoutEarnings()
+            ]);
+            
+            // Calculate DATA balance: userTokens * valueWithoutEarnings / totalSupply
+            if (totalSupplyWei.isZero()) {
+                balanceWei = ethers.BigNumber.from(0);
+            } else {
+                balanceWei = userTokensWei.mul(valueWithoutEarningsWei).div(totalSupplyWei);
+            }
         }
         const balanceFormatted = ethers.utils.formatEther(balanceWei);
         txModalBalanceValue.textContent = `${parseFloat(balanceFormatted).toFixed(4)} DATA`;
@@ -844,10 +908,24 @@ export async function confirmUndelegation(signer, myRealAddress, currentOperator
             return null;
         }
         
-        const [userBalanceDataWei, userBalanceTokensWei] = await Promise.all([
-            operatorContract.balanceInData(myRealAddress),
-            operatorContract.balanceOf(myRealAddress)
+        // Fetch all required values in parallel for accurate real-time exchange rate calculation
+        const [userBalanceTokensWei, totalSupplyWei, valueWithoutEarningsWei] = await Promise.all([
+            operatorContract.balanceOf(myRealAddress),
+            operatorContract.totalSupply(),
+            operatorContract.valueWithoutEarnings()
         ]);
+
+        // Calculate real-time exchange rate: DATA per Operator Token
+        // exchangeRate = valueWithoutEarnings / totalSupply
+        // To convert DATA to Operator Tokens: tokens = amountData * totalSupply / valueWithoutEarnings
+        
+        // Calculate user's current DATA balance using real-time exchange rate
+        let userBalanceDataWei;
+        if (totalSupplyWei.isZero()) {
+            userBalanceDataWei = ethers.BigNumber.from(0);
+        } else {
+            userBalanceDataWei = userBalanceTokensWei.mul(valueWithoutEarningsWei).div(totalSupplyWei);
+        }
 
         if (amountDataWei.gt(userBalanceDataWei)) {
             showToast({ type: 'warning', title: 'Insufficient Stake', message: 'You do not have enough staked DATA to undelegate.' });
@@ -859,14 +937,19 @@ export async function confirmUndelegation(signer, myRealAddress, currentOperator
         const fullWithdrawalThreshold = userBalanceDataWei.mul(9999).div(10000);
         
         if (amountDataWei.gte(fullWithdrawalThreshold)) {
+            // Full withdrawal - use all user's tokens
             amountOperatorTokensWei = userBalanceTokensWei;
         } else {
-            if (userBalanceDataWei.isZero()) {
-                throw new Error("User has no DATA balance, cannot calculate conversion");
+            // Partial withdrawal - calculate operator tokens using real-time exchange rate
+            // operatorTokens = amountData * totalSupply / valueWithoutEarnings
+            if (valueWithoutEarningsWei.isZero()) {
+                throw new Error("Operator has no DATA value, cannot calculate conversion");
             }
             amountOperatorTokensWei = amountDataWei
-                .mul(userBalanceTokensWei)
-                .div(userBalanceDataWei);
+                .mul(totalSupplyWei)
+                .div(valueWithoutEarningsWei);
+            
+            // Safety check: never exceed user's token balance
             if (amountOperatorTokensWei.gt(userBalanceTokensWei)) {
                 amountOperatorTokensWei = userBalanceTokensWei;
             }
@@ -1016,7 +1099,19 @@ export async function fetchMyStake(operatorId, myRealAddress, signer) {
     try {
         const provider = getProvider(signer);
         const operatorContract = new ethers.Contract(operatorId, OPERATOR_CONTRACT_ABI, provider);
-        const myStakeWei = await operatorContract.balanceInData(myRealAddress);
+        
+        // Calculate stake using real-time exchange rate
+        const [userTokensWei, totalSupplyWei, valueWithoutEarningsWei] = await Promise.all([
+            operatorContract.balanceOf(myRealAddress),
+            operatorContract.totalSupply(),
+            operatorContract.valueWithoutEarnings()
+        ]);
+        
+        // Calculate DATA balance: userTokens * valueWithoutEarnings / totalSupply
+        if (totalSupplyWei.isZero()) {
+            return '0';
+        }
+        const myStakeWei = userTokensWei.mul(valueWithoutEarningsWei).div(totalSupplyWei);
         return myStakeWei.toString();
     } catch (e) {
         console.error("Failed to get user's stake:", e);

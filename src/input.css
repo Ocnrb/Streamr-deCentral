@@ -555,12 +555,20 @@
       flex-shrink: 0;
     }
     
-    /* Truncate long operator names */
+    /* Truncate long operator names - keep centered */
     .operator-card .operator-name {
-      max-width: calc(100% - 3rem);
+      max-width: 100%;
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
+      text-align: center;
+    }
+    
+    /* Ensure the name container stays centered */
+    .operator-card > div {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
     }
     
     /* Stack metrics vertically on very small screens */
@@ -624,5 +632,41 @@
       bottom: calc(4.5rem + env(safe-area-inset-bottom, 0)); /* Above bottom nav */
       max-width: none;
     }
+  }
+  
+  /* ===== PWA INSTALL BUTTONS ===== */
+  
+  .install-platform-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 0.75rem 1rem;
+    background-color: #333333;
+    border: 1px solid #444444;
+    border-radius: 0.5rem;
+    color: #9ca3af;
+    transition: all 0.2s ease;
+    cursor: pointer;
+    min-width: 4.5rem;
+  }
+  
+  .install-platform-btn:hover {
+    background-color: #444444;
+    border-color: #555555;
+    color: #ffffff;
+    transform: translateY(-2px);
+  }
+  
+  .install-platform-btn:active {
+    transform: translateY(0);
+  }
+  
+  .install-platform-btn svg {
+    transition: transform 0.2s ease;
+  }
+  
+  .install-platform-btn:hover svg {
+    transform: scale(1.1);
   }
 }

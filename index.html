@@ -12,6 +12,10 @@
     <link rel="icon" type="image/png" sizes="16x16" href="/favicon/favicon-16x16.png">
     <link rel="manifest" href="/favicon/site.webmanifest">
     <link rel="shortcut icon" href="/favicon/favicon.ico">
+    <meta name="theme-color" content="#00060A">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 
     <!-- Performance: Preconnect to external domains -->
     <link rel="preconnect" href="https://gateway-arbitrum.network.thegraph.com">
@@ -23,6 +27,21 @@
     <link rel="dns-prefetch" href="https://d3js.org">
 
     <link rel="stylesheet" href="/styles.css">
+    
+    <!-- PWA Install Prompt Capture (must be inline and early to catch the event) -->
+    <script>
+        window.deferredInstallPrompt = null;
+        window.addEventListener('beforeinstallprompt', function(e) {
+            console.log('PWA: beforeinstallprompt captured (early)');
+            e.preventDefault();
+            window.deferredInstallPrompt = e;
+        });
+        window.addEventListener('appinstalled', function() {
+            console.log('PWA: App installed');
+            window.deferredInstallPrompt = null;
+        });
+    </script>
+    
     <script src="/libs/ethers.umd.min.js" defer></script>
     <script src="/libs/chart.js" defer></script>
     <!-- LeafletJS CSS -->
@@ -38,7 +57,11 @@
 <body class="text-gray-200">
 
     <!-- Login Modal (visible by default until user logs in) -->
-    <div id="loginModal" class="fixed inset-0 bg-[#121212] flex items-center justify-center p-4 z-50">
+    <div id="loginModal" class="fixed inset-0 bg-[#121212] flex flex-col items-center justify-between p-4 z-50">
+        <!-- Spacer top -->
+        <div class="flex-1"></div>
+        
+        <!-- Main Login Panel (centered) -->
         <div class="bg-[#1E1E1E] rounded-lg p-8 max-w-sm w-full text-gray-300 text-center shadow-2xl border border-[#333333]">
             
             <div id="walletLoginView">
@@ -62,6 +85,44 @@
                 </div>
                 <p id="loading-main-text" class="text-lg text-white">Connecting...</p>
                 <p id="loading-sub-text" class="text-sm text-gray-400 mt-2">Please follow the instructions in your wallet.</p>
+            </div>
+        </div>
+        
+        <!-- Spacer bottom (same as top to keep login centered) -->
+        <div class="flex-1"></div>
+
+        <!-- Install App Panel (bottom) - hidden by default, shown by JS if not installed -->
+        <div id="installAppSection" class="hidden bg-[#1E1E1E] rounded-lg p-4 max-w-sm w-full text-gray-300 text-center shadow-2xl border border-[#333333] mb-4">
+            <p class="text-xs text-gray-500 mb-3">Install App</p>
+            <div class="flex justify-center gap-4">
+                <!-- Android Button -->
+                <button id="installAndroidBtn" class="install-platform-btn" title="Install on Android">
+                    <svg class="w-6 h-6" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M17.523 15.341a.749.749 0 1 0 1.497 0 .749.749 0 0 0-1.497 0zm-12.543 0a.749.749 0 1 0 1.498 0 .749.749 0 0 0-1.498 0zm12.635-7.719 1.937-3.355a.405.405 0 0 0-.147-.552.405.405 0 0 0-.552.147L16.87 7.262a9.525 9.525 0 0 0-4.87-1.318 9.525 9.525 0 0 0-4.87 1.318L5.147 3.862a.405.405 0 0 0-.552-.147.405.405 0 0 0-.147.552l1.937 3.355A8.927 8.927 0 0 0 3 15.153V21h18v-5.847a8.927 8.927 0 0 0-3.385-7.531z"/>
+                    </svg>
+                    <span class="text-xs mt-1">Android</span>
+                </button>
+                <!-- Windows Button -->
+                <button id="installWindowsBtn" class="install-platform-btn" title="Install on Windows">
+                    <svg class="w-6 h-6" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M3 5.548l7.129-0.973v6.881l-7.121 0.04V5.548zm0 12.9l7.129 0.972v-6.842l-7.121-0.04v5.91zm7.921 1.048l9.875 1.354V13.54l-9.875-0.057v5.963zm0-13.992v5.97l9.875-0.057V3.15l-9.875 1.354z"/>
+                    </svg>
+                    <span class="text-xs mt-1">Windows</span>
+                </button>
+                <!-- iOS Button -->
+                <button id="installIOSBtn" class="install-platform-btn" title="Install on iOS">
+                    <svg class="w-6 h-6" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/>
+                    </svg>
+                    <span class="text-xs mt-1">iOS</span>
+                </button>
+                <!-- macOS Button -->
+                <button id="installMacOSBtn" class="install-platform-btn" title="Install on macOS">
+                    <svg class="w-6 h-6" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/>
+                    </svg>
+                    <span class="text-xs mt-1">macOS</span>
+                </button>
             </div>
         </div>
     </div>
@@ -149,6 +210,51 @@
             </div>
             
             <button id="unlockForget" class="w-full text-gray-500 hover:text-gray-400 text-sm mt-4 transition-colors">Forget saved wallet</button>
+        </div>
+    </div>
+
+    <!-- iOS Install Instructions Modal -->
+    <div id="iosInstallModal" class="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4 z-50 hidden">
+        <div class="bg-[#1E1E1E] rounded-lg p-6 max-w-sm w-full text-gray-300 border border-[#333333] shadow-2xl">
+            <h2 class="text-xl font-bold mb-4 text-white text-center">Install on iOS</h2>
+            
+            <div class="space-y-4">
+                <div class="flex items-start gap-3">
+                    <div class="flex-shrink-0 w-8 h-8 bg-blue-800 rounded-full flex items-center justify-center text-white font-bold">1</div>
+                    <div>
+                        <p class="text-white font-medium">Tap the Share button</p>
+                        <p class="text-gray-400 text-sm">Located at the bottom of Safari</p>
+                        <div class="mt-2 flex justify-center">
+                            <svg class="w-8 h-8 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"></path>
+                            </svg>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="flex items-start gap-3">
+                    <div class="flex-shrink-0 w-8 h-8 bg-blue-800 rounded-full flex items-center justify-center text-white font-bold">2</div>
+                    <div>
+                        <p class="text-white font-medium">Select "Add to Home Screen"</p>
+                        <p class="text-gray-400 text-sm">Scroll down in the menu if needed</p>
+                        <div class="mt-2 flex justify-center">
+                            <svg class="w-8 h-8 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+                            </svg>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="flex items-start gap-3">
+                    <div class="flex-shrink-0 w-8 h-8 bg-blue-800 rounded-full flex items-center justify-center text-white font-bold">3</div>
+                    <div>
+                        <p class="text-white font-medium">Tap "Add"</p>
+                        <p class="text-gray-400 text-sm">The app will appear on your home screen</p>
+                    </div>
+                </div>
+            </div>
+            
+            <button id="iosInstallModalClose" class="w-full mt-6 bg-[#444444] hover:bg-[#555555] text-white font-bold py-3 px-4 rounded-lg transition-colors">Got it</button>
         </div>
     </div>
 
@@ -457,7 +563,7 @@
                 </a>
                 
                 <!-- Delegators -->
-                <a href="#" data-nav="delegators" class="nav-link group flex items-center gap-3 px-3 py-2.5 rounded-md hover:bg-white/[0.02] transition-colors text-gray-400">
+                <a href="/delegators" data-nav="delegators" class="nav-link group flex items-center gap-3 px-3 py-2.5 rounded-md hover:bg-white/[0.02] transition-colors text-gray-400">
                     <img src="/assets/delegator_icon.png" alt="" class="w-6 h-6 flex-shrink-0 opacity-70 group-hover:opacity-100">
                     <span class="hidden lg:block text-sm font-medium">Delegators</span>
                 </a>
@@ -506,19 +612,27 @@
                     </svg>
                     <span class="hidden lg:block text-sm font-medium">Leaderboard</span>
                 </a>
+                
+                <!-- Divider -->
+                <div class="my-3 mx-3 border-t border-white/[0.04]"></div>
+                
+                <!-- Section: Tools -->
+                <div class="px-3 pt-2 pb-1">
+                    <span class="hidden lg:block text-[10px] font-semibold text-gray-600 uppercase tracking-widest">Tools</span>
+                </div>
+                
+                <!-- Autostaker -->
+                <button id="sidebar-autostaker-btn" class="nav-link group w-full flex items-center gap-3 px-3 py-2.5 rounded-md text-gray-400 hover:text-white hover:bg-white/[0.03] transition-all duration-200">
+                    <svg class="w-5 h-5 flex-shrink-0 text-green-500 group-hover:text-green-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                    </svg>
+                    <span class="hidden lg:block text-sm font-medium">Autostaker</span>
+                </button>
             </div>
         </nav>
         
         <!-- Bottom Section -->
         <div class="border-t border-[#2a2a2a] p-2">
-            <!-- Autostaker Quick Access -->
-            <button id="sidebar-autostaker-btn" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-400 hover:text-white hover:bg-white/5 transition-all">
-                <svg class="w-5 h-5 flex-shrink-0 text-green-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M13 10V3L4 14h7v7l9-11h-7z"/>
-                </svg>
-                <span class="hidden lg:block text-sm font-medium">Autostaker</span>
-            </button>
-            
             <!-- Settings -->
             <button id="sidebar-settings-btn" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-400 hover:text-white hover:bg-white/5 transition-all">
                 <svg class="w-5 h-5 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -526,6 +640,17 @@
                     <circle cx="12" cy="12" r="3"/>
                 </svg>
                 <span class="hidden lg:block text-sm font-medium">Settings</span>
+            </button>
+            
+            <!-- About -->
+            <button id="sidebar-about-btn" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-400 hover:text-white hover:bg-white/5 transition-all">
+                <svg class="w-5 h-5 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="10"/>
+                    <path d="M9 9h.01"/>
+                    <path d="M9 9a3 3 0 1 1 3 3v1"/>
+                    <path d="M12 17h.01"/>
+                </svg>
+                <span class="hidden lg:block text-sm font-medium">About</span>
             </button>
             
             <!-- Wallet Info (Sidebar) - with dropdown -->
@@ -583,7 +708,7 @@
 
     <!-- ===== DESKTOP HEADER - hidden until login ===== -->
     <header id="desktop-header" class="hidden fixed top-0 right-0 z-30 bg-[#121212]/95 backdrop-blur-md border-b border-[#2a2a2a] transition-all duration-300 left-[72px] lg:left-72">
-        <div class="flex items-center justify-between px-6 h-14">
+        <div class="container mx-auto flex items-center justify-between px-4 md:px-6 h-14">
             <!-- Left: Page Title -->
             <div class="flex items-center gap-2">
                 <h1 id="desktop-page-title" class="text-lg font-semibold text-white">Operators</h1>
@@ -617,8 +742,8 @@
                 <span class="text-[10px] font-medium">Operators</span>
             </a>
             
-            <!-- Delegators   href="/delegators"--> 
-            <a href="#" data-nav="delegators" class="bottom-nav-item flex flex-col items-center justify-center gap-1 p-2 min-w-[56px] text-gray-400 transition-colors">
+            <!-- Delegators --> 
+            <a href="/delegators" data-nav="delegators" class="bottom-nav-item flex flex-col items-center justify-center gap-1 p-2 min-w-[56px] text-gray-400 transition-colors">
                 <img src="/assets/delegator_icon.png" alt="" class="w-6 h-6">
                 <span class="text-[10px] font-medium">Delegators</span>
             </a>
@@ -693,6 +818,16 @@
                         </svg>
                         <span class="text-sm font-medium">Settings</span>
                     </button>
+                    
+                    <!-- About -->
+                    <button id="bottom-nav-about" class="w-full flex items-center gap-3 px-4 py-3 text-gray-300 hover:bg-[#2a2a2a] transition-colors">
+                        <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="10"/>
+                            <path d="M12 16v-4"/>
+                            <path d="M12 8h.01"/>
+                        </svg>
+                        <span class="text-sm font-medium">About</span>
+                    </button>
                 </div>
             </div>
         </div>
@@ -700,6 +835,94 @@
     
     <!-- Overlay to capture clicks when More menu is open (above content, below nav) -->
     <div id="bottom-nav-overlay" class="hidden fixed inset-0 z-30"></div>
+
+    <!-- About Modal -->
+    <div id="aboutModal" class="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4 z-50 hidden">
+        <div class="bg-[#1E1E1E] rounded-lg p-6 max-w-md w-full text-gray-300 border border-[#333333] shadow-2xl">
+            <!-- Header -->
+            <div class="flex items-center justify-between mb-6">
+                <div class="flex items-center gap-3">
+                    <img src="/favicon/favicon.ico" alt="Streamr deCentral" class="w-10 h-10">
+                    <div>
+                        <h2 class="text-xl font-bold text-white">Streamr deCentral</h2>
+                        <p class="text-xs text-gray-500">Community Dashboard</p>
+                    </div>
+                </div>
+                <button id="aboutModalClose" class="text-gray-500 hover:text-white transition-colors">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                    </svg>
+                </button>
+            </div>
+            
+            <!-- Description -->
+            <div class="space-y-4 text-sm">
+                <p class="text-gray-300">
+                    <strong class="text-white">Streamr deCentral</strong> is a community-built dashboard for exploring and managing the Streamr Network ecosystem.
+                </p>
+                
+                <!-- Security & Architecture -->
+                <div class="space-y-3 bg-[#151515] rounded-lg p-4 border border-[#2a2a2a]">
+                    <div class="flex items-center gap-2 mb-2">
+                        <svg class="w-4 h-4 text-green-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                        </svg>
+                        <p class="text-white font-medium text-xs uppercase tracking-wider">Security & Privacy</p>
+                    </div>
+                    
+                    <div class="space-y-2.5">
+                        <div class="flex items-start gap-2">
+                            <svg class="w-4 h-4 mt-0.5 text-green-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                            </svg>
+                            <p class="text-gray-400 text-sm"><span class="text-gray-300">100% Client-Side</span> — All code runs entirely in your browser. No backend servers, no data collection.</p>
+                        </div>
+                        
+                        <div class="flex items-start gap-2">
+                            <svg class="w-4 h-4 mt-0.5 text-green-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                            </svg>
+                            <p class="text-gray-400 text-sm"><span class="text-gray-300">Private Key Security</span> — Keys are encrypted using Ethereum Keystore V3 standard and stored locally. Never transmitted anywhere.</p>
+                        </div>
+                        
+                        <div class="flex items-start gap-2">
+                            <svg class="w-4 h-4 mt-0.5 text-green-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                            </svg>
+                            <p class="text-gray-400 text-sm"><span class="text-gray-300">Open Source</span> — Fully transparent codebase.</p>
+                            <a href="https://github.com/Ocnrb/Streamr-deCentral" target="_blank" rel="noopener noreferrer" class="ml-auto flex-shrink-0 text-gray-500 hover:text-white transition-colors" title="View on GitHub">
+                                <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+                                    <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
+                                </svg>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Data Sources -->
+                <div class="space-y-3 bg-[#151515] rounded-lg p-4 border border-[#2a2a2a]">
+                    <div class="flex items-center gap-2 mb-2">
+                        <svg class="w-4 h-4 text-blue-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"/>
+                        </svg>
+                        <p class="text-white font-medium text-xs uppercase tracking-wider">Data Sources</p>
+                    </div>
+                    
+                    <div class="space-y-1.5 text-sm text-gray-400">
+                        <p><span class="text-gray-500">•</span> <span class="text-gray-300">The Graph</span> — Operator & delegator data via decentralized indexing</p>
+                        <p><span class="text-gray-500">•</span> <span class="text-gray-300">Polygon RPC</span> — Direct blockchain queries for real-time data</p>
+                        <p><span class="text-gray-500">•</span> <span class="text-gray-300">Streamr Network</span> — Live node heartbeats and DATA price via WebSocket streams</p>
+                        <p><span class="text-gray-500">•</span> <span class="text-gray-300">Etherscan API</span> — Transaction History</p>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Footer -->
+            <div class="mt-6 pt-4 border-t border-[#333] flex items-center justify-between">
+                <a href="https://streamr.network" target="_blank" rel="noopener noreferrer" class="text-sm text-blue-400 hover:text-blue-300 transition-colors">streamr.network</a>
+            </div>
+        </div>
+    </div>
 
 
     <!-- ===== MAIN CONTAINER ===== -->
@@ -862,96 +1085,15 @@
                 </div>
             </div>
 
-            <!-- Portfolio Chart -->
-            <div class="bg-[#1E1E1E] border border-[#333] rounded-xl p-5 min-h-[400px] flex flex-col relative">
-                <div class="flex justify-between items-center mb-4 z-10 flex-wrap gap-2">
-                    <div class="flex items-center gap-4">
-                        <h3 class="text-base font-bold text-gray-200 flex items-center gap-2">
-                            <svg class="w-5 h-5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
-                            </svg>
-                            Total Portfolio Value
-                        </h3>
-                        <div id="delegator-chart-view-buttons" class="flex items-center gap-1 bg-[#2C2C2C] p-1 rounded-lg">
-                            <button data-view="data" class="px-3 py-1 text-xs font-bold rounded-md bg-blue-600 text-white transition">DATA</button>
-                            <button data-view="usd" class="px-3 py-1 text-xs font-bold rounded-md hover:bg-[#444444] text-gray-300 transition">USD</button>
-                        </div>
-                    </div>
-
-                    <!-- Timeframe Buttons -->
-                    <div id="delegator-chart-timeframe-buttons" class="flex items-center gap-1 bg-[#2C2C2C] p-1 rounded-lg">
-                        <button data-delegator-timeframe="30" class="px-3 py-1 text-xs font-bold rounded-md hover:bg-[#444444] text-gray-300 transition">30D</button>
-                        <button data-delegator-timeframe="90" class="px-3 py-1 text-xs font-bold rounded-md hover:bg-[#444444] text-gray-300 transition">90D</button>
-                        <button data-delegator-timeframe="365" class="px-3 py-1 text-xs font-bold rounded-md hover:bg-[#444444] text-gray-300 transition">1Y</button>
-                        <button data-delegator-timeframe="all" class="px-3 py-1 text-xs font-bold rounded-md bg-blue-600 text-white transition shadow-sm">All</button>
-                    </div>
-                </div>
-
-                <!-- Sync Message -->
-                <div id="delegator-portfolio-sync" class="absolute inset-0 flex items-center justify-center bg-[#1E1E1E]/80 z-20 hidden">
-                    <p class="text-gray-400 text-sm animate-pulse">Syncing blockchain history...</p>
-                </div>
-
-                <div class="flex-1 relative w-full z-10 h-64 md:h-80">
-                    <canvas id="delegator-portfolio-chart"></canvas>
-                </div>
-            </div>
-
-            <!-- Charts Row -->
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <!-- Flow Chart -->
-                <div class="bg-[#1E1E1E] border border-[#333] rounded-xl p-5 min-h-[350px] flex flex-col">
-                    <div class="flex justify-between items-center mb-4">
-                        <h3 class="text-sm font-bold text-gray-200 flex items-center gap-2">
-                            <svg class="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/>
-                            </svg>
-                            Capital Flow
-                        </h3>
-                        <div class="flex gap-4 text-[10px] font-medium uppercase tracking-wide">
-                            <span class="flex items-center gap-1.5 text-gray-500"><div class="w-2 h-2 rounded-full bg-green-500"></div> Delegated</span>
-                            <span class="flex items-center gap-1.5 text-gray-500"><div class="w-2 h-2 rounded-full bg-red-500"></div> Undelegated</span>
-                        </div>
-                    </div>
-                    <div class="flex-1 relative w-full h-64">
-                        <canvas id="delegator-flow-chart"></canvas>
-                    </div>
-                </div>
-
-                <!-- Earnings Chart -->
-                <div class="bg-[#1E1E1E] border border-[#333] rounded-xl p-5 min-h-[350px] flex flex-col">
-                    <div class="flex justify-between items-center mb-4">
-                        <h3 class="text-sm font-bold text-gray-200 flex items-center gap-2">
-                            <svg class="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                            </svg>
-                            Earnings
-                        </h3>
-                        <span class="relative group cursor-help">
-                            <svg class="w-4 h-4 text-gray-500 hover:text-gray-400 transition-colors" fill="currentColor" viewBox="0 0 20 20">
-                                <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"/>
-                            </svg>
-                            <span class="absolute bottom-full right-0 mb-2 px-3 py-2 text-xs font-normal text-gray-300 bg-[#1a1a1a] border border-[#333] rounded-lg shadow-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-50">
-                                USD values based on current price
-                            </span>
-                        </span>
-                    </div>
-                    <div class="flex-1 relative w-full h-64">
-                        <canvas id="delegator-earnings-chart"></canvas>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Current Delegations Table (inline) -->
+            <!-- Current Delegations Table -->
             <div class="bg-[#1E1E1E] border border-[#333] rounded-xl p-5">
                 <div class="flex justify-between items-center mb-4">
-                    <h3 class="text-sm font-bold text-gray-200 flex items-center gap-2">
-                        <svg class="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <h3 class="text-base font-bold text-gray-200 flex items-center gap-2">
+                        <svg class="w-5 h-5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/>
                         </svg>
                         Current Delegations
                     </h3>
-                    <span class="text-xs font-medium text-gray-500 uppercase tracking-wider">Source: The Graph</span>
                 </div>
                 <div class="overflow-x-auto border border-[#333] rounded-lg">
                     <table class="w-full text-xs text-left">
@@ -960,13 +1102,39 @@
                                 <th class="px-6 py-3">Operator</th>
                                 <th class="px-6 py-3 text-right">Delegated</th>
                                 <th class="px-6 py-3 text-right">Current Stake</th>
+                                <th class="px-6 py-3 text-right">Share %</th>
                                 <th class="px-6 py-3 text-right">Latest Action</th>
-                                <th class="px-6 py-3 text-right text-gray-500">Share %</th>
-                                <th class="px-6 py-3 text-center">Link</th>
                             </tr>
                         </thead>
                         <tbody id="delegator-inline-delegations-body" class="bg-[#1E1E1E]/30 text-gray-300"></tbody>
                     </table>
+                </div>
+            </div>
+
+            <!-- Unified Chart Section -->
+            <div class="bg-[#1E1E1E] border border-[#333] rounded-xl p-5 min-h-[450px] flex flex-col">
+                <div class="flex flex-col gap-2 mb-4">
+                    <div class="flex justify-between items-center flex-wrap gap-2">
+                        <div id="delegator-chart-type-tabs" class="flex bg-[#2C2C2C] p-1 rounded-lg">
+                            <button data-chart-type="earnings" class="px-3 py-1.5 text-xs font-medium rounded-md bg-blue-600 text-white transition-colors">Earnings</button>
+                            <button data-chart-type="flow" class="px-3 py-1.5 text-xs font-medium rounded-md text-gray-400 hover:text-white transition-colors">Capital Flow</button>
+                        </div>
+                        <div id="delegator-chart-timeframe-buttons" class="flex items-center gap-1 bg-[#2C2C2C] p-1 rounded-lg">
+                            <button data-delegator-timeframe="30" class="px-3 py-1 text-xs font-bold rounded-md hover:bg-[#444444] text-gray-300 transition">30D</button>
+                            <button data-delegator-timeframe="90" class="px-3 py-1 text-xs font-bold rounded-md hover:bg-[#444444] text-gray-300 transition">90D</button>
+                            <button data-delegator-timeframe="365" class="px-3 py-1 text-xs font-bold rounded-md hover:bg-[#444444] text-gray-300 transition">1Y</button>
+                            <button data-delegator-timeframe="all" class="px-3 py-1 text-xs font-bold rounded-md bg-blue-600 text-white transition shadow-sm">All</button>
+                        </div>
+                    </div>
+                    <div class="flex justify-end">
+                        <div id="delegator-chart-legend" class="hidden flex gap-4 text-[10px] font-medium uppercase tracking-wide">
+                            <span class="flex items-center gap-1.5 text-gray-500"><div class="w-2 h-2 rounded-full bg-green-500"></div> Delegated</span>
+                            <span class="flex items-center gap-1.5 text-gray-500"><div class="w-2 h-2 rounded-full bg-red-500"></div> Undelegated</span>
+                        </div>
+                    </div>
+                </div>
+                <div id="delegator-chart-container" class="flex-1 relative w-full h-96">
+                    <canvas id="delegator-unified-chart"></canvas>
                 </div>
             </div>
 
@@ -1424,7 +1592,6 @@
                 <!-- History Content -->
                 <div id="delegator-modal-content-history" class="hidden">
                     <div class="flex justify-between items-center mb-4">
-                        <span class="text-xs font-medium text-gray-500 uppercase tracking-wider">Source: Polygonscan</span>
                         <span id="delegator-tx-count" class="text-[10px] font-mono text-gray-400 bg-[#1E1E1E] border border-[#333] px-2 py-1 rounded">0 txs</span>
                     </div>
                     <div class="overflow-x-auto border border-[#333] rounded-lg">
@@ -1490,4 +1657,6 @@
     </script>
 
 </body>
+
 </html>
+

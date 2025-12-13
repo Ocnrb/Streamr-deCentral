@@ -283,10 +283,13 @@ export function setLoginModalState(state, mode = 'wallet') {
     const loadingContent = document.getElementById('loadingContent');
     const loadingMainText = document.getElementById('loading-main-text');
     const loadingSubText = document.getElementById('loading-sub-text');
+    const installAppSection = document.getElementById('installAppSection');
 
     if (state === 'loading') {
         walletLoginView.classList.add('hidden');
         loadingContent.classList.remove('hidden');
+        // Hide install panel during loading
+        if (installAppSection) installAppSection.classList.add('hidden');
         if (mode === 'guest') {
             loadingMainText.textContent = 'Loading...';
             loadingSubText.textContent = 'Fetching operator data, please wait.';
@@ -300,6 +303,15 @@ export function setLoginModalState(state, mode = 'wallet') {
     } else { // 'buttons'
         loadingContent.classList.add('hidden');
         walletLoginView.classList.remove('hidden');
+        // Show install panel when showing login buttons, but only if app is not installed
+        if (installAppSection) {
+            const isInstalled = typeof window.isAppInstalled === 'function' && window.isAppInstalled();
+            if (isInstalled) {
+                installAppSection.classList.add('hidden');
+            } else {
+                installAppSection.classList.remove('hidden');
+            }
+        }
     }
 }
 
@@ -545,17 +557,51 @@ export async function renderBalances(addresses) {
     }
 }
 
-export function updateDelegatorsSection(delegations, totalDelegatorCount) {
+export function updateDelegatorsSection(delegations, totalDelegatorCount, operatorData = null) {
     const listEl = document.getElementById('delegators-list');
     const footerEl = document.getElementById('delegators-footer');
     if (!listEl || !footerEl) return;
 
-    listEl.innerHTML = delegations.map(delegation => `
+    // Calculate exchange rate from operator data for real-time value
+    // exchangeRate = valueWithoutEarnings / operatorTokenTotalSupply
+    let exchangeRateNum = 1;
+    if (operatorData && operatorData.operatorTokenTotalSupplyWei && operatorData.valueWithoutEarnings) {
+        const totalSupply = BigInt(operatorData.operatorTokenTotalSupplyWei);
+        const valueWithoutEarnings = BigInt(operatorData.valueWithoutEarnings);
+        if (totalSupply > 0n) {
+            // exchangeRate as a ratio (multiply by 1e18 for precision)
+            exchangeRateNum = Number(valueWithoutEarnings * BigInt(1e18) / totalSupply) / 1e18;
+        }
+    }
+
+    listEl.innerHTML = delegations.map(delegation => {
+        // Calculate current DATA value: operatorTokenBalanceWei * exchangeRate
+        let currentDataValue;
+        if (delegation.operatorTokenBalanceWei && exchangeRateNum !== 1) {
+            const tokenBalance = BigInt(delegation.operatorTokenBalanceWei);
+            // currentValue = tokenBalance * valueWithoutEarnings / totalSupply
+            if (operatorData && operatorData.operatorTokenTotalSupplyWei && operatorData.valueWithoutEarnings) {
+                const totalSupply = BigInt(operatorData.operatorTokenTotalSupplyWei);
+                const valueWithoutEarnings = BigInt(operatorData.valueWithoutEarnings);
+                if (totalSupply > 0n) {
+                    const currentValueWei = tokenBalance * valueWithoutEarnings / totalSupply;
+                    currentDataValue = convertWeiToData(currentValueWei.toString());
+                } else {
+                    currentDataValue = convertWeiToData(delegation._valueDataWei);
+                }
+            } else {
+                currentDataValue = convertWeiToData(delegation._valueDataWei);
+            }
+        } else {
+            currentDataValue = convertWeiToData(delegation._valueDataWei);
+        }
+        
+        return `
         <li class="flex justify-between items-center py-2 border-b border-[#333333]">
             <div class="font-mono text-xs text-gray-300 truncate">${createAddressLink(delegation.delegator.id)}</div>
-            <div class="text-right"><span class="font-mono text-xs text-green-400 block" data-tooltip-value="${convertWeiToData(delegation._valueDataWei)}">${formatBigNumber(convertWeiToData(delegation._valueDataWei))} DATA</span></div>
-        </li>`
-    ).join('');
+            <div class="text-right"><span class="font-mono text-xs text-green-400 block" data-tooltip-value="${currentDataValue}">${formatBigNumber(currentDataValue)} DATA</span></div>
+        </li>`;
+    }).join('');
 
     footerEl.innerHTML = '';
     if (delegations.length < (totalDelegatorCount - 1)) {
@@ -600,10 +646,14 @@ export function renderSponsorshipsHistory(historyGroups) {
             
             let directionClass;
             const method = event.methodId;
-            // Stake/Unstake are orange, regardless of direction
-            const stakeInMethods = ["Stake", "Unstake", "Force Unstake"];
+            // Stake/Unstake/Reduce Stake are orange (stake operations)
+            const stakeInMethods = ["Stake", "Unstake", "Force Unstake", "Reduce Stake"];
+            // Undelegate and Protocol Tax are red (remove value from operator)
+            const redMethods = ["Undelegate", "Protocol Tax"];
 
-            if (stakeInMethods.includes(method)) {
+            if (redMethods.includes(method)) {
+                directionClass = "tx-badge-out";
+            } else if (stakeInMethods.includes(method)) {
                 directionClass = "tx-badge-stake";
             } else if (event.relatedObject === "OUT") {
                 directionClass = "tx-badge-out";
@@ -661,10 +711,6 @@ export function renderStakeChart(chartData, isUsdView) {
     if (operatorEarningsChart) {
         operatorEarningsChart.destroy();
         operatorEarningsChart = null;
-    }
-    if (operatorFlowChart) {
-        operatorFlowChart.destroy();
-        operatorFlowChart = null;
     }
 
     if (!chartData || chartData.length === 0) {
@@ -825,10 +871,6 @@ export function renderOperatorEarningsChart(labels, dailyData, cumulativeData, i
         stakeHistoryChart.destroy();
         stakeHistoryChart = null;
     }
-    if (operatorFlowChart) {
-        operatorFlowChart.destroy();
-        operatorFlowChart = null;
-    }
 
     if (!labels || labels.length === 0) {
         container.innerHTML = '<div class="flex items-center justify-center h-full"><p class="text-gray-500">No earnings data available for this timeframe.</p></div>';
@@ -960,157 +1002,6 @@ export function renderOperatorEarningsChart(labels, dailyData, cumulativeData, i
     });
 }
 
-// Operator Flow Chart instance
-let operatorFlowChart = null;
-
-/**
- * Render Operator Flow Chart (delegated/undelegated bars)
- */
-export function renderOperatorFlowChart(flowData, isUsdView) {
-    const container = document.getElementById('stake-chart-container');
-    if (!container) return;
-
-    if (operatorFlowChart) {
-        operatorFlowChart.destroy();
-        operatorFlowChart = null;
-    }
-    if (stakeHistoryChart) {
-        stakeHistoryChart.destroy();
-        stakeHistoryChart = null;
-    }
-    if (operatorEarningsChart) {
-        operatorEarningsChart.destroy();
-        operatorEarningsChart = null;
-    }
-
-    if (!flowData || flowData.length === 0) {
-        container.innerHTML = '<div class="flex items-center justify-center h-full"><p class="text-gray-500">No flow data available for this timeframe.</p></div>';
-        return;
-    }
-
-    container.innerHTML = '<canvas id="stake-history-chart"></canvas>';
-    const canvas = document.getElementById('stake-history-chart');
-    if (!canvas) return;
-    
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    const labels = flowData.map(d => d.label);
-    const delegatedData = flowData.map(d => {
-        if (isUsdView) return d.delegated * d.historicalPrice;
-        return d.delegated;
-    });
-    const undelegatedData = flowData.map(d => {
-        if (isUsdView) return -(d.undelegated * d.historicalPrice);
-        return -d.undelegated;
-    });
-
-    const yAxisPrefix = isUsdView ? '$' : '';
-    const yAxisSuffix = isUsdView ? '' : ' DATA';
-
-    operatorFlowChart = new Chart(ctx, {
-        type: 'bar',
-        data: {
-            labels: labels,
-            datasets: [
-                { label: '+', data: delegatedData, backgroundColor: '#22c55e', borderRadius: 4 },
-                { label: '-', data: undelegatedData, backgroundColor: '#ef4444', borderRadius: 4 }
-            ]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            interaction: {
-                mode: 'index',
-                intersect: false,
-            },
-            plugins: {
-                legend: { display: false },
-                tooltip: {
-                    backgroundColor: 'rgba(30, 30, 30, 0.9)',
-                    titleColor: '#ffffff',
-                    bodyColor: '#9ca3af',
-                    borderColor: '#333333',
-                    borderWidth: 1,
-                    padding: 12,
-                    cornerRadius: 8,
-                    displayColors: false,
-                    titleFont: { family: "'Inter', sans-serif", size: 13, weight: '600' },
-                    bodyFont: { family: "'Inter', sans-serif", size: 12 },
-                    callbacks: {
-                        beforeBody: (context) => {
-                            const dataPoint = flowData[context[0].dataIndex];
-                            if (!dataPoint) return [];
-                            
-                            const lines = [];
-                            
-                            // Delegated section
-                            if (dataPoint.delegated > 0) {
-                                lines.push('Delegated:');
-                                const delegatedFormatted = dataPoint.delegated >= 1000 
-                                    ? formatBigNumber(Math.round(dataPoint.delegated).toString())
-                                    : dataPoint.delegated.toFixed(2);
-                                let delegatedLine = `  ${delegatedFormatted} DATA`;
-                                if (dataPoint.historicalPrice > 0) {
-                                    const usdValue = dataPoint.delegated * dataPoint.historicalPrice;
-                                    delegatedLine += `  ~$${formatBigNumber(Math.round(usdValue).toString())}`;
-                                }
-                                lines.push(delegatedLine);
-                            }
-                            
-                            // Undelegated section
-                            if (dataPoint.undelegated > 0) {
-                                lines.push('Undelegated:');
-                                const undelegatedFormatted = dataPoint.undelegated >= 1000 
-                                    ? formatBigNumber(Math.round(dataPoint.undelegated).toString())
-                                    : dataPoint.undelegated.toFixed(2);
-                                let undelegatedLine = `  ${undelegatedFormatted} DATA`;
-                                if (dataPoint.historicalPrice > 0) {
-                                    const usdValue = dataPoint.undelegated * dataPoint.historicalPrice;
-                                    undelegatedLine += `  ~$${formatBigNumber(Math.round(usdValue).toString())}`;
-                                }
-                                lines.push(undelegatedLine);
-                            }
-                            
-                            return lines;
-                        },
-                        label: () => null // Disable default label
-                    }
-                }
-            },
-            scales: {
-                y: { 
-                    stacked: true, 
-                    grid: { color: '#333333', borderDash: [4, 4], drawBorder: false }, 
-                    ticks: { 
-                        color: '#6b7280', 
-                        font: { family: "'Inter', sans-serif", size: 11 },
-                        callback: function(value) {
-                            const absVal = Math.abs(value);
-                            const sign = value < 0 ? '-' : '';
-                            if (absVal >= 1000000) return sign + yAxisPrefix + (absVal / 1000000).toFixed(1) + 'M';
-                            if (absVal >= 1000) return sign + yAxisPrefix + (absVal / 1000).toFixed(0) + 'K';
-                            return sign + yAxisPrefix + Math.round(absVal) + yAxisSuffix;
-                        }
-                    }, 
-                    border: { display: false } 
-                },
-                x: { 
-                    stacked: true, 
-                    grid: { display: false }, 
-                    ticks: { 
-                        color: '#6b7280', 
-                        maxTicksLimit: 8, 
-                        maxRotation: 0,
-                        font: { family: "'Inter', sans-serif", size: 11 } 
-                    }, 
-                    border: { display: false } 
-                }
-            }
-        }
-    });
-}
-
 export function populateOperatorSettingsModal(operatorData) {
     const { name, description } = parseOperatorMetadata(operatorData.metadataJsonString);
     let redundancyFactor = '1';
@@ -1216,17 +1107,9 @@ export function renderOperatorDetails(data, globalState) {
         <div class="detail-section p-6 mt-8">
             <div class="flex flex-col gap-2 mb-4">
                 <div class="flex justify-between items-center flex-wrap gap-2">
-                    <div class="flex items-center gap-2">
-                        <div class="relative">
-                            <select id="chart-type-select" class="appearance-none bg-[#2C2C2C] border border-[#444] text-white text-sm font-semibold rounded-lg px-4 py-2 pr-8 cursor-pointer hover:bg-[#3a3a3a] focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-colors">
-                                <option value="stake">Stake</option>
-                                <option value="earnings">Earnings</option>
-                                <option value="flow">Flow</option>
-                            </select>
-                            <svg class="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
-                            </svg>
-                        </div>
+                    <div id="chart-type-tabs" class="flex bg-[#2C2C2C] p-1 rounded-lg">
+                        <button data-chart-type="stake" class="px-3 py-1.5 text-xs font-medium rounded-md bg-blue-800 text-white transition-colors">Stake</button>
+                        <button data-chart-type="earnings" class="px-3 py-1.5 text-xs font-medium rounded-md text-gray-400 hover:text-white transition-colors">Earnings</button>
                     </div>
                     <div id="chart-view-buttons" class="flex items-center gap-1 bg-[#2C2C2C] p-1 rounded-lg">
                         <button data-view="data" class="px-3 py-1 text-xs font-bold rounded-md hover:bg-[#444444] transition">DATA</button>
@@ -1503,7 +1386,7 @@ export function renderOperatorDetails(data, globalState) {
     detailContent.innerHTML = editSettingsButtonHtml + headerStatsHtml + listsHtml + streamHtml;
 
     updateOperatorDetails(data, globalState);
-    updateDelegatorsSection(globalState.currentDelegations, globalState.totalDelegatorCount);
+    updateDelegatorsSection(globalState.currentDelegations, globalState.totalDelegatorCount, data.operator);
 
     toggleStatsPanel(true, globalState.uiState);
 
@@ -1603,6 +1486,18 @@ export function toggleVoteList(flagId) {
 }
 
 export function updateChartTimeframeButtons(days, isUsdView, chartType = 'stake') {
+    // Chart type pills
+    const chartTypeTabs = document.querySelectorAll('#chart-type-tabs button');
+    chartTypeTabs.forEach(button => {
+        if (button.dataset.chartType === chartType) {
+            button.classList.add('bg-blue-800', 'text-white');
+            button.classList.remove('text-gray-400', 'hover:text-white');
+        } else {
+            button.classList.remove('bg-blue-800', 'text-white');
+            button.classList.add('text-gray-400', 'hover:text-white');
+        }
+    });
+
     // Timeframe buttons
     const buttons = document.querySelectorAll('#chart-timeframe-buttons button');
     buttons.forEach(button => {
@@ -2020,20 +1915,60 @@ export function renderAutostakerSponsorships(sponsorships, onToggleExclude) {
     }
     
     listEl.innerHTML = sponsorships.map(sp => {
-        const truncatedId = sp.streamId.length > 60 ? sp.streamId.substring(0, 57) + '...' : sp.streamId;
+        // Truncate stream ID more aggressively to prevent overflow
+        const maxIdLength = 45;
+        const truncatedId = sp.streamId.length > maxIdLength 
+            ? sp.streamId.substring(0, maxIdLength - 3) + '...' 
+            : sp.streamId;
         const stakeAmount = sp.currentStake ? formatBigNumber(convertWeiToData(sp.currentStake.toString())) : '0';
         const apy = sp.spotAPY ? Math.round(Number(sp.spotAPY) * 100) : 0;
         const balance = sp.remainingWei ? formatBigNumber(convertWeiToData(sp.remainingWei.toString())) : '?';
         const payoutPerDay = formatPayoutPerDay(sp.payoutPerSec);
         
-        // Minimal styling - uniform background
-        const borderColor = sp.isStaked ? 'border-blue-500/30' : (sp.isExcluded ? 'border-red-500/20' : 'border-[#2a2a2a]');
+        // Determine border color based on status
+        let borderColor = 'border-[#2a2a2a]';
+        const isStakeable = sp.isStakeable === true;
+        const hasIssues = sp.issues && sp.issues.length > 0;
+        const hasInfo = sp.info && sp.info.length > 0;
+        const canBeActivated = sp.canBeActivated === true;
+        
+        if (sp.isStaked) {
+            borderColor = 'border-blue-500/30';
+        } else if (sp.isExcluded) {
+            borderColor = 'border-red-500/20';
+        } else if (hasIssues) {
+            borderColor = 'border-yellow-500/20';
+        } else if (canBeActivated) {
+            borderColor = 'border-green-500/20';
+        }
+        
+        // Build issues badges (blocking) - yellow
+        let issuesHtml = '';
+        if (hasIssues) {
+            issuesHtml = `
+                <div class="flex flex-wrap gap-1 mt-2">
+                    ${sp.issues.map(issue => `<span class="px-2 py-0.5 text-xs bg-yellow-500/10 text-yellow-400 rounded border border-yellow-500/20">${escapeHtml(issue)}</span>`).join('')}
+                </div>
+            `;
+        }
+        
+        // Build info badges (non-blocking) - green/cyan for activatable sponsorships
+        let infoHtml = '';
+        if (hasInfo) {
+            infoHtml = `
+                <div class="flex flex-wrap gap-1 mt-2">
+                    ${sp.info.map(msg => `<span class="px-2 py-0.5 text-xs bg-green-500/10 text-green-400 rounded border border-green-500/20">${escapeHtml(msg)}</span>`).join('')}
+                </div>
+            `;
+        }
         
         return `
-            <div class="bg-[#1E1E1E] rounded-xl p-5 border ${borderColor} autostaker-sponsorship-item" data-sponsorship-id="${sp.id}" data-stream-id="${sp.streamId.toLowerCase()}" data-is-staked="${sp.isStaked}">
+            <div class="bg-[#1E1E1E] rounded-xl p-5 border ${borderColor} autostaker-sponsorship-item ${hasIssues && !sp.isStaked ? 'opacity-60' : ''}" data-sponsorship-id="${sp.id}" data-stream-id="${sp.streamId.toLowerCase()}" data-is-staked="${sp.isStaked}" data-is-stakeable="${isStakeable}" data-can-be-activated="${canBeActivated}">
                 <!-- Header -->
                 <div class="mb-4">
-                    <p class="text-sm text-gray-200 font-mono leading-relaxed" title="${escapeHtml(sp.streamId)}">${escapeHtml(truncatedId)}</p>
+                    <p class="text-sm text-gray-200 font-mono leading-relaxed break-all overflow-hidden" title="${escapeHtml(sp.streamId)}">${escapeHtml(truncatedId)}</p>
+                    ${issuesHtml}
+                    ${infoHtml}
                 </div>
                 
                 <!-- Stats Grid -->
@@ -2052,7 +1987,7 @@ export function renderAutostakerSponsorships(sponsorships, onToggleExclude) {
                     </div>
                     <div class="space-y-1">
                         <p class="text-xs text-gray-500 uppercase tracking-wide">Operators</p>
-                        <p class="text-sm text-gray-300">${sp.operatorCount}${sp.maxOperators ? ' / ' + sp.maxOperators : ''}</p>
+                        <p class="text-sm text-gray-300">${sp.operatorCount}${sp.maxOperators ? ' / ' + sp.maxOperators : ''}${sp.minOperators ? ` (min: ${sp.minOperators})` : ''}</p>
                     </div>
                     ${sp.isStaked ? `
                         <div class="space-y-1">

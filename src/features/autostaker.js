@@ -13,7 +13,7 @@ import { OPERATOR_CONTRACT_ABI, SPONSORSHIP_ABI } from '../core/constants.js';
 
 // Configuration Constants
 const MIN_SPONSORSHIP_TOTAL_PAYOUT_PER_SECOND = BigInt('1000000000000'); // 1e12 wei
-const MIN_SPONSORSHIP_BALANCE_DATA = 15; // Minimum balance in DATA tokens
+const MIN_SPONSORSHIP_BALANCE_DATA = 1; // Minimum balance in DATA tokens
 const MIN_SPONSORSHIP_BALANCE_WEI = BigInt(MIN_SPONSORSHIP_BALANCE_DATA) * BigInt('1000000000000000000'); // Convert to wei
 const DEFAULT_MAX_SPONSORSHIP_COUNT = 20;
 const DEFAULT_MIN_TRANSACTION_AMOUNT = 100; // DATA tokens
@@ -141,7 +141,6 @@ async function fetchStakeableSponsorships(currentStakes, maxAcceptableMinOperato
         {
             sponsorships(
                 where: {
-                    isRunning: true
                     projectedInsolvency_gt: ${now}
                     minimumStakingPeriodSeconds: "0"
                     minOperators_lte: ${maxAcceptableMinOperatorCount}
@@ -284,6 +283,7 @@ async function fetchUndelegationQueueAmount(operatorId) {
 
 /**
  * Fetch all available sponsorships for display (including excluded status)
+ * Shows all sponsorships with balance > 0 and no lock period
  * @param {string} operatorId - The operator contract address
  * @returns {Promise<Array>} Array of sponsorship objects with stake info
  */
@@ -291,17 +291,14 @@ export async function fetchAllSponsorshipsForDisplay(operatorId) {
     const currentStakes = await fetchCurrentStakes(operatorId);
     const excludedSponsorships = loadExcludedSponsorships(operatorId);
     
-    const now = Math.floor(Date.now() / 1000);
     const query = `
         {
             sponsorships(
                 where: {
-                    isRunning: true
-                    projectedInsolvency_gt: ${now}
-                    totalPayoutWeiPerSec_gte: "${MIN_SPONSORSHIP_TOTAL_PAYOUT_PER_SECOND.toString()}"
-                    remainingWei_gte: "${MIN_SPONSORSHIP_BALANCE_WEI.toString()}"
+                    remainingWei_gt: "0"
+                    minimumStakingPeriodSeconds: "0"
                 }
-                first: 500
+                first: 1000
                 orderBy: totalPayoutWeiPerSec
                 orderDirection: desc
             ) {
@@ -309,8 +306,11 @@ export async function fetchAllSponsorshipsForDisplay(operatorId) {
                 totalPayoutWeiPerSec
                 operatorCount
                 maxOperators
+                minOperators
                 spotAPY
                 remainingWei
+                projectedInsolvency
+                isRunning
                 stream { id }
             }
         }
@@ -318,19 +318,57 @@ export async function fetchAllSponsorshipsForDisplay(operatorId) {
     
     const data = await runQuery(query);
     const sponsorships = data.sponsorships || [];
+    const now = Math.floor(Date.now() / 1000);
     
-    return sponsorships.map(sp => ({
-        id: sp.id,
-        streamId: sp.stream?.id || sp.id,
-        payoutPerSec: sp.totalPayoutWeiPerSec,
-        operatorCount: sp.operatorCount,
-        maxOperators: sp.maxOperators,
-        spotAPY: sp.spotAPY,
-        remainingWei: sp.remainingWei,
-        currentStake: currentStakes.get(sp.id) || BigInt(0),
-        isStaked: currentStakes.has(sp.id),
-        isExcluded: excludedSponsorships.has(sp.id.toLowerCase())
-    }));
+    return sponsorships.map(sp => {
+        // Determine why a sponsorship might not be stakeable by autostaker
+        const issues = [];
+        const info = []; // Informational messages (not blocking)
+        const projectedInsolvency = parseInt(sp.projectedInsolvency || '0');
+        const remainingWei = BigInt(sp.remainingWei || '0');
+        const payoutPerSec = BigInt(sp.totalPayoutWeiPerSec || '0');
+        const minOperators = parseInt(sp.minOperators || '0');
+        const operatorCount = parseInt(sp.operatorCount || '0');
+        
+        // Check if sponsorship is not running but CAN be activated by staking
+        // A sponsorship becomes "running" when it has >= minOperators staked
+        const canBeActivated = !sp.isRunning && operatorCount < minOperators && projectedInsolvency > now;
+        
+        if (!sp.isRunning && !canBeActivated) {
+            // Truly not running and cannot be activated
+            issues.push('Not running');
+        } else if (canBeActivated) {
+            // Not running but can be activated - show as info, not blocking issue
+            const needsMore = minOperators - operatorCount;
+            info.push(`Needs ${needsMore} operator${needsMore > 1 ? 's' : ''} to activate`);
+        }
+        
+        if (projectedInsolvency <= now) issues.push('Expired');
+        if (payoutPerSec < MIN_SPONSORSHIP_TOTAL_PAYOUT_PER_SECOND) issues.push('Low payout');
+        if (remainingWei < MIN_SPONSORSHIP_BALANCE_WEI) issues.push('Low balance');
+        if (minOperators > DEFAULT_MAX_ACCEPTABLE_MIN_OPERATOR_COUNT) issues.push(`Min operators: ${minOperators}`);
+        if (sp.maxOperators !== null && operatorCount >= parseInt(sp.maxOperators)) issues.push('Full');
+        
+        return {
+            id: sp.id,
+            streamId: sp.stream?.id || sp.id,
+            payoutPerSec: sp.totalPayoutWeiPerSec,
+            operatorCount: sp.operatorCount,
+            maxOperators: sp.maxOperators,
+            minOperators: sp.minOperators,
+            spotAPY: sp.spotAPY,
+            remainingWei: sp.remainingWei,
+            projectedInsolvency: sp.projectedInsolvency,
+            isRunning: sp.isRunning,
+            canBeActivated: canBeActivated,
+            currentStake: currentStakes.get(sp.id) || BigInt(0),
+            isStaked: currentStakes.has(sp.id),
+            isExcluded: excludedSponsorships.has(sp.id.toLowerCase()),
+            isStakeable: issues.length === 0,
+            issues: issues,
+            info: info
+        };
+    });
 }
 
 /**
@@ -384,8 +422,9 @@ function getExpiredSponsorships(myCurrentStakes, stakeableSponsorships) {
 }
 
 /**
- * Select sponsorships to stake - OFFICIAL ALGORITHM
- * Keeps currently staked ones and adds new ones based on payout
+ * Select sponsorships to stake - CORRECTED ALGORITHM
+ * Selects the most profitable sponsorships up to maxSponsorshipCount
+ * When maxSponsorshipCount is reduced, less profitable sponsorships will be abandoned
  */
 function getSelectedSponsorships(
     myCurrentStakes,
@@ -406,14 +445,13 @@ function getSelectedSponsorships(
     
     if (count <= 0) return [];
     
-    // Partition into kept (already staked) and potential (not staked yet)
-    const keptSponsorships = [...stakeableSponsorships.keys()].filter(id => myCurrentStakes.has(id));
-    const potentialSponsorships = [...stakeableSponsorships.keys()].filter(id => !myCurrentStakes.has(id));
+    // Get all stakeable sponsorships and sort by profitability
+    const allSponsorships = [...stakeableSponsorships.keys()];
     
-    // Sort potential sponsorships by:
-    // 1. payoutPerSec (descending)
+    // Sort ALL sponsorships by:
+    // 1. payoutPerSec (descending) - most profitable first
     // 2. Hash of operator+sponsorship (for deterministic tie-breaking)
-    const sortedPotential = potentialSponsorships.sort((a, b) => {
+    const sortedSponsorships = allSponsorships.sort((a, b) => {
         const payoutA = stakeableSponsorships.get(a).payoutPerSec;
         const payoutB = stakeableSponsorships.get(b).payoutPerSec;
         
@@ -426,11 +464,10 @@ function getSelectedSponsorships(
         return hashA - hashB;
     });
     
-    // Keep all currently staked, then add from sorted potential
-    return [
-        ...keptSponsorships,
-        ...sortedPotential
-    ].slice(0, count);
+    // Select the top 'count' most profitable sponsorships
+    // This ensures that when maxSponsorshipCount is reduced,
+    // the least profitable sponsorships are dropped, even if currently staked
+    return sortedSponsorships.slice(0, count);
 }
 
 /**
@@ -672,23 +709,37 @@ export async function analyzeAndCalculateActions(operatorId, config, operatorCon
     // Fallback to contract if Graph data not available
     if (myUnstakedAmount === BigInt(0)) {
         try {
-            const valueWithoutEarnings = await operatorContract.totalValueInQueuesAndSponsorships();
+            const valueWithoutEarnings = await operatorContract.valueWithoutEarnings();
             const myStakedAmount = sumBigInts([...myCurrentStakes.values()]);
-            myUnstakedAmount = valueWithoutEarnings > myStakedAmount ? valueWithoutEarnings - myStakedAmount : BigInt(0);
+            myUnstakedAmount = valueWithoutEarnings.gt(myStakedAmount.toString()) 
+                ? BigInt(valueWithoutEarnings.toString()) - myStakedAmount 
+                : BigInt(0);
+            console.log(`[Autostaker] Fallback: valueWithoutEarnings=${valueWithoutEarnings.toString()}, staked=${myStakedAmount.toString()}, free=${myUnstakedAmount.toString()}`);
         } catch (e) {
-            console.warn('Failed to get operator free funds from contract, using Graph data:', e.message);
+            console.warn('Failed to get operator free funds from contract:', e.message);
         }
     }
     
     // Log key values for debugging
     const totalCurrentStakes = sumBigInts([...myCurrentStakes.values()]);
+    const currentSponsorshipCount = myCurrentStakes.size;
+    
     console.log('[Autostaker] Analysis:', {
         currentStakesTotal: convertWeiToData(totalCurrentStakes.toString()) + ' DATA',
+        currentSponsorshipCount: currentSponsorshipCount,
+        maxSponsorshipCount: config.maxSponsorshipCount,
         freeBalance: convertWeiToData(myUnstakedAmount.toString()) + ' DATA',
         undelegationQueue: convertWeiToData(undelegationQueueAmount.toString()) + ' DATA',
         minStakePerSponsorship: convertWeiToData(minStakePerSponsorship.toString()) + ' DATA',
         stakeableSponsorshipsCount: stakeableSponsorships.size
     });
+    
+    // Log if we need to reduce sponsorship count
+    if (currentSponsorshipCount > config.maxSponsorshipCount) {
+        const toReduce = currentSponsorshipCount - config.maxSponsorshipCount;
+        console.log(`[Autostaker] Need to reduce sponsorship count by ${toReduce} (current: ${currentSponsorshipCount}, max: ${config.maxSponsorshipCount})`);
+        console.log('[Autostaker] Will unstake from least profitable sponsorships to match the new limit');
+    }
     
     // Convert minTransactionAmount to wei
     const minTransactionAmountWei = BigInt(config.minTransactionAmount) * BigInt('1000000000000000000');
@@ -875,6 +926,10 @@ export async function executeActions(actions, operatorId, signer, onProgress, co
     const operatorContract = new ethers.Contract(operatorId, OPERATOR_CONTRACT_ABI, signer);
     
     // Get current gas prices from the network
+    // Use fixed gasLimit like official plugin to avoid gas estimation failures
+    // when stake actions are calculated before unstakes complete
+    const ACTION_GAS_LIMIT = 500000;
+    
     let gasSettings = {};
     try {
         const feeData = await signer.provider.getFeeData();
@@ -883,6 +938,7 @@ export async function executeActions(actions, operatorId, signer, onProgress, co
         const minMaxFee = ethers.utils.parseUnits('100', 'gwei');
         
         gasSettings = {
+            gasLimit: ACTION_GAS_LIMIT,
             maxPriorityFeePerGas: feeData.maxPriorityFeePerGas?.gt(minPriorityFee) 
                 ? feeData.maxPriorityFeePerGas 
                 : minPriorityFee,
@@ -893,6 +949,7 @@ export async function executeActions(actions, operatorId, signer, onProgress, co
     } catch (e) {
         console.warn('Failed to get fee data, using defaults:', e.message);
         gasSettings = {
+            gasLimit: ACTION_GAS_LIMIT,
             maxPriorityFeePerGas: ethers.utils.parseUnits('50', 'gwei'),
             maxFeePerGas: ethers.utils.parseUnits('200', 'gwei')
         };
@@ -982,13 +1039,42 @@ export async function executeActions(actions, operatorId, signer, onProgress, co
         try {
             let tx;
             if (action.type === 'stake') {
-                // For stakes, convert BigInt to ethers.BigNumber via hex
+                // For stakes, first verify the operator has enough free balance
+                const valueWithoutEarnings = await operatorContract.valueWithoutEarnings();
+                const totalStakedIntoSponsorships = await operatorContract.totalStakedIntoSponsorshipsWei();
+                const actualFreeBalance = valueWithoutEarnings.sub(totalStakedIntoSponsorships);
+                
                 const amountHex = '0x' + action.amount.toString(16);
                 const amountBN = ethers.BigNumber.from(amountHex);
-                console.log(`[Autostaker] Staking ${amountBN.toString()} wei to ${action.sponsorshipId}`);
-                tx = await operatorContract.stake(action.sponsorshipId, amountBN, gasSettings);
+                
+                console.log(`[Autostaker] Stake validation:`);
+                console.log(`  - valueWithoutEarnings: ${ethers.utils.formatEther(valueWithoutEarnings)} DATA`);
+                console.log(`  - totalStakedIntoSponsorships: ${ethers.utils.formatEther(totalStakedIntoSponsorships)} DATA`);
+                console.log(`  - actualFreeBalance: ${ethers.utils.formatEther(actualFreeBalance)} DATA`);
+                console.log(`  - amountToStake: ${ethers.utils.formatEther(amountBN)} DATA`);
+                
+                // Check if we have enough free balance
+                if (amountBN.gt(actualFreeBalance)) {
+                    console.warn(`[Autostaker] Insufficient free balance! Need ${ethers.utils.formatEther(amountBN)} DATA but only have ${ethers.utils.formatEther(actualFreeBalance)} DATA`);
+                    
+                    // If there's any free balance, stake what we can
+                    if (actualFreeBalance.gt(0)) {
+                        console.log(`[Autostaker] Staking available amount: ${ethers.utils.formatEther(actualFreeBalance)} DATA instead`);
+                        tx = await operatorContract.stake(action.sponsorshipId, actualFreeBalance, gasSettings);
+                    } else {
+                        results.failed.push({
+                            action,
+                            error: `Insufficient free balance: need ${ethers.utils.formatEther(amountBN)} DATA but have ${ethers.utils.formatEther(actualFreeBalance)} DATA`
+                        });
+                        actionIndex++;
+                        continue;
+                    }
+                } else {
+                    console.log(`[Autostaker] Staking ${ethers.utils.formatEther(amountBN)} DATA to ${action.sponsorshipId}`);
+                    tx = await operatorContract.stake(action.sponsorshipId, amountBN, gasSettings);
+                }
             } else {
-                // For unstakes (reduceStakeTo)
+                // For unstakes
                 // Convert BigInt to ethers.BigNumber via hex (avoids precision issues)
                 const targetStakeHex = '0x' + action.targetStake.toString(16);
                 let targetStakeBN = ethers.BigNumber.from(targetStakeHex);
@@ -1008,24 +1094,40 @@ export async function executeActions(actions, operatorId, signer, onProgress, co
                 console.log(`  - minimumStakeOf: ${minimumStakeOf.toString()}`);
                 console.log(`  - lockedStake: ${lockedStake.toString()}`);
                 
-                // If target is below minimum, adjust to minimum
-                if (targetStakeBN.lt(minimumStakeOf)) {
-                    console.warn(`[Autostaker] Target ${targetStakeBN.toString()} is below minimum ${minimumStakeOf.toString()}, adjusting to minimum`);
-                    targetStakeBN = minimumStakeOf;
-                }
-                
-                // Check if there's actually anything to reduce
-                if (targetStakeBN.gte(currentStakeOnChain)) {
-                    console.warn(`[Autostaker] Skipping unstake: targetStake (${targetStakeBN.toString()}) >= onChainStake (${currentStakeOnChain.toString()})`);
+                // Check if there's locked stake preventing full unstake
+                if (lockedStake.gt(0)) {
+                    console.warn(`[Autostaker] Cannot unstake: ${lockedStake.toString()} wei is locked (lock period active)`);
                     results.failed.push({
                         action,
-                        error: 'Cannot reduce stake - target is not less than current stake or at minimum'
+                        error: `Cannot unstake - ${ethers.utils.formatEther(lockedStake)} DATA is locked due to lock period`
                     });
                     continue;
                 }
                 
-                console.log(`[Autostaker] Calling reduceStakeTo(${action.sponsorshipId}, ${targetStakeBN.toString()})`);
-                tx = await operatorContract.reduceStakeTo(action.sponsorshipId, targetStakeBN, gasSettings);
+                // If target is 0, use unstake() for complete withdrawal (ignores minimumStakeOf)
+                if (action.targetStake === BigInt(0)) {
+                    console.log(`[Autostaker] Calling unstake(${action.sponsorshipId}) for complete withdrawal`);
+                    tx = await operatorContract.unstake(action.sponsorshipId, gasSettings);
+                } else {
+                    // For partial unstake, respect the minimum
+                    if (targetStakeBN.lt(minimumStakeOf)) {
+                        console.warn(`[Autostaker] Target ${targetStakeBN.toString()} is below minimum ${minimumStakeOf.toString()}, adjusting to minimum`);
+                        targetStakeBN = minimumStakeOf;
+                    }
+                    
+                    // Check if there's actually anything to reduce
+                    if (targetStakeBN.gte(currentStakeOnChain)) {
+                        console.warn(`[Autostaker] Skipping unstake: targetStake (${targetStakeBN.toString()}) >= onChainStake (${currentStakeOnChain.toString()})`);
+                        results.failed.push({
+                            action,
+                            error: 'Cannot reduce stake - target is not less than current stake or at minimum'
+                        });
+                        continue;
+                    }
+                    
+                    console.log(`[Autostaker] Calling reduceStakeTo(${action.sponsorshipId}, ${targetStakeBN.toString()})`);
+                    tx = await operatorContract.reduceStakeTo(action.sponsorshipId, targetStakeBN, gasSettings);
+                }
                 
                 // Calculate actual freed funds
                 const actualFreed = currentStakeOnChain.sub(targetStakeBN);

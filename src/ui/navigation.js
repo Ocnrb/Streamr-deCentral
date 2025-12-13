@@ -170,6 +170,15 @@ class NavigationController {
             });
         }
         
+        // About button (in More menu)
+        const bottomNavAbout = document.getElementById('bottom-nav-about');
+        if (bottomNavAbout) {
+            bottomNavAbout.addEventListener('click', () => {
+                hideMoreMenu();
+                this.openAbout();
+            });
+        }
+        
         // Sidebar buttons
         const sidebarAutostaker = document.getElementById('sidebar-autostaker-btn');
         const sidebarSettings = document.getElementById('sidebar-settings-btn');
@@ -183,6 +192,14 @@ class NavigationController {
         if (sidebarSettings) {
             sidebarSettings.addEventListener('click', () => {
                 this.openSettings();
+            });
+        }
+        
+        // About button (sidebar)
+        const sidebarAbout = document.getElementById('sidebar-about-btn');
+        if (sidebarAbout) {
+            sidebarAbout.addEventListener('click', () => {
+                this.openAbout();
             });
         }
         
@@ -222,7 +239,7 @@ class NavigationController {
                 } else {
                     // Fallback: clear storage and reload
                     localStorage.removeItem('walletType');
-                    localStorage.removeItem('encryptedPrivateKey');
+                    localStorage.removeItem('encrypted_wallet');
                     sessionStorage.clear();
                     window.location.reload();
                 }
@@ -469,7 +486,7 @@ class NavigationController {
      */
     openSettings() {
         const settingsModal = document.getElementById('settingsModal');
-        const theGraphInput = document.getElementById('the-graph-api-key-input');
+        const theGraphInput = document.getElementById('thegraph-api-key-input');
         const etherscanInput = document.getElementById('etherscan-api-key-input');
         
         // Populate saved values
@@ -486,17 +503,33 @@ class NavigationController {
     }
     
     /**
+     * Open about modal
+     */
+    openAbout() {
+        const aboutModal = document.getElementById('aboutModal');
+        if (aboutModal) {
+            aboutModal.classList.remove('hidden');
+        }
+    }
+    
+    /**
      * Show login modal with buttons state (reset from loading state)
      */
     showLoginModal() {
         const loginModal = document.getElementById('loginModal');
         const walletLoginView = document.getElementById('walletLoginView');
         const loadingContent = document.getElementById('loadingContent');
+        const installSection = document.getElementById('installAppSection');
         
         if (loginModal) {
             // Reset to buttons state before showing
             if (loadingContent) loadingContent.classList.add('hidden');
             if (walletLoginView) walletLoginView.classList.remove('hidden');
+            
+            // Hide install section if app is already installed (standalone mode)
+            if (installSection && typeof window.isAppInstalled === 'function' && window.isAppInstalled()) {
+                installSection.classList.add('hidden');
+            }
             
             // Show the modal
             loginModal.classList.remove('hidden');

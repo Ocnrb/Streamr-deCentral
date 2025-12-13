@@ -44,21 +44,17 @@ const state = {
     
     // Charts
     charts: {
-        portfolio: null,
-        flow: null,
-        earnings: null,
+        unified: null,
         map: null
     },
     
-    // Chart timeframe
+    // Chart type and timeframe
+    chartType: 'earnings', // 'flow' or 'earnings'
     timeframe: 'all',
     
     // Price data
     dataPriceUSD: null,
     historicalDataPriceMap: null,
-    
-    // Chart view (USD vs DATA)
-    isChartUsdView: false,
     
     // Operator metadata cache
     operatorAddresses: new Set(),
@@ -114,6 +110,19 @@ const formatTimestampWithTime = (ts) => {
         hour12: false
     });
     return `${datePart} ${timePart}`;
+};
+
+/**
+ * Calculate exchange rate from operator data
+ * exchangeRate = valueWithoutEarnings / operatorTokenTotalSupplyWei
+ * Returns 1 if data is missing or invalid
+ */
+const calculateExchangeRate = (operator) => {
+    if (!operator) return 1;
+    const valueWithoutEarnings = parseFloat(operator.valueWithoutEarnings) || 0;
+    const totalSupply = parseFloat(operator.operatorTokenTotalSupplyWei) || 0;
+    if (totalSupply === 0) return 1;
+    return valueWithoutEarnings / totalSupply;
 };
 
 /**
@@ -218,7 +227,7 @@ async function fetchDelegatorsList(skip = 0, limit = DELEGATORS_LIST_PAGE_SIZE) 
                     operator {
                         id
                         metadataJsonString
-                        exchangeRate
+                        valueWithoutEarnings
                         operatorTokenTotalSupplyWei
                     }
                 }
@@ -250,7 +259,7 @@ async function fetchDelegatorById(address) {
                     operator {
                         id
                         metadataJsonString
-                        exchangeRate
+                        valueWithoutEarnings
                         operatorTokenTotalSupplyWei
                     }
                 }
@@ -407,10 +416,18 @@ function renderLeaderboard() {
     
     tbody.innerHTML = '';
     
-    // Calculate totals (real staked = initial + earnings)
-    const totalStakedWei = state.filteredDelegators.reduce(
-        (sum, d) => sum + (parseFloat(d.totalValueDataWei) || 0) + (parseFloat(d.cumulativeEarningsWei) || 0), 0
-    );
+    // Calculate totals using calculated exchangeRate for accurate current value
+    // For each delegator, sum (operatorTokenBalanceWei * exchangeRate) across all delegations
+    // exchangeRate = valueWithoutEarnings / operatorTokenTotalSupplyWei
+    const totalStakedWei = state.filteredDelegators.reduce((sum, d) => {
+        const delegatorStake = d.delegations.reduce((delSum, del) => {
+            const exchangeRate = calculateExchangeRate(del.operator);
+            const operatorTokens = parseFloat(del.operatorTokenBalanceWei) || 0;
+            // operatorTokens * exchangeRate gives DATA value in wei
+            return delSum + (operatorTokens * exchangeRate);
+        }, 0);
+        return sum + delegatorStake;
+    }, 0);
     
     if (totalCountEl) totalCountEl.textContent = state.filteredDelegators.length;
     if (totalStakedEl) totalStakedEl.textContent = formatDATA(totalStakedWei, 0, 0) + ' DATA';
@@ -439,10 +456,14 @@ function renderLeaderboard() {
         
         const avatarUrl = `https://effigy.im/a/${d.id}.svg`;
         
-        // Calculate real staked value: initial delegation + unclaimed earnings
-        const initialDelegation = parseFloat(d.totalValueDataWei) || 0;
-        const earnings = parseFloat(d.cumulativeEarningsWei) || 0;
-        const realStakedWei = initialDelegation + earnings;
+        // Calculate real staked value using calculated exchangeRate
+        // Sum (operatorTokenBalanceWei * exchangeRate) across all delegations
+        // exchangeRate = valueWithoutEarnings / operatorTokenTotalSupplyWei
+        const realStakedWei = d.delegations.reduce((sum, del) => {
+            const exchangeRate = calculateExchangeRate(del.operator);
+            const operatorTokens = parseFloat(del.operatorTokenBalanceWei) || 0;
+            return sum + (operatorTokens * exchangeRate);
+        }, 0);
         const staked = formatDATA(realStakedWei.toString(), 0, 0);
         
         // Calculate last seen
@@ -518,16 +539,22 @@ function renderDetailHeader(delegator) {
         initialEl.setAttribute('data-tooltip-value', initialValue.toString());
     }
     
-    // Current Staked value will be updated after chart calculation
-    // For now, use approximation: initial + unclaimed earnings
-    const earningsValue = parseFloat(delegator.cumulativeEarningsWei) / 1e18;
-    const approxStakeValue = initialValue + earningsValue;
+    // Current Staked value = sum of (operatorTokenBalanceWei * exchangeRate) for all delegations
+    // This matches exactly what is shown in the list
+    // exchangeRate = valueWithoutEarnings / operatorTokenTotalSupplyWei (calculated, not from The Graph)
+    const currentStakedWei = delegator.delegations.reduce((sum, del) => {
+        const exchangeRate = calculateExchangeRate(del.operator);
+        const operatorTokens = parseFloat(del.operatorTokenBalanceWei) || 0;
+        return sum + (operatorTokens * exchangeRate);
+    }, 0);
+    const currentStakedValue = currentStakedWei / 1e18;
     if (stakeEl) {
-        stakeEl.textContent = formatDATA((approxStakeValue * 1e18).toString(), 0, 0);
-        stakeEl.setAttribute('data-tooltip-value', approxStakeValue.toString());
+        stakeEl.textContent = formatDATA(currentStakedWei.toString(), 0, 0);
+        stakeEl.setAttribute('data-tooltip-value', currentStakedValue.toString());
     }
     
     // Earnings value with USD tooltip
+    const earningsValue = parseFloat(delegator.cumulativeEarningsWei) / 1e18;
     if (earningsEl) {
         earningsEl.textContent = formatDATA(delegator.cumulativeEarningsWei, 0, 0);
         earningsEl.setAttribute('data-tooltip-value', earningsValue.toString());
@@ -661,7 +688,7 @@ function renderInlineDelegationsTable(delegations) {
         });
     
     if (sorted.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="6" class="px-6 py-8 text-center text-gray-500">No delegations found.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="5" class="px-6 py-8 text-center text-gray-500">No delegations found.</td></tr>';
         return;
     }
     
@@ -675,9 +702,9 @@ function renderInlineDelegationsTable(delegations) {
         const isUndelegated = delegatedValue < 0.0001;
         
         // Calculate current stake: operatorTokenBalanceWei * exchangeRate / 1e18
-        // operatorTokenBalanceWei is in wei, exchangeRate is already a decimal ratio
+        // exchangeRate = valueWithoutEarnings / operatorTokenTotalSupplyWei (calculated)
         // Result: currentStakeData is in DATA units (not wei)
-        const exchangeRate = parseFloat(del.operator.exchangeRate) || 1;
+        const exchangeRate = calculateExchangeRate(del.operator);
         const operatorTokens = parseFloat(del.operatorTokenBalanceWei) || 0;
         const currentStakeData = (operatorTokens * exchangeRate) / 1e18;
         // Convert to wei for formatDATA
@@ -692,38 +719,28 @@ function renderInlineDelegationsTable(delegations) {
             : "border-b border-[#333] hover:bg-[#2a2a2a] transition-colors";
         
         row.innerHTML = `
-            <td class="px-6 py-4 font-medium">
-                <div class="flex items-center gap-3">
+            <td class="px-6 py-4">
+                <a href="/operator/${del.operator.id}" class="flex items-center gap-3 hover:opacity-80 transition-opacity" data-nav-link>
                     ${imageUrl 
-                        ? `<img src="${imageUrl}" alt="${name}" class="h-8 w-8 rounded-full object-cover ${isUndelegated ? 'opacity-50 grayscale' : ''}" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
-                           <div class="h-8 w-8 rounded-full items-center justify-center text-xs font-bold text-white shadow-sm ${isUndelegated ? 'bg-gray-700' : 'bg-gradient-to-br from-orange-400 to-red-500'}" style="display:none;">
+                        ? `<img src="${imageUrl}" alt="${name}" class="h-10 w-10 rounded-full object-cover flex-shrink-0 ${isUndelegated ? 'opacity-50 grayscale' : ''}" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                           <div class="h-10 w-10 rounded-full items-center justify-center text-sm font-bold text-white shadow-sm flex-shrink-0 ${isUndelegated ? 'bg-gray-700' : 'bg-gradient-to-br from-orange-400 to-red-500'}" style="display:none;">
                                ${name.charAt(0).toUpperCase()}
                            </div>`
-                        : `<div class="h-8 w-8 rounded-full flex items-center justify-center text-xs font-bold text-white shadow-sm ${isUndelegated ? 'bg-gray-700' : 'bg-gradient-to-br from-orange-400 to-red-500'}">
+                        : `<div class="h-10 w-10 rounded-full flex items-center justify-center text-sm font-bold text-white shadow-sm flex-shrink-0 ${isUndelegated ? 'bg-gray-700' : 'bg-gradient-to-br from-orange-400 to-red-500'}">
                                ${name.charAt(0).toUpperCase()}
                            </div>`
                     }
-                    <div class="flex flex-col">
-                        <span class="truncate max-w-[200px] ${isUndelegated ? 'text-gray-500' : 'text-white'}" title="${name}">${name}</span>
-                        <span class="text-[10px] text-gray-500 font-mono">${shortAddress(del.operator.id)}</span>
-                    </div>
-                </div>
-            </td>
-            <td class="px-6 py-4 text-right ${isUndelegated ? 'text-gray-600' : 'text-gray-400'}">
-                ${formatDATA(del._valueDataWei, 0, 0)} <span class="text-[10px] text-gray-500">DATA</span>
-            </td>
-            <td class="px-6 py-4 text-right font-bold ${isUndelegated ? 'text-gray-600' : 'text-orange-400'}">
-                ${formatDATA(currentStakeWei.toString(), 0, 0)} <span class="text-[10px] text-gray-500">DATA</span>
-            </td>
-            <td class="px-6 py-4 text-right font-mono text-gray-300 text-xs">${date}</td>
-            <td class="px-6 py-4 text-right font-mono text-gray-500 text-xs">${sharePct.toFixed(4)}%</td>
-            <td class="px-6 py-4 text-center">
-                <a href="/operator/${del.operator.id}" class="p-2 text-gray-400 hover:text-white hover:bg-gray-600 rounded-lg inline-flex" data-nav-link>
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/>
-                    </svg>
+                    <span class="text-sm truncate max-w-[200px] ${isUndelegated ? 'text-gray-500' : 'text-gray-300'}" title="${name}">${name}</span>
                 </a>
             </td>
+            <td class="px-6 py-4 text-right text-xs ${isUndelegated ? 'text-gray-600' : 'text-gray-300'}">
+                <span data-tooltip-value="${delegatedValue}">${formatDATA(del._valueDataWei, 0, 0)} <span class="text-gray-500">DATA</span></span>
+            </td>
+            <td class="px-6 py-4 text-right text-xs font-bold ${isUndelegated ? 'text-gray-600' : 'text-orange-400'}">
+                <span data-tooltip-value="${currentStakeData}">${formatDATA(currentStakeWei.toString(), 0, 0)} <span class="text-gray-500">DATA</span></span>
+            </td>
+            <td class="px-6 py-4 text-right text-xs ${isUndelegated ? 'text-gray-600' : 'text-gray-300'}">${Math.round(sharePct)}%</td>
+            <td class="px-6 py-4 text-right text-xs ${isUndelegated ? 'text-gray-600' : 'text-gray-300'}">${date}</td>
         `;
         
         tbody.appendChild(row);
@@ -816,225 +833,18 @@ function getHistoricalPrice(dateTimestamp) {
 }
 
 /**
- * Render portfolio value chart (matches Operator stake chart style)
- */
-function renderPortfolioChart() {
-    if (!state.txHistory || !state.earningsHistory) return;
-    
-    const ctx = document.getElementById('delegator-portfolio-chart')?.getContext('2d');
-    if (!ctx) return;
-    
-    if (state.charts.portfolio) {
-        state.charts.portfolio.destroy();
-    }
-    
-    const txs = [...state.txHistory].sort((a, b) => a.timestamp - b.timestamp);
-    
-    // Build earnings map
-    const earningsMap = new Map();
-    state.earningsHistory.forEach(e => {
-        const d = new Date(e.date * 1000);
-        d.setHours(0, 0, 0, 0);
-        earningsMap.set(d.getTime(), parseFloat(e.cumulativeEarningsWei) / 1e18);
-    });
-    
-    const chartData = [];
-    
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    
-    let currentPrincipal = 0;
-    let currentEarnings = 0;
-    let cumulativeClaims = 0;
-    let txIndex = 0;
-    let latestKnownPrice = state.dataPriceUSD || 0;
-    
-    const scanStart = txs.length > 0 ? new Date(txs[0].timestamp * 1000) : new Date();
-    scanStart.setHours(0, 0, 0, 0);
-    
-    // Calculate cutoff based on timeframe
-    let cutoffTimestamp = scanStart.getTime();
-    if (state.timeframe !== 'all') {
-        const daysAgo = parseInt(state.timeframe);
-        const timeAgo = today.getTime() - (daysAgo * 24 * 60 * 60 * 1000);
-        cutoffTimestamp = Math.max(cutoffTimestamp, timeAgo);
-    }
-    
-    for (let d = new Date(scanStart); d <= today; d.setDate(d.getDate() + 1)) {
-        const dayTimestamp = d.getTime();
-        const nextDayTimestamp = dayTimestamp + 86400000;
-        
-        while (txIndex < txs.length) {
-            const tx = txs[txIndex];
-            const txTime = tx.timestamp * 1000;
-            
-            if (txTime < nextDayTimestamp) {
-                if (tx.type === "Collect Earnings") {
-                    cumulativeClaims += tx.amount;
-                } else if (tx.isRelevantFlow) {
-                    if (tx.type === "Delegated") currentPrincipal += tx.amount;
-                    else if (tx.type === "Undelegated") currentPrincipal = Math.max(0, currentPrincipal - tx.amount);
-                }
-                txIndex++;
-            } else {
-                break;
-            }
-        }
-        
-        if (earningsMap.has(dayTimestamp)) {
-            currentEarnings = earningsMap.get(dayTimestamp);
-        }
-        
-        if (dayTimestamp >= cutoffTimestamp) {
-            const unclaimedEarnings = Math.max(0, currentEarnings - cumulativeClaims);
-            const dataAmount = currentPrincipal + unclaimedEarnings;
-            
-            // Get historical price for this date
-            const dateSeconds = Math.floor(dayTimestamp / 1000);
-            let value;
-            let historicalPrice = 0;
-            
-            if (state.isChartUsdView) {
-                historicalPrice = getHistoricalPrice(dateSeconds);
-                if (historicalPrice > 0) latestKnownPrice = historicalPrice;
-                value = dataAmount * (historicalPrice || latestKnownPrice);
-            } else {
-                value = dataAmount;
-            }
-            
-            const date = new Date(dayTimestamp);
-            const month = date.toLocaleDateString(undefined, { month: 'short' });
-            const day = date.getDate();
-            const year = date.getFullYear().toString().substring(2);
-            
-            chartData.push({
-                label: `${month} ${day} '${year}`,
-                value: value,
-                dataAmount: dataAmount,
-                historicalPrice: historicalPrice || latestKnownPrice,
-                dateTimestamp: dayTimestamp
-            });
-        }
-    }
-    
-    if (chartData.length === 0) {
-        return;
-    }
-    
-    // Update Staked value in header with the latest calculated value
-    const lastDataPoint = chartData[chartData.length - 1];
-    const stakeEl = document.getElementById('delegator-detail-stake');
-    if (stakeEl && lastDataPoint) {
-        stakeEl.textContent = formatDATA((lastDataPoint.dataAmount * 1e18).toString(), 0, 0);
-        stakeEl.setAttribute('data-tooltip-value', lastDataPoint.dataAmount.toString());
-    }
-    
-    const labels = chartData.map(d => d.label);
-    const data = chartData.map(d => d.value);
-    
-    const chartLabel = state.isChartUsdView ? 'Total Value (USD)' : 'Total Value (DATA)';
-    const yAxisPrefix = state.isChartUsdView ? '$' : '';
-    const yAxisSuffix = state.isChartUsdView ? '' : ' DATA';
-    
-    // Create gradient (same as operator chart)
-    const gradient = ctx.createLinearGradient(0, 0, 0, 300);
-    gradient.addColorStop(0, 'rgba(59, 130, 246, 0.5)');
-    gradient.addColorStop(1, 'rgba(59, 130, 246, 0.0)');
-    
-    state.charts.portfolio = new Chart(ctx, {
-        type: 'line',
-        data: {
-            labels: labels,
-            datasets: [{
-                label: chartLabel,
-                data: data,
-                backgroundColor: gradient,
-                borderColor: '#3b82f6',
-                borderWidth: 2,
-                pointBackgroundColor: '#3b82f6',
-                pointBorderColor: '#232c45ff',
-                pointBorderWidth: 0.5,
-                pointRadius: 2.5,
-                pointHoverRadius: 4,
-                tension: 0.25,
-                fill: true
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            interaction: { mode: 'index', intersect: false },
-            plugins: {
-                legend: { display: false },
-                tooltip: {
-                    backgroundColor: 'rgba(30, 30, 30, 0.9)',
-                    titleColor: '#ffffff',
-                    bodyColor: '#9ca3af',
-                    borderColor: '#333333',
-                    borderWidth: 1,
-                    padding: 10,
-                    cornerRadius: 8,
-                    displayColors: false,
-                    titleFont: { family: "'Inter', sans-serif", size: 13, weight: '600' },
-                    bodyFont: { family: "'Inter', sans-serif", size: 12 },
-                    callbacks: {
-                        label: (context) => {
-                            const dataPoint = chartData[context.dataIndex];
-                            if (state.isChartUsdView) {
-                                return yAxisPrefix + formatBigNumber(Math.round(context.parsed.y).toString());
-                            } else {
-                                return formatBigNumber(Math.round(context.parsed.y).toString()) + yAxisSuffix;
-                            }
-                        }
-                    }
-                }
-            },
-            scales: {
-                x: {
-                    ticks: {
-                        color: '#6b7280',
-                        maxTicksLimit: 8,
-                        maxRotation: 0,
-                        autoSkip: true,
-                        font: { family: "'Inter', sans-serif", size: 11 }
-                    },
-                    grid: { display: false }
-                },
-                y: {
-                    position: 'left',
-                    ticks: {
-                        color: '#6b7280',
-                        callback: function(value) {
-                            if (value >= 1000000) return yAxisPrefix + (value / 1000000).toFixed(1) + 'M';
-                            if (value >= 1000) return yAxisPrefix + (value / 1000).toFixed(0) + 'K';
-                            return yAxisPrefix + Math.round(value);
-                        },
-                        font: { family: "'Inter', sans-serif", size: 11 }
-                    },
-                    grid: {
-                        color: '#333333',
-                        borderDash: [4, 4],
-                        drawBorder: false
-                    }
-                }
-            }
-        }
-    });
-    
-    updateDelegatorChartButtons();
-}
-
-/**
  * Render capital flow chart
  */
 function renderFlowChart() {
     if (!state.txHistory) return;
     
-    const ctx = document.getElementById('delegator-flow-chart')?.getContext('2d');
+    const ctx = document.getElementById('delegator-unified-chart')?.getContext('2d');
     if (!ctx) return;
     
-    if (state.charts.flow) {
-        state.charts.flow.destroy();
+    // Destroy existing unified chart
+    if (state.charts.unified) {
+        state.charts.unified.destroy();
+        state.charts.unified = null;
     }
     
     const sortedTxs = [...state.txHistory].reverse();
@@ -1068,11 +878,26 @@ function renderFlowChart() {
         }
     });
     
+    // Add mock "today" point if the last data point is not today
+    const todayStr = today.toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' });
+    if (flowData.length > 0) {
+        const lastDate = flowData[flowData.length - 1].date;
+        if (lastDate !== todayStr) {
+            flowData.push({
+                date: todayStr,
+                timestamp: Math.floor(today.getTime() / 1000),
+                inflow: 0,
+                outflow: 0,
+                historicalPrice: state.dataPriceUSD || 0
+            });
+        }
+    }
+    
     const dates = flowData.map(d => d.date);
     const inflows = flowData.map(d => d.inflow);
     const outflows = flowData.map(d => d.outflow);
     
-    state.charts.flow = new Chart(ctx, {
+    state.charts.unified = new Chart(ctx, {
         type: 'bar',
         data: {
             labels: dates,
@@ -1127,11 +952,13 @@ function renderFlowChart() {
 function renderEarningsChart() {
     if (!state.earningsHistory) return;
     
-    const ctx = document.getElementById('delegator-earnings-chart')?.getContext('2d');
+    const ctx = document.getElementById('delegator-unified-chart')?.getContext('2d');
     if (!ctx) return;
     
-    if (state.charts.earnings) {
-        state.charts.earnings.destroy();
+    // Destroy existing unified chart
+    if (state.charts.unified) {
+        state.charts.unified.destroy();
+        state.charts.unified = null;
     }
     
     // Calculate cutoff
@@ -1161,7 +988,7 @@ function renderEarningsChart() {
         cumulative.push(cum);
     }
     
-    state.charts.earnings = new Chart(ctx, {
+    state.charts.unified = new Chart(ctx, {
         type: 'bar',
         data: {
             labels: dates,
@@ -1433,42 +1260,64 @@ function renderMapChart() {
 }
 
 /**
- * Render all charts
+ * Filter and render the appropriate chart based on chartType
+ */
+function filterAndRenderChart() {
+    if (!state.isActive) return;
+    
+    switch (state.chartType) {
+        case 'earnings':
+            renderEarningsChart();
+            break;
+        case 'flow':
+        default:
+            renderFlowChart();
+            break;
+    }
+    updateDelegatorChartButtons();
+}
+
+/**
+ * Render all charts (unified chart + map)
  */
 function renderAllCharts() {
     if (!state.isActive) return;
     
-    const syncMsg = document.getElementById('delegator-portfolio-sync');
-    if (syncMsg) syncMsg.classList.add('hidden');
-    
-    renderPortfolioChart();
-    renderFlowChart();
-    renderEarningsChart();
+    filterAndRenderChart();
     renderMapChart();
 }
 
 /**
- * Update chart buttons state (timeframe and view toggle)
+ * Update chart buttons state (chart type pills and timeframe)
  */
 function updateDelegatorChartButtons() {
+    // Chart type pills
+    const chartTypeTabs = document.querySelectorAll('#delegator-chart-type-tabs button');
+    chartTypeTabs.forEach(button => {
+        if (button.dataset.chartType === state.chartType) {
+            button.classList.add('bg-blue-600', 'text-white');
+            button.classList.remove('text-gray-400', 'hover:text-white');
+        } else {
+            button.classList.remove('bg-blue-600', 'text-white');
+            button.classList.add('text-gray-400', 'hover:text-white');
+        }
+    });
+    
+    // Update legend visibility based on chart type
+    const legend = document.getElementById('delegator-chart-legend');
+    if (legend) {
+        if (state.chartType === 'flow') {
+            legend.classList.remove('hidden');
+        } else {
+            legend.classList.add('hidden');
+        }
+    }
+    
     // Timeframe buttons
     const timeframeButtons = document.querySelectorAll('#delegator-chart-timeframe-buttons button');
     timeframeButtons.forEach(button => {
         const btnTimeframe = button.dataset.delegatorTimeframe;
         if (btnTimeframe === state.timeframe) {
-            button.classList.add('bg-blue-600', 'text-white');
-            button.classList.remove('hover:bg-[#444444]', 'text-gray-300');
-        } else {
-            button.classList.remove('bg-blue-600', 'text-white');
-            button.classList.add('hover:bg-[#444444]', 'text-gray-300');
-        }
-    });
-    
-    // View buttons (DATA/USD)
-    const viewButtons = document.querySelectorAll('#delegator-chart-view-buttons button');
-    viewButtons.forEach(button => {
-        const isActive = (button.dataset.view === 'usd' && state.isChartUsdView) || (button.dataset.view === 'data' && !state.isChartUsdView);
-        if (isActive) {
             button.classList.add('bg-blue-600', 'text-white');
             button.classList.remove('hover:bg-[#444444]', 'text-gray-300');
         } else {
@@ -1560,12 +1409,14 @@ export const DelegatorsLogic = {
             });
         });
         
-        // View toggle buttons (DATA/USD)
-        document.querySelectorAll('#delegator-chart-view-buttons button').forEach(btn => {
+        // Chart type pills
+        document.querySelectorAll('#delegator-chart-type-tabs button').forEach(btn => {
             btn.addEventListener('click', () => {
-                const view = btn.dataset.view;
-                state.isChartUsdView = (view === 'usd');
-                renderPortfolioChart();
+                const chartType = btn.dataset.chartType;
+                if (chartType && chartType !== state.chartType) {
+                    state.chartType = chartType;
+                    filterAndRenderChart();
+                }
             });
         });
         
@@ -1772,10 +1623,6 @@ export const DelegatorsLogic = {
         // Render header
         renderDetailHeader(delegator);
         
-        // Show loading for charts
-        const syncMsg = document.getElementById('delegator-portfolio-sync');
-        if (syncMsg) syncMsg.classList.remove('hidden');
-        
         // Fetch data in parallel
         try {
             const [txHistory, earningsHistory] = await Promise.all([
@@ -1930,7 +1777,7 @@ export const DelegatorsLogic = {
         Object.values(state.charts).forEach(chart => {
             if (chart) chart.destroy();
         });
-        state.charts = { portfolio: null, flow: null, earnings: null, map: null };
+        state.charts = { flow: null, earnings: null, map: null };
         state.isActive = false;
     },
     

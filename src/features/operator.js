@@ -25,7 +25,7 @@ const state = {
     sponsorshipHistory: [],
     operatorDailyBuckets: [],
     chartTimeFrame: 90,
-    chartType: 'stake', // 'stake', 'earnings', 'flow'
+    chartType: 'stake', // 'stake' or 'earnings'
     
     // List state
     loadedOperatorCount: 0,
@@ -164,9 +164,6 @@ function filterAndRenderChart() {
         case 'earnings':
             renderEarningsChart();
             break;
-        case 'flow':
-            renderFlowChart();
-            break;
         case 'stake':
         default:
             renderStakeChart();
@@ -255,67 +252,6 @@ function renderEarningsChart() {
 }
 
 /**
- * Render Flow chart (delegated/undelegated bars)
- * Uses totalDelegatedWei and totalUndelegatedWei from dailyBuckets
- * 
- * IMPORTANT: totalDelegatedWei includes daily earnings, so we need to subtract them:
- * Real Delegated = totalDelegatedWei - (cumulativeEarningsWei[today] - cumulativeEarningsWei[yesterday])
- */
-function renderFlowChart() {
-    const filteredBuckets = filterBucketsByTimeframe(state.operatorDailyBuckets);
-    const allBuckets = state.operatorDailyBuckets;
-    
-    // Build a map of date -> cumulativeEarningsWei for easy lookup
-    const cumulativeEarningsMap = new Map();
-    allBuckets.forEach(bucket => {
-        cumulativeEarningsMap.set(bucket.date, parseFloat(Utils.convertWeiToData(bucket.cumulativeEarningsWei || '0')));
-    });
-    
-    const flowData = [];
-    
-    filteredBuckets.forEach(bucket => {
-        const rawDelegated = parseFloat(Utils.convertWeiToData(bucket.totalDelegatedWei || '0'));
-        const undelegated = parseFloat(Utils.convertWeiToData(bucket.totalUndelegatedWei || '0'));
-        
-        // Calculate daily earnings to subtract from totalDelegatedWei
-        const todayCumEarnings = parseFloat(Utils.convertWeiToData(bucket.cumulativeEarningsWei || '0'));
-        let dailyEarnings = 0;
-        
-        // Find previous day's cumulative earnings
-        const prevDayTimestamp = bucket.date - 86400;
-        const prevCumEarnings = cumulativeEarningsMap.get(String(prevDayTimestamp));
-        
-        if (prevCumEarnings !== undefined) {
-            dailyEarnings = Math.max(0, todayCumEarnings - prevCumEarnings);
-        } else {
-            // If no previous day data, check the bucket before this one in the array
-            const bucketIndex = allBuckets.findIndex(b => b.date === bucket.date);
-            if (bucketIndex > 0) {
-                const prevBucket = allBuckets[bucketIndex - 1];
-                const prevCum = parseFloat(Utils.convertWeiToData(prevBucket.cumulativeEarningsWei || '0'));
-                dailyEarnings = Math.max(0, todayCumEarnings - prevCum);
-            }
-        }
-        
-        // Real delegated = totalDelegatedWei - dailyEarnings
-        const delegated = Math.max(0, rawDelegated - dailyEarnings);
-        
-        // Only include days with real delegation/undelegation activity
-        if (delegated > 0 || undelegated > 0) {
-            flowData.push({
-                label: formatDateLabel(bucket.date),
-                timestamp: bucket.date,
-                delegated: delegated,
-                undelegated: undelegated,
-                historicalPrice: getHistoricalPrice(bucket.date)
-            });
-        }
-    });
-    
-    UI.renderOperatorFlowChart(flowData, false); // Flow always shows DATA values
-}
-
-/**
  * Update the "My Stake" UI section
  */
 async function updateMyStakeUI() {
@@ -360,6 +296,10 @@ async function handleDelegateClick() {
     const confirmBtn = document.getElementById('tx-modal-confirm');
     const newConfirmBtn = confirmBtn.cloneNode(true);
     confirmBtn.parentNode.replaceChild(newConfirmBtn, confirmBtn);
+    
+    // Reset button state
+    newConfirmBtn.disabled = false;
+    newConfirmBtn.textContent = 'Confirm';
 
     document.getElementById('tx-modal-max-btn').onclick = () => {
         if (maxAmountWei !== '0') {
@@ -371,13 +311,16 @@ async function handleDelegateClick() {
         newConfirmBtn.disabled = true;
         newConfirmBtn.innerHTML = `<div class="w-4 h-4 border-2 border-white rounded-full border-t-transparent btn-spinner"></div> Processing...`;
         
-        const txHash = await Services.confirmDelegation(state.signer, state.myRealAddress, state.currentOperatorId);
-        if (txHash) {
-            await OperatorLogic.refreshWithRetry(txHash);
+        try {
+            const txHash = await Services.confirmDelegation(state.signer, state.myRealAddress, state.currentOperatorId);
+            if (txHash) {
+                await OperatorLogic.refreshWithRetry(txHash);
+            }
+        } finally {
+            // Always reset button state
+            newConfirmBtn.disabled = false;
+            newConfirmBtn.textContent = 'Confirm';
         }
-
-        newConfirmBtn.disabled = false;
-        newConfirmBtn.textContent = 'Confirm';
     });
 }
 
@@ -396,6 +339,10 @@ async function handleUndelegateClick() {
     const newConfirmBtn = confirmBtn.cloneNode(true);
     confirmBtn.parentNode.replaceChild(newConfirmBtn, confirmBtn);
     
+    // Reset button state
+    newConfirmBtn.disabled = false;
+    newConfirmBtn.textContent = 'Confirm';
+    
     document.getElementById('tx-modal-max-btn').onclick = () => {
         if (maxAmountWei !== '0') {
             UI.txModalAmount.value = ethers.utils.formatEther(maxAmountWei);
@@ -406,13 +353,16 @@ async function handleUndelegateClick() {
         newConfirmBtn.disabled = true;
         newConfirmBtn.innerHTML = `<div class="w-4 h-4 border-2 border-white rounded-full border-t-transparent btn-spinner"></div> Processing...`;
 
-        const txHash = await Services.confirmUndelegation(state.signer, state.myRealAddress, state.currentOperatorId);
-        if (txHash) {
-           await OperatorLogic.refreshWithRetry(txHash);
+        try {
+            const txHash = await Services.confirmUndelegation(state.signer, state.myRealAddress, state.currentOperatorId);
+            if (txHash) {
+               await OperatorLogic.refreshWithRetry(txHash);
+            }
+        } finally {
+            // Always reset button state
+            newConfirmBtn.disabled = false;
+            newConfirmBtn.textContent = 'Confirm';
         }
-
-        newConfirmBtn.disabled = false;
-        newConfirmBtn.textContent = 'Confirm';
     });
 }
 
@@ -474,8 +424,11 @@ async function handleEditStakeClick(sponsorshipId, currentStakeWei) {
             await OperatorLogic.refreshWithRetry(result);
         }
         
-        newConfirmBtn.disabled = false;
-        newConfirmBtn.textContent = 'Confirm';
+        const currentBtn = document.getElementById('stake-modal-confirm');
+        if (currentBtn) {
+            currentBtn.disabled = false;
+            currentBtn.textContent = 'Confirm';
+        }
     });
 }
 
@@ -633,7 +586,7 @@ async function handleLoadMoreDelegators(button) {
     try {
         const newDelegations = await Services.fetchMoreDelegators(state.currentOperatorId, state.currentDelegations.length);
         state.currentDelegations.push(...newDelegations);
-        UI.updateDelegatorsSection(state.currentDelegations, state.totalDelegatorCount);
+        UI.updateDelegatorsSection(state.currentDelegations, state.totalDelegatorCount, state.currentOperatorData);
     } catch (error) {
         console.error("Failed to load more delegators:", error);
     } finally {
@@ -742,7 +695,19 @@ export const OperatorLogic = {
             if (isFirstLoad) {
                 let polygonscanTxs = [];
                 try {
-                    polygonscanTxs = await Services.fetchPolygonscanHistory(state.currentOperatorId);
+                    // Extract sponsorship addresses from current stakes AND historical staking events
+                    // This ensures we can properly classify transactions with sponsorships no longer staked
+                    const currentStakeSponsorships = (data.operator?.stakes || [])
+                        .map(stake => stake.sponsorship?.id)
+                        .filter(Boolean);
+                    const historicalSponsorships = (data.stakingEvents || [])
+                        .map(event => event.sponsorship?.id)
+                        .filter(Boolean);
+                    
+                    // Use Set to deduplicate
+                    const allSponsorshipAddresses = [...new Set([...currentStakeSponsorships, ...historicalSponsorships])];
+                    
+                    polygonscanTxs = await Services.fetchPolygonscanHistory(state.currentOperatorId, 500, allSponsorshipAddresses);
                 } catch (error) {
                     logger.error("Failed to load Polygonscan history:", error);
                 }
@@ -873,10 +838,11 @@ export const OperatorLogic = {
         // Load more button
         document.getElementById('load-more-operators-btn').addEventListener('click', (e) => this.handleLoadMore(e.target));
         
-        // Chart type dropdown (delegated event listener)
-        document.body.addEventListener('change', (e) => {
-            if (e.target.id === 'chart-type-select') {
-                state.chartType = e.target.value;
+        // Chart type pills (delegated event listener)
+        document.body.addEventListener('click', (e) => {
+            const chartTypeTab = e.target.closest('#chart-type-tabs button');
+            if (chartTypeTab && chartTypeTab.dataset.chartType) {
+                state.chartType = chartTypeTab.dataset.chartType;
                 filterAndRenderChart();
             }
         });
@@ -920,7 +886,7 @@ export const OperatorLogic = {
                 document.getElementById('queue-content').classList.toggle('hidden', tab !== 'queue');
                 state.uiState.isDelegatorViewActive = (tab === 'delegators');
                 if (tab === 'delegators') {
-                    UI.updateDelegatorsSection(state.currentDelegations, state.totalDelegatorCount);
+                    UI.updateDelegatorsSection(state.currentDelegations, state.totalDelegatorCount, state.currentOperatorData);
                 }
             }
             

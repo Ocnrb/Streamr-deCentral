@@ -15,6 +15,169 @@ let raceModuleLoading = false;
 let visualModuleLoading = false;
 let delegatorsModuleLoading = false;
 
+// PWA Installation - use global variable set by inline script in HTML
+// The inline script captures beforeinstallprompt early, before modules load
+
+// Also listen here in case the event fires after module loads
+window.addEventListener('beforeinstallprompt', (e) => {
+    console.log('PWA: beforeinstallprompt event captured (module)');
+    e.preventDefault();
+    window.deferredInstallPrompt = e;
+    updateInstallButtons();
+});
+
+// Listen for successful installation
+window.addEventListener('appinstalled', () => {
+    console.log('PWA: App installed successfully');
+    window.deferredInstallPrompt = null;
+    document.getElementById('installAppSection')?.classList.add('hidden');
+    UI.showToast({
+        type: 'success',
+        title: 'App Installed',
+        message: 'Streamr deCentral is now installed on your device!',
+        duration: 4000
+    });
+});
+
+/**
+ * Detect the user's operating system/platform
+ * @returns {'android'|'ios'|'windows'|'macos'|'other'}
+ */
+function getPlatform() {
+    const ua = navigator.userAgent || navigator.vendor || window.opera;
+    if (/android/i.test(ua)) return 'android';
+    if (/iPad|iPhone|iPod/.test(ua) && !window.MSStream) return 'ios';
+    if (/Win/.test(navigator.platform)) return 'windows';
+    if (/Mac/.test(navigator.platform)) return 'macos';
+    return 'other';
+}
+
+/**
+ * Check if the app is running in standalone mode (already installed)
+ * @returns {boolean}
+ */
+function isAppInstalled() {
+    return window.matchMedia('(display-mode: standalone)').matches ||
+           window.navigator.standalone === true ||
+           document.referrer.includes('android-app://');
+}
+// Expose globally for use in other modules
+window.isAppInstalled = isAppInstalled;
+
+/**
+ * Update the visibility of install buttons based on platform and availability
+ */
+function updateInstallButtons() {
+    const installSection = document.getElementById('installAppSection');
+    if (!installSection) return;
+    
+    // Hide everything if app is already installed
+    if (isAppInstalled()) {
+        installSection.classList.add('hidden');
+        return;
+    }
+    
+    // Show all buttons - they're always visible by default in HTML
+    installSection.classList.remove('hidden');
+    
+    // Log status for debugging
+    console.log('PWA: Install prompt available:', !!window.deferredInstallPrompt);
+}
+
+/**
+ * Trigger the native install prompt (for Android, Windows, macOS)
+ */
+async function triggerInstallPrompt() {
+    const platform = getPlatform();
+    console.log('PWA: Install button clicked, platform:', platform, 'prompt available:', !!window.deferredInstallPrompt);
+    
+    if (!window.deferredInstallPrompt) {
+        // Provide helpful message based on platform
+        let message = 'Use your browser menu to install this app.';
+        if (platform === 'windows') {
+            message = 'Click the install icon in the address bar, or use browser menu → "Install Streamr deCentral"';
+        } else if (platform === 'android') {
+            message = 'Tap the browser menu (⋮) → "Install app" or "Add to Home screen"';
+        } else if (platform === 'macos') {
+            message = 'Click the install icon in the address bar, or use browser menu → "Install Streamr deCentral"';
+        }
+        
+        UI.showToast({
+            type: 'info',
+            title: 'Install via Browser Menu',
+            message: message,
+            duration: 6000
+        });
+        return;
+    }
+    
+    try {
+        window.deferredInstallPrompt.prompt();
+        const { outcome } = await window.deferredInstallPrompt.userChoice;
+        console.log('PWA: User choice:', outcome);
+        
+        if (outcome === 'accepted') {
+            UI.showToast({
+                type: 'success',
+                title: 'App Installed',
+                message: 'Streamr deCentral has been installed successfully!',
+                duration: 3000
+            });
+            document.getElementById('installAppSection')?.classList.add('hidden');
+        }
+        
+        // Clear the deferred prompt - can only be used once
+        window.deferredInstallPrompt = null;
+    } catch (error) {
+        console.error('PWA: Install prompt error:', error);
+        UI.showToast({
+            type: 'error',
+            title: 'Installation Failed',
+            message: 'Please try installing via browser menu.',
+            duration: 4000
+        });
+    }
+}
+
+/**
+ * Show iOS install instructions modal
+ */
+function showIOSInstallInstructions() {
+    const modal = document.getElementById('iosInstallModal');
+    if (modal) {
+        modal.classList.remove('hidden');
+    }
+}
+
+/**
+ * Setup PWA install button event listeners
+ */
+function setupInstallButtons() {
+    const androidBtn = document.getElementById('installAndroidBtn');
+    const windowsBtn = document.getElementById('installWindowsBtn');
+    const macosBtn = document.getElementById('installMacOSBtn');
+    const iosBtn = document.getElementById('installIOSBtn');
+    const iosModalClose = document.getElementById('iosInstallModalClose');
+    
+    androidBtn?.addEventListener('click', triggerInstallPrompt);
+    windowsBtn?.addEventListener('click', triggerInstallPrompt);
+    macosBtn?.addEventListener('click', triggerInstallPrompt);
+    iosBtn?.addEventListener('click', showIOSInstallInstructions);
+    
+    iosModalClose?.addEventListener('click', () => {
+        document.getElementById('iosInstallModal')?.classList.add('hidden');
+    });
+    
+    // Close iOS modal on backdrop click
+    document.getElementById('iosInstallModal')?.addEventListener('click', (e) => {
+        if (e.target.id === 'iosInstallModal') {
+            e.target.classList.add('hidden');
+        }
+    });
+    
+    console.log('PWA: Install buttons setup complete, prompt available:', !!window.deferredInstallPrompt);
+}
+
 /**
  * Lazy load the Race module
  * @returns {Promise<object>} The RaceLogic module
@@ -117,133 +280,68 @@ async function loadDelegatorsModule() {
 
 const { logger } = Utils;
 
-// --- Private Key Encryption Utilities ---
+// --- Private Key Encryption Utilities (Keystore V3 - Ethers.js Standard) ---
 
-const PK_STORAGE_KEY = 'pk_encrypted';
-const PK_SALT_KEY = 'pk_salt';
-const PK_IV_KEY = 'pk_iv';
+const KEYSTORE_STORAGE_KEY = 'encrypted_wallet';
 
 /**
- * Generate a cryptographic key from user password using PBKDF2
- * @param {string} password - User's encryption password
- * @param {Uint8Array} salt - Random salt
- */
-async function deriveKeyFromPassword(password, salt) {
-    const encoder = new TextEncoder();
-    const baseKey = await crypto.subtle.importKey(
-        'raw',
-        encoder.encode(password),
-        'PBKDF2',
-        false,
-        ['deriveKey']
-    );
-    
-    return crypto.subtle.deriveKey(
-        {
-            name: 'PBKDF2',
-            salt: salt,
-            iterations: 100000,
-            hash: 'SHA-256'
-        },
-        baseKey,
-        { name: 'AES-GCM', length: 256 },
-        false,
-        ['encrypt', 'decrypt']
-    );
-}
-
-/**
- * Encrypt private key for storage using user's password
+ * Save wallet as encrypted Keystore V3 JSON to localStorage
+ * Uses the same secure format as MetaMask, MyEtherWallet, Geth, etc.
  * @param {string} privateKey - The private key to encrypt
  * @param {string} password - User's encryption password
+ * @returns {Promise<boolean>} True if saved successfully
  */
-async function encryptPrivateKey(privateKey, password) {
+async function savePrivateKey(privateKey, password) {
     try {
-        const encoder = new TextEncoder();
-        const salt = crypto.getRandomValues(new Uint8Array(16));
-        const iv = crypto.getRandomValues(new Uint8Array(12));
-        const key = await deriveKeyFromPassword(password, salt);
-        
-        const encrypted = await crypto.subtle.encrypt(
-            { name: 'AES-GCM', iv: iv },
-            key,
-            encoder.encode(privateKey)
-        );
-        
-        return {
-            encrypted: btoa(String.fromCharCode(...new Uint8Array(encrypted))),
-            salt: btoa(String.fromCharCode(...salt)),
-            iv: btoa(String.fromCharCode(...iv))
-        };
+        const wallet = new ethers.Wallet(privateKey);
+        // Encrypt using Keystore V3 format (scrypt + AES-128-CTR)
+        // This is slow by design (~3-5 seconds) to prevent brute-force attacks
+        const encryptedJson = await wallet.encrypt(password);
+        localStorage.setItem(KEYSTORE_STORAGE_KEY, encryptedJson);
+        return true;
     } catch (e) {
-        logger.error('Encryption failed:', e);
-        return null;
+        logger.error('Keystore encryption failed:', e);
+        return false;
     }
 }
 
 /**
- * Decrypt stored private key using user's password
+ * Decrypt stored Keystore V3 JSON and return the private key
  * @param {string} password - User's encryption password
- * @returns {string|null} Decrypted private key or null if failed
+ * @returns {Promise<string|null>} Decrypted private key or null if failed
  */
 async function decryptPrivateKey(password) {
     try {
-        const encryptedB64 = localStorage.getItem(PK_STORAGE_KEY);
-        const saltB64 = localStorage.getItem(PK_SALT_KEY);
-        const ivB64 = localStorage.getItem(PK_IV_KEY);
+        const encryptedJson = localStorage.getItem(KEYSTORE_STORAGE_KEY);
+        if (!encryptedJson) return null;
         
-        if (!encryptedB64 || !saltB64 || !ivB64) return null;
-        
-        const encrypted = Uint8Array.from(atob(encryptedB64), c => c.charCodeAt(0));
-        const salt = Uint8Array.from(atob(saltB64), c => c.charCodeAt(0));
-        const iv = Uint8Array.from(atob(ivB64), c => c.charCodeAt(0));
-        
-        const key = await deriveKeyFromPassword(password, salt);
-        
-        const decrypted = await crypto.subtle.decrypt(
-            { name: 'AES-GCM', iv: iv },
-            key,
-            encrypted
-        );
-        
-        return new TextDecoder().decode(decrypted);
+        // Decrypt Keystore V3 JSON (slow by design)
+        const wallet = await ethers.Wallet.fromEncryptedJson(encryptedJson, password);
+        return wallet.privateKey;
     } catch (e) {
         // Don't clear on failure - might be wrong password
-        logger.error('Decryption failed:', e);
+        logger.error('Keystore decryption failed:', e);
         return null;
     }
 }
 
 /**
- * Save encrypted private key to localStorage
- * @param {string} privateKey - The private key to save
- * @param {string} password - User's encryption password
- */
-async function savePrivateKey(privateKey, password) {
-    const encrypted = await encryptPrivateKey(privateKey, password);
-    if (encrypted) {
-        localStorage.setItem(PK_STORAGE_KEY, encrypted.encrypted);
-        localStorage.setItem(PK_SALT_KEY, encrypted.salt);
-        localStorage.setItem(PK_IV_KEY, encrypted.iv);
-        return true;
-    }
-    return false;
-}
-
-/**
- * Check if there's a stored private key
+ * Check if there's a stored encrypted wallet
+ * @returns {boolean}
  */
 function hasStoredPrivateKey() {
-    return localStorage.getItem(PK_STORAGE_KEY) !== null;
+    return localStorage.getItem(KEYSTORE_STORAGE_KEY) !== null;
 }
 
 /**
- * Clear stored private key
+ * Clear stored encrypted wallet
  */
 function clearStoredPrivateKey() {
-    localStorage.removeItem(PK_STORAGE_KEY);
-    localStorage.removeItem(PK_SALT_KEY);
-    localStorage.removeItem(PK_IV_KEY);
+    localStorage.removeItem(KEYSTORE_STORAGE_KEY);
+    // Also clear legacy keys if they exist (one-time cleanup)
+    localStorage.removeItem('pk_encrypted');
+    localStorage.removeItem('pk_salt');
+    localStorage.removeItem('pk_iv');
 }
 
 // --- Global State ---
@@ -274,6 +372,10 @@ async function initializeApp() {
 
         await Services.setupDataPriceStream((price) => {
             state.dataPriceUSD = price;
+            // Update operator module if loaded
+            if (OperatorLogic) {
+                OperatorLogic.setSharedState({ dataPriceUSD: price });
+            }
             // Update delegators module if loaded
             if (DelegatorsLogic) {
                 DelegatorsLogic.setSharedState({ dataPriceUSD: price });
@@ -1416,14 +1518,27 @@ function setupEventListeners() {
                 encryptionPassword = pwd1;
             }
 
-            // Clear fields
-            privateKeyInput.value = '';
-            rememberCheckbox.checked = false;
-            if (encryptionPasswordSection) encryptionPasswordSection.classList.add('hidden');
-            if (encryptionPasswordInput) encryptionPasswordInput.value = '';
-            if (confirmEncryptionPasswordInput) confirmEncryptionPasswordInput.value = '';
+            // Show loading state (encryption takes 3-5 seconds when saving)
+            const originalText = pkModalConnect.innerHTML;
+            if (shouldSave) {
+                pkModalConnect.innerHTML = '<div class="loader rounded-full border-2 border-t-2 border-white border-t-transparent h-5 w-5 animate-spin"></div>';
+            }
+            pkModalConnect.disabled = true;
+            privateKeyInput.disabled = true;
 
-            await connectWithPrivateKey(pk, encryptionPassword);
+            try {
+                await connectWithPrivateKey(pk, encryptionPassword);
+            } finally {
+                // Clear fields and restore button state
+                pkModalConnect.innerHTML = originalText;
+                pkModalConnect.disabled = false;
+                privateKeyInput.disabled = false;
+                privateKeyInput.value = '';
+                rememberCheckbox.checked = false;
+                if (encryptionPasswordSection) encryptionPasswordSection.classList.add('hidden');
+                if (encryptionPasswordInput) encryptionPasswordInput.value = '';
+                if (confirmEncryptionPasswordInput) confirmEncryptionPasswordInput.value = '';
+            }
         });
     }
 
@@ -1460,8 +1575,22 @@ function setupEventListeners() {
                 UI.showToast('Digite sua senha', 'error');
                 return;
             }
-            unlockPasswordInput.value = '';
-            await unlockWallet(password);
+            
+            // Show loading state (decryption takes 3-5 seconds)
+            const originalText = unlockConfirmBtn.innerHTML;
+            unlockConfirmBtn.innerHTML = '<div class="loader rounded-full border-2 border-t-2 border-white border-t-transparent h-5 w-5 animate-spin"></div>';
+            unlockConfirmBtn.disabled = true;
+            unlockPasswordInput.disabled = true;
+            
+            try {
+                await unlockWallet(password);
+            } finally {
+                // Restore button state
+                unlockConfirmBtn.innerHTML = originalText;
+                unlockConfirmBtn.disabled = false;
+                unlockPasswordInput.disabled = false;
+                unlockPasswordInput.value = '';
+            }
         });
     }
 
@@ -1508,16 +1637,19 @@ function setupEventListeners() {
     document.getElementById('stake-modal-cancel').addEventListener('click', () => UI.stakeModal.classList.add('hidden'));
     document.getElementById('operator-settings-modal-cancel').addEventListener('click', () => UI.operatorSettingsModal.classList.add('hidden'));
     
-    // Settings - both desktop header and sidebar buttons
-    const openSettings = () => {
-        UI.theGraphApiKeyInput.value = localStorage.getItem(Constants.STORAGE_KEYS.GRAPH_API_KEY) || '';
-        document.getElementById('etherscan-api-key-input').value = localStorage.getItem(Constants.STORAGE_KEYS.ETHERSCAN_API_KEY) || '';
-        UI.settingsModal.classList.remove('hidden');
-    };
-    
-    document.getElementById('sidebar-settings-btn')?.addEventListener('click', openSettings);
-    
+    // Settings modal cancel/save handlers
     document.getElementById('settings-cancel-btn').addEventListener('click', () => UI.settingsModal.classList.add('hidden'));
+    
+    // About modal close handlers
+    const aboutModal = document.getElementById('aboutModal');
+    const aboutModalClose = document.getElementById('aboutModalClose');
+    if (aboutModalClose && aboutModal) {
+        aboutModalClose.addEventListener('click', () => aboutModal.classList.add('hidden'));
+        // Close on background click
+        aboutModal.addEventListener('click', (e) => {
+            if (e.target === aboutModal) aboutModal.classList.add('hidden');
+        });
+    }
     document.getElementById('settings-save-btn').addEventListener('click', () => {
         const newGraphKey = UI.theGraphApiKeyInput.value.trim();
         if (newGraphKey) {
@@ -1550,6 +1682,10 @@ function setupEventListeners() {
 document.addEventListener('DOMContentLoaded', async () => {
     setupRouter();
     setupEventListeners();
+    
+    // Setup PWA install buttons
+    setupInstallButtons();
+    updateInstallButtons();
     
     // Warn user if bot is running when closing page
     window.addEventListener('beforeunload', (e) => {
