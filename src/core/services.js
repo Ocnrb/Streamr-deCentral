@@ -21,7 +21,7 @@ import {
     STORAGE_KEYS
 } from './constants.js';
 import { showToast, setModalState, txModalAmount, txModalBalanceValue, txModalMinimumValue, stakeModalAmount, stakeModalCurrentStake, stakeModalFreeFunds, dataPriceValueEl, transactionModal, stakeModal, operatorSettingsModal } from '../ui/ui.js';
-import { getFriendlyErrorMessage, convertWeiToData, parseDateFromCsv, parseOperatorMetadata } from './utils.js';
+import { getFriendlyErrorMessage, convertWeiToData, parseDateFromCsv, parseOperatorMetadata, logger } from './utils.js';
 
 // Note: etherscanApiKey is now managed via getEtherscanApiKey() from constants.js
 // This variable is kept for backward compatibility with updateEtherscanApiKey()
@@ -165,7 +165,7 @@ export function updateEtherscanApiKey(newKey) {
     } else {
         localStorage.removeItem(STORAGE_KEYS.ETHERSCAN_API_KEY);
     }
-    console.log("Etherscan API Key updated.");
+    logger.log("Etherscan API Key updated.");
 }
 
 
@@ -269,7 +269,7 @@ function parseCSVWithWorker(csvText) {
             if (e.data.success) {
                 // Convert array entries back to Map
                 const priceMap = new Map(e.data.priceEntries);
-                console.log(`[Worker] Processed ${e.data.count} price points in ${e.data.processingTime}ms`);
+                logger.log(`[Worker] Processed ${e.data.count} price points in ${e.data.processingTime}ms`);
                 resolve(priceMap);
             } else {
                 reject(new Error(e.data.error));
@@ -278,7 +278,7 @@ function parseCSVWithWorker(csvText) {
         
         worker.onerror = function(error) {
             clearTimeout(timeoutId);
-            console.warn('CSV Worker error, falling back to main thread:', error);
+            logger.warn('CSV Worker error, falling back to main thread:', error);
             resolve(parseCSVSync(csvText));
         };
         
@@ -323,7 +323,7 @@ function parseCSVSync(csvText) {
         }
     }
     
-    console.log(`[Sync] Processed ${priceMap.size} price points`);
+    logger.log(`[Sync] Processed ${priceMap.size} price points`);
     return priceMap;
 }
 
@@ -449,7 +449,7 @@ export async function fetchOperatorDetails(operatorId) {
             queueEntries(orderBy: date, orderDirection: asc) { id amount delegator { id } date }
           }
           selfDelegation: delegations(where: {operator: "${sanitizedId}", isSelfDelegation: true}, first: 1) { _valueDataWei }
-          stakingEvents(orderBy: date, orderDirection: desc, first: 800, where: {operator: "${sanitizedId}"}) {
+          stakingEvents(orderBy: date, orderDirection: desc, first: 1000, where: {operator: "${sanitizedId}"}) {
             id
             amount
             date
@@ -522,7 +522,7 @@ export async function fetchPolygonscanHistory(walletAddress, offset = 500, spons
     // Create a Set of known sponsorship addresses (smart contracts) for quick lookup
     const sponsorshipSet = new Set(sponsorshipAddresses.map(addr => addr.toLowerCase()));
     if (!apiKey) {
-        console.warn("Etherscan API Key not available. Skipping transaction history fetch.");
+        logger.warn("Etherscan API Key not available. Skipping transaction history fetch.");
         return [];
     }
 
@@ -597,6 +597,7 @@ export async function fetchPolygonscanHistory(walletAddress, offset = 500, spons
             const baseMethodId = methodIdMap.get(txHash) || "-";
             let groupMethodId = baseMethodId;
 
+
             // ===========================================
             // INFER METHOD ID FROM TOKEN TRANSFER PATTERNS
             // (for transactions initiated by other addresses)
@@ -639,8 +640,9 @@ export async function fetchPolygonscanHistory(walletAddress, offset = 500, spons
                             // Check if from address is a known sponsorship (smart contract)
                             const fromAddress = singleTx.from.toLowerCase();
                             if (sponsorshipSet.has(fromAddress)) {
-                                // From sponsorship = Collect Earnings
-                                groupMethodId = "Collect Earnings";
+                                // From sponsorship without Tax (single tx) = Reduce Stake
+                                // (Collect Earnings would typically have a second Tax transfer)
+                                groupMethodId = "Reduce Stake";
                             } else {
                                 // From normal address (EOA) = Delegate (external user delegating)
                                 groupMethodId = "Delegate";
@@ -685,8 +687,10 @@ export async function fetchPolygonscanHistory(walletAddress, offset = 500, spons
                 if (direction === "OUT" && tx.tokenSymbol === "DATA" && isToTreasury) {
                     finalMethodId = "Protocol Tax";
                 }
-                // 2. User Corrections: Specific overrides for Reduce Stake/Collect Earnings OUT
-                else if ((baseMethodId === "Reduce Stake" || baseMethodId === "Collect Earnings") && direction === "OUT") {
+                // 2. Specific overrides for Reduce Stake/Collect Earnings OUT
+                // If the group is identified as "Collect Earnings" (inferred or explicit), 
+                // any OUT that isn't Tax (caught by Rule 1) must be something else, usually Undelegate.
+                else if ((groupMethodId === "Reduce Stake" || groupMethodId === "Collect Earnings") && direction === "OUT") {
                     finalMethodId = "Undelegate";
                 }
                 // 3. Protocol Tax Context: The 2nd transaction after tax is typically the earnings component
@@ -726,6 +730,26 @@ export async function fetchPolygonscanHistory(walletAddress, offset = 500, spons
                 else if (finalMethodId === "-" && tx.tokenSymbol === "DATA" && VOTE_ON_FLAG_RAW_AMOUNTS.has(tx.value)) {
                     finalMethodId = "Vote On Flag";
                 }
+                // 10. Fallback for unknown methods based on address types (Heuristic for complex txs)
+                else if (finalMethodId === "-" && tx.tokenSymbol === "DATA") {
+                    if (direction === "IN") {
+                        // IN from Sponsorship -> Reduce Stake (heuristic for unknown method)
+                        if (sponsorshipSet.has(tx.from.toLowerCase())) {
+                            finalMethodId = "Reduce Stake";
+                        } else {
+                            // IN from User/Other -> Delegate
+                            finalMethodId = "Delegate";
+                        }
+                    } else if (direction === "OUT") {
+                        // OUT to Sponsorship -> Stake
+                        if (sponsorshipSet.has(tx.to.toLowerCase())) {
+                            finalMethodId = "Stake";
+                        } else if (!isToTreasury) {
+                            // OUT to User/Other -> Undelegate
+                            finalMethodId = "Undelegate";
+                        }
+                    }
+                }
             
                 processedTokenTxs.push({
                     txHash: tx.hash,
@@ -738,6 +762,7 @@ export async function fetchPolygonscanHistory(walletAddress, offset = 500, spons
                 });
             }
         }
+
 
         const allTxs = [...processedNormalTxs, ...processedTokenTxs];
 
@@ -753,13 +778,312 @@ export async function fetchPolygonscanHistory(walletAddress, offset = 500, spons
             return false;
         });
 
-        return filteredFinalTxs;
+        const hasMore = normalTxs.length === offset || tokenTxs.length === offset;
+        
+        return {
+            transactions: filteredFinalTxs,
+            hasMore: hasMore
+        };
 
     } catch (error) {
         console.error("Error fetching Polygonscan history:", error);
         showToast({ type: 'error', title: 'API Error', message: 'Failed to fetch transaction history. Check your API key in Settings.', duration: 8000 });
-        return [];
+        return { transactions: [], hasMore: false };
     }
+}
+
+export async function fetchAllStakingEvents(operatorId, initialSkip = 0, existingEvents = []) {
+    const PAGE_SIZE = 1000;
+    const MAX_EVENTS = 10000;
+    let allEvents = [...existingEvents];
+    let skip = initialSkip;
+    let hasMore = true;
+    const sanitizedId = operatorId.toLowerCase();
+    
+    while (hasMore) {
+        const query = `
+            query GetStakingEvents {
+                stakingEvents(
+                    orderBy: date, 
+                    orderDirection: desc, 
+                    first: ${PAGE_SIZE}, 
+                    skip: ${skip}, 
+                    where: {operator: "${sanitizedId}"}
+                ) {
+                    id
+                    amount
+                    date
+                    sponsorship { id stream { id } }
+                }
+            }`;
+        
+        const data = await runQuery(query);
+        const events = data.stakingEvents || [];
+        
+        allEvents = [...allEvents, ...events];
+        skip += PAGE_SIZE;
+        
+        hasMore = events.length === PAGE_SIZE && skip < MAX_EVENTS;
+        
+        if (hasMore) {
+            await new Promise(r => setTimeout(r, 100));
+        }
+    }
+    
+    return allEvents;
+}
+
+export async function fetchAllPolygonscanHistory(walletAddress, sponsorshipAddresses = [], initialPage = 1, existingTxs = []) {
+    const apiKey = getEtherscanApiKey();
+    if (!apiKey) return existingTxs;
+
+    const OFFSET = 500;
+    const MAX_PAGES = 20;
+    const MAX_RETRIES = 3;
+    const BASE_DELAY = 1000;
+    const sponsorshipSet = new Set(sponsorshipAddresses.map(addr => addr.toLowerCase()));
+    const nativeToken = POLYGONSCAN_NETWORK.nativeToken;
+    
+    const existingHashes = new Set(existingTxs.map(tx => `${tx.txHash}-${tx.timestamp}`));
+    let allProcessedTxs = [...existingTxs];
+    let page = initialPage;
+    let hasMore = true;
+    let consecutiveErrors = 0;
+    
+    while (hasMore) {
+        let retryCount = 0;
+        let success = false;
+        
+        while (!success && retryCount < MAX_RETRIES) {
+            try {
+                if (retryCount > 0) {
+                    await new Promise(r => setTimeout(r, BASE_DELAY * Math.pow(2, retryCount)));
+                }
+                
+                const txlistUrl = buildPolygonscanUrl({
+                    module: 'account',
+                    action: 'txlist',
+                    address: walletAddress,
+                    page,
+                    offset: OFFSET
+                });
+                
+                await new Promise(r => setTimeout(r, 300));
+                
+                const tokentxUrl = buildPolygonscanUrl({
+                    module: 'account',
+                    action: 'tokentx',
+                    address: walletAddress,
+                    page,
+                    offset: OFFSET
+                });
+                
+                const txlistRes = await fetch(txlistUrl, { cache: 'no-store' });
+                await new Promise(r => setTimeout(r, 300));
+                const tokentxRes = await fetch(tokentxUrl, { cache: 'no-store' });
+
+                if (!txlistRes.ok || !tokentxRes.ok) {
+                    retryCount++;
+                    continue;
+                }
+
+                const txlistData = await txlistRes.json();
+                const tokentxData = await tokentxRes.json();
+
+                const txlistError = txlistData.status === "0" && txlistData.message !== "No transactions found";
+                const tokentxError = tokentxData.status === "0" && tokentxData.message !== "No transactions found";
+                
+                if (txlistError || tokentxError) {
+                    const isRateLimit = (txlistData.result?.includes?.("rate limit")) || 
+                                       (tokentxData.result?.includes?.("rate limit"));
+                    if (isRateLimit) {
+                        retryCount++;
+                        continue;
+                    }
+                    retryCount++;
+                    continue;
+                }
+
+                const normalTxs = txlistData.result || [];
+                const tokenTxs = tokentxData.result || [];
+
+                const pageTxs = processPolygonscanPage(normalTxs, tokenTxs, walletAddress, sponsorshipSet, nativeToken);
+                
+                const newTxs = pageTxs.filter(tx => !existingHashes.has(`${tx.txHash}-${tx.timestamp}`));
+                newTxs.forEach(tx => existingHashes.add(`${tx.txHash}-${tx.timestamp}`));
+                allProcessedTxs = [...allProcessedTxs, ...newTxs];
+
+                hasMore = (normalTxs.length === OFFSET || tokenTxs.length === OFFSET) && page < MAX_PAGES;
+                success = true;
+                consecutiveErrors = 0;
+                page++;
+
+                if (hasMore) {
+                    await new Promise(r => setTimeout(r, BASE_DELAY));
+                }
+            } catch (error) {
+                retryCount++;
+            }
+        }
+        
+        if (!success) {
+            consecutiveErrors++;
+            if (consecutiveErrors >= 2) break;
+            page++;
+            hasMore = page <= MAX_PAGES;
+        }
+    }
+    
+    return allProcessedTxs;
+}
+
+function processPolygonscanPage(normalTxs, tokenTxs, walletAddress, sponsorshipSet, nativeToken) {
+    const methodIdMap = new Map();
+    
+    const processedNormalTxs = normalTxs.map(tx => {
+        const direction = tx.from.toLowerCase() === walletAddress.toLowerCase() ? "OUT" : "IN";
+        const methodIdHex = (tx.input === "0x" || !tx.input) ? "-" : tx.input.substring(0, 10);
+        const methodId = POLYGONSCAN_METHOD_IDS[methodIdHex] || methodIdHex;
+        
+        if (methodId !== "-") {
+            methodIdMap.set(tx.hash, methodId);
+        }
+
+        return {
+            txHash: tx.hash,
+            timestamp: parseInt(tx.timeStamp),
+            token: nativeToken,
+            direction: direction,
+            methodId: methodId,
+            amount: parseFloat(tx.value) / 1e18,
+            rawValue: tx.value
+        };
+    });
+
+    const tokenTxsByHash = new Map();
+    for (const tx of tokenTxs) {
+        if (!tokenTxsByHash.has(tx.hash)) {
+            tokenTxsByHash.set(tx.hash, []);
+        }
+        tokenTxsByHash.get(tx.hash).push(tx);
+    }
+
+    const processedTokenTxs = [];
+    for (const [txHash, txGroup] of tokenTxsByHash.entries()) {
+        const baseMethodId = methodIdMap.get(txHash) || "-";
+        let groupMethodId = inferGroupMethodId(txGroup, baseMethodId, walletAddress, sponsorshipSet);
+
+        const protocolTaxIndex = txGroup.findIndex(t => 
+            t.from.toLowerCase() === walletAddress.toLowerCase() && 
+            t.to.toLowerCase() === STREAMR_TREASURY_ADDRESS.toLowerCase() &&
+            t.tokenSymbol === "DATA"
+        );
+
+        for (let i = 0; i < txGroup.length; i++) {
+            const tx = txGroup[i];
+            const direction = tx.from.toLowerCase() === walletAddress.toLowerCase() ? "OUT" : "IN";
+            const decimals = parseInt(tx.tokenDecimal) || 18;
+            const amount = parseFloat(tx.value) / Math.pow(10, decimals);
+            const isToTreasury = tx.to.toLowerCase() === STREAMR_TREASURY_ADDRESS.toLowerCase();
+            
+            const finalMethodId = classifyTransaction(
+                tx, direction, isToTreasury, baseMethodId, groupMethodId, 
+                protocolTaxIndex, i, sponsorshipSet
+            );
+        
+            processedTokenTxs.push({
+                txHash: tx.hash,
+                timestamp: parseInt(tx.timeStamp),
+                token: tx.tokenSymbol,
+                direction: direction,
+                methodId: finalMethodId,
+                amount: amount,
+                rawValue: tx.value
+            });
+        }
+    }
+
+    const allTxs = [...processedNormalTxs, ...processedTokenTxs];
+    return allTxs.filter(tx => {
+        const tokenSymbol = tx.token.toUpperCase();
+        if (tokenSymbol === 'DATA') return true;
+        if (tokenSymbol === nativeToken.toUpperCase() && tx.amount > 0) return true;
+        return false;
+    });
+}
+
+function inferGroupMethodId(txGroup, baseMethodId, walletAddress, sponsorshipSet) {
+    if (baseMethodId !== "-") return baseMethodId;
+    
+    const directions = txGroup.map(t => t.from.toLowerCase() === walletAddress.toLowerCase() ? "OUT" : "IN");
+    const hasIn = directions.includes("IN");
+    const hasOutToTreasury = txGroup.some(t => 
+        t.from.toLowerCase() === walletAddress.toLowerCase() && 
+        t.to.toLowerCase() === STREAMR_TREASURY_ADDRESS.toLowerCase()
+    );
+    const allAreIn = directions.every(d => d === "IN");
+    const dataTransfers = txGroup.filter(t => t.tokenSymbol === "DATA");
+    
+    if (txGroup.length > 1) {
+        if (hasIn && hasOutToTreasury) return "Collect Earnings";
+        if (allAreIn && dataTransfers.length > 1) return "Force Unstake";
+    } else if (txGroup.length === 1) {
+        const singleTx = txGroup[0];
+        const singleDirection = directions[0];
+        const singleIsToTreasury = singleTx.to.toLowerCase() === STREAMR_TREASURY_ADDRESS.toLowerCase();
+        
+        if (singleTx.tokenSymbol === "DATA") {
+            if (VOTE_ON_FLAG_RAW_AMOUNTS.has(singleTx.value)) return "Vote On Flag";
+            if (singleDirection === "OUT" && singleIsToTreasury) return "Protocol Tax";
+            if (singleDirection === "IN") {
+                return sponsorshipSet.has(singleTx.from.toLowerCase()) ? "Reduce Stake" : "Delegate";
+            }
+            if (singleDirection === "OUT" && !singleIsToTreasury) {
+                return sponsorshipSet.has(singleTx.to.toLowerCase()) ? "Stake" : "Undelegate";
+            }
+        }
+    }
+    return "-";
+}
+
+function classifyTransaction(tx, direction, isToTreasury, baseMethodId, groupMethodId, protocolTaxIndex, index, sponsorshipSet) {
+    if (direction === "OUT" && tx.tokenSymbol === "DATA" && isToTreasury) {
+        return "Protocol Tax";
+    }
+    if ((groupMethodId === "Reduce Stake" || groupMethodId === "Collect Earnings") && direction === "OUT") {
+        return "Undelegate";
+    }
+    if (protocolTaxIndex !== -1 && index === protocolTaxIndex + 2 && tx.tokenSymbol === "DATA") {
+        return "Collect Earnings";
+    }
+    if (["Stake", "Undelegate", "Reduce Stake", "Unstake"].includes(baseMethodId)) {
+        return baseMethodId;
+    }
+    if (baseMethodId === "Collect Earnings" && direction === "IN" && tx.tokenSymbol === "DATA") {
+        return "Collect Earnings";
+    }
+    if ((baseMethodId === "Unstake" || baseMethodId === "Force Unstake") && direction === "OUT" && !isToTreasury) {
+        return baseMethodId;
+    }
+    if (baseMethodId === "Delegate" && direction === "OUT" && tx.tokenSymbol === "DATA" && !isToTreasury) {
+        return "Stake";
+    }
+    if ((baseMethodId === "Delegate" || baseMethodId === "Transfer") && direction === "IN") {
+        return "Delegate";
+    }
+    if (groupMethodId === "-" && tx.tokenSymbol === "DATA" && VOTE_ON_FLAG_RAW_AMOUNTS.has(tx.value)) {
+        return "Vote On Flag";
+    }
+    if (groupMethodId === "-" && tx.tokenSymbol === "DATA") {
+        if (direction === "IN") {
+            return sponsorshipSet.has(tx.from.toLowerCase()) ? "Reduce Stake" : "Delegate";
+        }
+        if (direction === "OUT") {
+            if (sponsorshipSet.has(tx.to.toLowerCase())) return "Stake";
+            if (!isToTreasury) return "Undelegate";
+        }
+    }
+    return groupMethodId;
 }
 
 
@@ -1198,7 +1522,7 @@ export async function setupDataPriceStream(onPriceUpdate) {
                 onPriceUpdate(price);
             }
         });
-        console.log(`Subscribed to DATA price stream: ${DATA_PRICE_STREAM_ID}`);
+        logger.log(`Subscribed to DATA price stream: ${DATA_PRICE_STREAM_ID}`);
     } catch (error) {
         console.error("Error setting up DATA price stream:", error);
         dataPriceValueEl.textContent = 'Stream Error';

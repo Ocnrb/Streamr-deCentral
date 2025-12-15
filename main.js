@@ -20,7 +20,7 @@ let delegatorsModuleLoading = false;
 
 // Also listen here in case the event fires after module loads
 window.addEventListener('beforeinstallprompt', (e) => {
-    console.log('PWA: beforeinstallprompt event captured (module)');
+    Utils.logger.log('PWA: beforeinstallprompt event captured (module)');
     e.preventDefault();
     window.deferredInstallPrompt = e;
     updateInstallButtons();
@@ -28,7 +28,7 @@ window.addEventListener('beforeinstallprompt', (e) => {
 
 // Listen for successful installation
 window.addEventListener('appinstalled', () => {
-    console.log('PWA: App installed successfully');
+    Utils.logger.log('PWA: App installed successfully');
     window.deferredInstallPrompt = null;
     document.getElementById('installAppSection')?.classList.add('hidden');
     UI.showToast({
@@ -81,7 +81,7 @@ function updateInstallButtons() {
     installSection.classList.remove('hidden');
     
     // Log status for debugging
-    console.log('PWA: Install prompt available:', !!window.deferredInstallPrompt);
+    Utils.logger.log('PWA: Install prompt available:', !!window.deferredInstallPrompt);
 }
 
 /**
@@ -89,7 +89,7 @@ function updateInstallButtons() {
  */
 async function triggerInstallPrompt() {
     const platform = getPlatform();
-    console.log('PWA: Install button clicked, platform:', platform, 'prompt available:', !!window.deferredInstallPrompt);
+    Utils.logger.log('PWA: Install button clicked, platform:', platform, 'prompt available:', !!window.deferredInstallPrompt);
     
     if (!window.deferredInstallPrompt) {
         // Provide helpful message based on platform
@@ -114,7 +114,7 @@ async function triggerInstallPrompt() {
     try {
         window.deferredInstallPrompt.prompt();
         const { outcome } = await window.deferredInstallPrompt.userChoice;
-        console.log('PWA: User choice:', outcome);
+        Utils.logger.log('PWA: User choice:', outcome);
         
         if (outcome === 'accepted') {
             UI.showToast({
@@ -175,7 +175,7 @@ function setupInstallButtons() {
         }
     });
     
-    console.log('PWA: Install buttons setup complete, prompt available:', !!window.deferredInstallPrompt);
+    Utils.logger.log('PWA: Install buttons setup complete, prompt available:', !!window.deferredInstallPrompt);
 }
 
 /**
@@ -363,9 +363,9 @@ let router = null;
 async function initializeApp() {
     await Services.cleanupClient();
     try {
-        const streamrClient = new StreamrClient();
+        // Configure Streamr SDK with minimal logging (only errors)
+        const streamrClient = new StreamrClient({ logLevel: 'error' });
         Services.setStreamrClient(streamrClient);
-        logger.log("Streamr client initialized.");
 
         // Load CSV price data on startup
         state.historicalDataPriceMap = await Services.fetchHistoricalDataPrice();

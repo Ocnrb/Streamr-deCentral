@@ -3,7 +3,6 @@ const CACHE_NAME = 'streamr-central-cache-v5';
 // The install event is now simpler. We don't pre-cache a fixed list of URLs.
 // This makes the installation much less likely to fail.
 self.addEventListener('install', event => {
-  console.log('Service Worker: Installing...');
   // The skipWaiting() method allows this service worker to activate
   // as soon as it has finished installing.
   self.skipWaiting();
@@ -11,19 +10,17 @@ self.addEventListener('install', event => {
 
 // The activate event is used to clean up old caches.
 self.addEventListener('activate', event => {
-    console.log('Service Worker: Activating...');
     const cacheWhitelist = [CACHE_NAME];
     event.waitUntil(
         caches.keys().then(cacheNames => {
             return Promise.all(
                 cacheNames.map(cacheName => {
                     if (cacheWhitelist.indexOf(cacheName) === -1) {
-                        console.log('Service Worker: Deleting old cache', cacheName);
                         return caches.delete(cacheName);
                     }
                 })
             );
-        }).then(() => self.clients.claim()) // Take control of open pages
+        }).then(() => self.clients.claim())
     );
 });
 

@@ -15,26 +15,21 @@ const { logger } = Utils;
 // ============================================
 
 const state = {
-    // Current operator context
     currentOperatorId: null,
     currentOperatorData: null,
     currentDelegations: [],
     totalDelegatorCount: 0,
     
-    // History and chart data
     sponsorshipHistory: [],
     operatorDailyBuckets: [],
     chartTimeFrame: 90,
-    chartType: 'stake', // 'stake' or 'earnings'
+    chartType: 'stake',
     
-    // List state
     loadedOperatorCount: 0,
     searchQuery: '',
     
-    // Intervals
     detailsRefreshInterval: null,
     
-    // UI state
     activeSponsorshipMenu: null,
     uiState: {
         isStatsPanelExpanded: false,
@@ -43,15 +38,25 @@ const state = {
         isChartUsdView: false,
     },
     
-    // Node status
     activeNodes: new Set(),
     unreachableNodes: new Set(),
     
-    // Shared state references (set from main.js)
     signer: null,
     myRealAddress: '',
     dataPriceUSD: null,
     historicalDataPriceMap: null,
+    
+    historyState: {
+        isFullLoaded: false,
+        graphEvents: [],
+        graphSkip: 0,
+        hasMoreGraph: true,
+        etherscanTxs: [],
+        etherscanPage: 1,
+        hasMoreEtherscan: true,
+        etherscanCutoffDate: null,
+        allSponsorshipAddresses: [],
+    },
 };
 
 // Debounced search function
@@ -68,13 +73,24 @@ const debouncedSearch = Utils.debounce((query) => {
 // Data Fetching and Processing
 // ============================================
 
-/**
- * Process sponsorship history from GraphQL and Polygonscan data
- */
-function processSponsorshipHistory(gqlData, polygonscanTxs) {
-    const combinedEvents = new Map();
+const INITIAL_GRAPH_LIMIT = 1000;
+const INITIAL_ETHERSCAN_OFFSET = 500;
 
-    (gqlData.stakingEvents || []).forEach(e => {
+function processSponsorshipHistory(graphEvents, polygonscanTxs, limitToEtherscan = true) {
+    const combinedEvents = new Map();
+    
+    let cutoffDate = null;
+    if (limitToEtherscan && polygonscanTxs && polygonscanTxs.length > 0) {
+        const timestamps = polygonscanTxs.map(tx => Number(tx.timestamp));
+        cutoffDate = Math.min(...timestamps);
+        state.historyState.etherscanCutoffDate = cutoffDate;
+    }
+
+    const filteredGraphEvents = limitToEtherscan && cutoffDate
+        ? graphEvents.filter(e => Number(e.date) >= cutoffDate)
+        : graphEvents;
+
+    filteredGraphEvents.forEach(e => {
         const timestamp = Number(e.date); 
         if (!combinedEvents.has(timestamp)) {
             combinedEvents.set(timestamp, { timestamp, events: [] });
@@ -110,6 +126,72 @@ function processSponsorshipHistory(gqlData, polygonscanTxs) {
     unifiedHistory.sort((a, b) => b.timestamp - a.timestamp); 
     
     state.sponsorshipHistory = unifiedHistory;
+}
+
+function hasMoreHistoryToLoad() {
+    return state.historyState.hasMoreGraph || 
+           state.historyState.hasMoreEtherscan || 
+           (state.historyState.etherscanCutoffDate && 
+            state.historyState.graphEvents.some(e => Number(e.date) < state.historyState.etherscanCutoffDate));
+}
+
+async function loadFullHistory() {
+    const btn = document.getElementById('load-all-history-btn');
+    if (!btn) return;
+    
+    btn.disabled = true;
+    btn.innerHTML = `
+        <span class="flex items-center gap-2">
+            <div class="w-4 h-4 border-2 border-white rounded-full border-t-transparent animate-spin"></div>
+            Loading...
+        </span>`;
+    
+    try {
+        const [allGraphEvents, allEtherscanTxs] = await Promise.all([
+            state.historyState.hasMoreGraph 
+                ? Services.fetchAllStakingEvents(
+                    state.currentOperatorId, 
+                    state.historyState.graphSkip,
+                    state.historyState.graphEvents
+                  )
+                : Promise.resolve(state.historyState.graphEvents),
+            
+            state.historyState.hasMoreEtherscan
+                ? Services.fetchAllPolygonscanHistory(
+                    state.currentOperatorId,
+                    state.historyState.allSponsorshipAddresses,
+                    state.historyState.etherscanPage,
+                    state.historyState.etherscanTxs
+                  )
+                : Promise.resolve(state.historyState.etherscanTxs)
+        ]);
+        
+        state.historyState.graphEvents = allGraphEvents;
+        state.historyState.etherscanTxs = allEtherscanTxs;
+        state.historyState.isFullLoaded = true;
+        state.historyState.hasMoreGraph = false;
+        state.historyState.hasMoreEtherscan = false;
+        
+        processSponsorshipHistory(allGraphEvents, allEtherscanTxs, false);
+        UI.renderSponsorshipsHistory(state.sponsorshipHistory, false);
+        
+    } catch (error) {
+        logger.error('Failed to load full history:', error);
+        UI.showToast({ 
+            type: 'error', 
+            title: 'Error', 
+            message: 'Failed to load complete history' 
+        });
+        
+        btn.disabled = false;
+        btn.innerHTML = `
+            <span class="flex items-center gap-2">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3"></path>
+                </svg>
+                Load All History
+            </span>`;
+    }
 }
 
 /**
@@ -658,7 +740,19 @@ export const OperatorLogic = {
         state.unreachableNodes.clear();
         state.chartTimeFrame = 90;
         state.chartType = 'stake';
-        state.uiState.isChartUsdView = false; 
+        state.uiState.isChartUsdView = false;
+        
+        state.historyState = {
+            isFullLoaded: false,
+            graphEvents: [],
+            graphSkip: 0,
+            hasMoreGraph: true,
+            etherscanTxs: [],
+            etherscanPage: 1,
+            hasMoreEtherscan: true,
+            etherscanCutoffDate: null,
+            allSponsorshipAddresses: [],
+        };
 
         try {
             await this.refreshData(true); 
@@ -695,8 +789,6 @@ export const OperatorLogic = {
             if (isFirstLoad) {
                 let polygonscanTxs = [];
                 try {
-                    // Extract sponsorship addresses from current stakes AND historical staking events
-                    // This ensures we can properly classify transactions with sponsorships no longer staked
                     const currentStakeSponsorships = (data.operator?.stakes || [])
                         .map(stake => stake.sponsorship?.id)
                         .filter(Boolean);
@@ -704,19 +796,29 @@ export const OperatorLogic = {
                         .map(event => event.sponsorship?.id)
                         .filter(Boolean);
                     
-                    // Use Set to deduplicate
                     const allSponsorshipAddresses = [...new Set([...currentStakeSponsorships, ...historicalSponsorships])];
+                    state.historyState.allSponsorshipAddresses = allSponsorshipAddresses;
                     
-                    polygonscanTxs = await Services.fetchPolygonscanHistory(state.currentOperatorId, 500, allSponsorshipAddresses);
+                    const result = await Services.fetchPolygonscanHistory(state.currentOperatorId, INITIAL_ETHERSCAN_OFFSET, allSponsorshipAddresses);
+                    polygonscanTxs = result.transactions || result;
+                    state.historyState.hasMoreEtherscan = result.hasMore || false;
                 } catch (error) {
                     logger.error("Failed to load Polygonscan history:", error);
                 }
                 
-                processSponsorshipHistory(data, polygonscanTxs);
+                const graphEvents = data.stakingEvents || [];
+                state.historyState.graphEvents = graphEvents;
+                state.historyState.graphSkip = INITIAL_GRAPH_LIMIT;
+                state.historyState.hasMoreGraph = graphEvents.length === INITIAL_GRAPH_LIMIT;
+                
+                state.historyState.etherscanTxs = polygonscanTxs;
+                state.historyState.etherscanPage = 2;
+                state.historyState.isFullLoaded = false;
+                
+                processSponsorshipHistory(graphEvents, polygonscanTxs, true);
                 
                 UI.renderOperatorDetails(data, state);
                 
-                // Notify main.js to update bot status UI
                 if (typeof window.updateBotStatusUI === 'function') {
                     window.updateBotStatusUI();
                 }
@@ -726,7 +828,9 @@ export const OperatorLogic = {
                 updateMyStakeUI();
                 setupOperatorStream();
                 filterAndRenderChart();
-                UI.renderSponsorshipsHistory(state.sponsorshipHistory);
+                
+                const showLoadAll = hasMoreHistoryToLoad();
+                UI.renderSponsorshipsHistory(state.sponsorshipHistory, showLoadAll);
                 
                 if (expectedTxHash) {
                     const txFound = polygonscanTxs.some(tx => 
@@ -906,8 +1010,15 @@ export const OperatorLogic = {
                 document.getElementById('sponsorships-history-content').classList.toggle('hidden', tab !== 'history');
                 state.uiState.isSponsorshipsListViewActive = (tab === 'list');
                 if (tab === 'history') {
-                    UI.renderSponsorshipsHistory(state.sponsorshipHistory);
+                    const showLoadAll = hasMoreHistoryToLoad() && !state.historyState.isFullLoaded;
+                    UI.renderSponsorshipsHistory(state.sponsorshipHistory, showLoadAll);
                 }
+            }
+            
+            // Load All History button
+            if (target.closest('#load-all-history-btn')) {
+                loadFullHistory();
+                return;
             }
             
             // Wallets Pills Tabs

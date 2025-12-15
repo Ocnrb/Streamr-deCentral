@@ -918,10 +918,10 @@ function renderFlowChart() {
                     borderColor: '#333333',
                     borderWidth: 1,
                     padding: 10,
-                    cornerRadius: 8,
+                    cornerRadius: 12,
                     displayColors: false,
                     titleFont: { family: "'Inter', sans-serif", size: 13, weight: '600' },
-                    bodyFont: { family: "'Inter', sans-serif", size: 12 },
+                    bodyFont: { family: "'Inter', sans-serif", size: 13 },
                     callbacks: {
                         label: (context) => {
                             const value = Math.abs(context.raw);
@@ -1012,12 +1012,12 @@ function renderEarningsChart() {
                     cornerRadius: 8,
                     displayColors: false,
                     titleFont: { family: "'Inter', sans-serif", size: 13, weight: '600' },
-                    bodyFont: { family: "'Inter', sans-serif", size: 12 },
+                    bodyFont: { family: "'Inter', sans-serif", size: 13 },
                     callbacks: {
                         label: (context) => {
                             const value = context.raw;
                             const lines = [];
-                            lines.push(`${formatDATA(value * 1e18, 0, 2)} DATA`);
+                            lines.push(`${formatBigNumber(Math.round(value).toString())} DATA`);
                             // Show USD using live stream price
                             if (state.dataPriceUSD > 0) {
                                 const usdValue = value * state.dataPriceUSD;
@@ -1204,7 +1204,7 @@ function renderMapChart() {
                     cornerRadius: 8,
                     displayColors: false,
                     titleFont: { family: "'Inter', sans-serif", size: 13, weight: '600' },
-                    bodyFont: { family: "'Inter', sans-serif", size: 12 },
+                    bodyFont: { family: "'Inter', sans-serif", size: 13 },
                     filter: (item) => item.raw.type !== 'Timeline',
                     callbacks: {
                         title: (items) => {

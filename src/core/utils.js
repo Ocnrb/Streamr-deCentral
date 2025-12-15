@@ -1,13 +1,11 @@
 /**
- * Development mode logger - only logs in development environment
+ * Production logger - only logs errors to keep console clean
  */
-const isDevelopment = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-
 export const logger = {
-    log: (...args) => isDevelopment && console.log(...args),
-    warn: (...args) => isDevelopment && console.warn(...args),
-    error: (...args) => console.error(...args), // Always log errors
-    info: (...args) => isDevelopment && console.info(...args),
+    log: () => {},   // Silent
+    warn: () => {},  // Silent
+    error: (...args) => console.error(...args),
+    info: () => {},  // Silent
 };
 
 /**

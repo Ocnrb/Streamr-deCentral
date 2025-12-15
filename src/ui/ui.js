@@ -609,7 +609,7 @@ export function updateDelegatorsSection(delegations, totalDelegatorCount, operat
     }
 }
 
-export function renderSponsorshipsHistory(historyGroups) {
+export function renderSponsorshipsHistory(historyGroups, showLoadAllButton = true) {
     const listEl = document.getElementById('sponsorships-history-list');
     if (!listEl) return;
 
@@ -618,7 +618,7 @@ export function renderSponsorshipsHistory(historyGroups) {
         return;
     }
 
-    listEl.innerHTML = historyGroups.map(group => {
+    let html = historyGroups.map(group => {
         const date = new Date(group.timestamp * 1000).toLocaleString();
 
         const graphEventsHtml = group.events.filter(e => e.type === 'graph').map(event => {
@@ -646,9 +646,7 @@ export function renderSponsorshipsHistory(historyGroups) {
             
             let directionClass;
             const method = event.methodId;
-            // Stake/Unstake/Reduce Stake are orange (stake operations)
             const stakeInMethods = ["Stake", "Unstake", "Force Unstake", "Reduce Stake"];
-            // Undelegate and Protocol Tax are red (remove value from operator)
             const redMethods = ["Undelegate", "Protocol Tax"];
 
             if (redMethods.includes(method)) {
@@ -701,6 +699,22 @@ export function renderSponsorshipsHistory(historyGroups) {
             </div>
         </li>`;
     }).join('');
+    
+    if (showLoadAllButton) {
+        html += `
+            <li id="load-all-history-container" class="py-4 text-center">
+                <button id="load-all-history-btn" 
+                        class="bg-[#2C2C2C] hover:bg-[#3C3C3C] text-white font-medium py-2.5 px-6 rounded-lg text-sm transition-colors inline-flex items-center gap-2">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3"></path>
+                    </svg>
+                    Load All History
+                </button>
+                <p class="text-xs text-gray-500 mt-2">Showing recent activity. Click to load complete history.</p>
+            </li>`;
+    }
+    
+    listEl.innerHTML = html;
 }
 
 export function renderStakeChart(chartData, isUsdView) {
@@ -765,7 +779,7 @@ export function renderStakeChart(chartData, isUsdView) {
                 },
                 bodyFont: {
                     family: "'Inter', sans-serif",
-                    size: 12
+                    size: 13
                 },
                 callbacks: {
                     label: function (context) {
@@ -937,15 +951,13 @@ export function renderOperatorEarningsChart(labels, dailyData, cumulativeData, i
                     cornerRadius: 8,
                     displayColors: false,
                     titleFont: { family: "'Inter', sans-serif", size: 13, weight: '600' },
-                    bodyFont: { family: "'Inter', sans-serif", size: 12 },
+                    bodyFont: { family: "'Inter', sans-serif", size: 13 },
                     callbacks: {
                         label: (context) => {
                             const value = context.raw;
                             const lines = [];
                             // Format DATA value with appropriate decimals
-                            const formatted = value >= 1000 
-                                ? formatBigNumber(Math.round(value).toString()) 
-                                : value.toFixed(2);
+                            const formatted = formatBigNumber(Math.round(value).toString());
                             lines.push(`${formatted} DATA`);
                             // Show USD using live current price
                             if (currentPrice && currentPrice > 0) {
