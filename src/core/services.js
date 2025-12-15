@@ -661,7 +661,15 @@ export async function fetchPolygonscanHistory(walletAddress, offset = 500, spons
                 }
             }
 
-            for (const tx of txGroup) {
+            // Find index of Protocol Tax transaction (OUT to Treasury) in this group to help classify related transfers
+            const protocolTaxIndex = txGroup.findIndex(t => 
+                t.from.toLowerCase() === walletAddress.toLowerCase() && 
+                t.to.toLowerCase() === STREAMR_TREASURY_ADDRESS.toLowerCase() &&
+                t.tokenSymbol === "DATA"
+            );
+
+            for (let i = 0; i < txGroup.length; i++) {
+                const tx = txGroup[i];
                 const direction = tx.from.toLowerCase() === walletAddress.toLowerCase() ? "OUT" : "IN";
                 const decimals = parseInt(tx.tokenDecimal) || 18;
                 const amount = parseFloat(tx.value) / Math.pow(10, decimals);
@@ -677,7 +685,15 @@ export async function fetchPolygonscanHistory(walletAddress, offset = 500, spons
                 if (direction === "OUT" && tx.tokenSymbol === "DATA" && isToTreasury) {
                     finalMethodId = "Protocol Tax";
                 }
-                // 2. Known methods that should keep their name
+                // 2. User Corrections: Specific overrides for Reduce Stake/Collect Earnings OUT
+                else if ((baseMethodId === "Reduce Stake" || baseMethodId === "Collect Earnings") && direction === "OUT") {
+                    finalMethodId = "Undelegate";
+                }
+                // 3. Protocol Tax Context: The 2nd transaction after tax is typically the earnings component
+                else if (protocolTaxIndex !== -1 && i === protocolTaxIndex + 2 && tx.tokenSymbol === "DATA") {
+                    finalMethodId = "Collect Earnings";
+                }
+                // 4. Known methods that should keep their name
                 else if (baseMethodId === "Stake") {
                     finalMethodId = "Stake";
                 }
@@ -687,23 +703,26 @@ export async function fetchPolygonscanHistory(walletAddress, offset = 500, spons
                 else if (baseMethodId === "Reduce Stake") {
                     finalMethodId = "Reduce Stake";
                 }
-                // 3. Collect Earnings (0xe8e658b4) or Unstake (0xf2888dbb): IN = "Collect Earnings"
-                else if ((baseMethodId === "Collect Earnings" || baseMethodId === "Unstake") && direction === "IN" && tx.tokenSymbol === "DATA") {
+                else if (baseMethodId === "Unstake") {
+                    finalMethodId = "Unstake";
+                }
+                // 5. Collect Earnings (0xe8e658b4): IN = "Collect Earnings"
+                else if (baseMethodId === "Collect Earnings" && direction === "IN" && tx.tokenSymbol === "DATA") {
                     finalMethodId = "Collect Earnings";
                 }
-                // 4. Unstake/Force Unstake: OUT (not to treasury) - keep method name
+                // 6. Unstake/Force Unstake: OUT (not to treasury) - keep method name
                 else if ((baseMethodId === "Unstake" || baseMethodId === "Force Unstake") && direction === "OUT" && !isToTreasury) {
                     finalMethodId = baseMethodId;
                 }
-                // 5. Delegate (transferAndCall) OUT = "Stake" (staking into sponsorship via transferAndCall)
+                // 7. Delegate (transferAndCall) OUT = "Stake" (staking into sponsorship via transferAndCall)
                 else if (baseMethodId === "Delegate" && direction === "OUT" && tx.tokenSymbol === "DATA" && !isToTreasury) {
                     finalMethodId = "Stake";
                 }
-                // 6. Delegate/Transfer: IN = "Delegate"
+                // 8. Delegate/Transfer: IN = "Delegate"
                 else if ((baseMethodId === "Delegate" || baseMethodId === "Transfer") && direction === "IN") {
                     finalMethodId = "Delegate";
                 }
-                // 7. Vote On Flag: detected by specific raw amounts (fallback)
+                // 9. Vote On Flag: detected by specific raw amounts (fallback)
                 else if (finalMethodId === "-" && tx.tokenSymbol === "DATA" && VOTE_ON_FLAG_RAW_AMOUNTS.has(tx.value)) {
                     finalMethodId = "Vote On Flag";
                 }
