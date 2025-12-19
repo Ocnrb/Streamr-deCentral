@@ -1,7 +1,7 @@
 {
-  "name": "streamr-operators-main",
+  "name": "streamr-decentral-main",
   "version": "1.0.0",
-  "description": "\\# Streamr Operators Dashboard",
+  "description": "\\# Streamr Dashboard",
   "main": "main.js",
   "scripts": {
     "build:css": "tailwindcss -i src/input.css -o styles.css",

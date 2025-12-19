@@ -8,7 +8,7 @@ const COLOR_LINK = '#BFC8D9';
 const COLOR_LIVE_NODE = '#10b981'; 
 const COLOR_DELEGATOR = '#f97316'; 
 
-const LAUNCH_DATE_TS = 1750852800; 
+const LAUNCH_DATE_TS = 1701388800; 
 const AVG_BLOCK_TIME = 2.2; 
 
 const NODE_RADIUS = 5;

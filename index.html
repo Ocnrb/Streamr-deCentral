@@ -55,10 +55,7 @@
 <body class="text-gray-200">
 
     <!-- Login Modal (visible by default until user logs in) -->
-    <div id="loginModal" class="fixed inset-0 bg-[#121212] flex flex-col items-center justify-between p-4 z-50">
-        <!-- Spacer top -->
-        <div class="flex-1"></div>
-        
+    <div id="loginModal" class="fixed inset-0 bg-[#121212] flex items-center justify-center p-4 z-50">
         <!-- Main Login Panel (centered) -->
         <div class="bg-[#1E1E1E] rounded-lg p-8 max-w-sm w-full text-gray-300 text-center shadow-2xl border border-[#333333]">
             
@@ -85,12 +82,9 @@
                 <p id="loading-sub-text" class="text-sm text-gray-400 mt-2">Please follow the instructions in your wallet.</p>
             </div>
         </div>
-        
-        <!-- Spacer bottom (same as top to keep login centered) -->
-        <div class="flex-1"></div>
 
         <!-- Install App Panel (bottom) - hidden by default, shown by JS if not installed -->
-        <div id="installAppSection" class="hidden bg-[#1E1E1E] rounded-lg p-4 max-w-sm w-full text-gray-300 text-center shadow-2xl border border-[#333333] mb-4">
+        <div id="installAppSection" class="hidden absolute bottom-4 left-1/2 -translate-x-1/2 bg-[#1E1E1E] rounded-lg p-4 max-w-sm w-[calc(100%-2rem)] text-gray-300 text-center shadow-2xl border border-[#333333]">
             <p class="text-xs text-gray-500 mb-3">Install App</p>
             <div class="flex justify-center gap-4">
                 <!-- Android Button -->
