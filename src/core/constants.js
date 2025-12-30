@@ -173,7 +173,7 @@ export const POLYGON_RPC_URL = 'https://polygon-rpc.com';
 // API Keys Configuration
 // ============================================
 // Default API key fallbacks (used when user hasn't configured their own)
-export const DEFAULT_GRAPH_API_KEY = '085f61a7b58a920ba322de13e275fc20';
+export const DEFAULT_GRAPH_API_KEY = 'a163aff289198d3ae971bf19b943caa9';
 export const DEFAULT_ETHERSCAN_API_KEY = 'B8BXCXWR66RI1J2QYQRTT4SPHCC6VYYJHC';
 
 // LocalStorage keys for user-configured API keys
@@ -269,5 +269,6 @@ export const DELEGATOR_TIMEFRAMES = {
     '365': 365,
     'all': 'all'
 };
+
 
 
