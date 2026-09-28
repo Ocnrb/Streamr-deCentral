@@ -799,9 +799,12 @@ export function renderSponsorshipsHistory(historyGroups, showLoadAllButton = tru
                     ? scanRowHtml(match)
                     : graphRowHtml(event, scanBadgeHtml(match))));
             }
+            // The other transfers of the same transaction (Protocol Tax, earnings...) belong to its action
+            const otherTransfers = cluster.scan.filter(t => !merged.has(t)).map(t => scanRowHtml(t)).join('');
+            if (actionBlocks.length > 0 && otherTransfers) actionBlocks[actionBlocks.length - 1] += otherTransfers;
             const graphHtml = actionBlocks.map(block => `
                 <div class="relative pl-4 [&>div]:py-1.5 before:content-[''] before:absolute before:left-0 before:top-2 before:bottom-2 before:w-[3px] before:rounded-full before:bg-[#444]">${block}</div>`).join('');
-            const scanHtml = cluster.scan.filter(t => !merged.has(t)).map(t => scanRowHtml(t)).join('');
+            const scanHtml = actionBlocks.length > 0 ? '' : otherTransfers;
             return `
                 <div class="${index > 0 ? 'mt-2' : ''}">
                     ${graphHtml ? `<div class="space-y-2">${graphHtml}</div>` : ''}
