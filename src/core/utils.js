@@ -193,6 +193,15 @@ function isValidIpfsCid(cid) {
     return /^Qm[1-9A-HJ-NP-Za-km-z]{44}$/.test(cid) || /^b[a-z2-7]{58,}$/.test(cid);
 }
 
+// Operator avatar stored in a Streamr stream (see streamAvatar.js)
+export const OPERATOR_AVATAR_PLACEHOLDER = 'https://placehold.co/64x64/1E1E1E/a3a3a3?text=OP';
+export const AVATAR_STREAM_MARKER = '#avatar-stream=';
+const PROFILE_STREAM_ID_REGEX = /^(0x[0-9a-fA-F]{40}|[a-z0-9.-]+\.eth)\/[A-Za-z0-9_.\-\/]+$/;
+
+export function isValidProfileStreamId(streamId) {
+    return typeof streamId === 'string' && streamId.length <= 255 && PROFILE_STREAM_ID_REGEX.test(streamId);
+}
+
 /**
  * Parses the operator's metadata JSON string.
  * Includes protection against prototype pollution attacks.
@@ -214,10 +223,16 @@ export function parseOperatorMetadata(metadataJsonString) {
                 return { name: null, description: null, imageUrl: null };
             }
             
-            // Validate IPFS CID before constructing URL
+            // Avatar priority: IPFS CID (official) > profile stream (imageStreamId) > placeholder.
+            // A stream avatar is signalled with a URL fragment that the avatar hydrator (streamAvatar.js)
+            // resolves: right away when there is no CID, or when the IPFS image fails to load.
             let imageUrl = null;
             if (metadata.imageIpfsCid && isValidIpfsCid(metadata.imageIpfsCid)) {
                 imageUrl = `https://ipfs.io/ipfs/${metadata.imageIpfsCid}`;
+            }
+            if (isValidProfileStreamId(metadata.imageStreamId)) {
+                const partition = Number.isInteger(metadata.imageStreamPartition) ? metadata.imageStreamPartition : 0;
+                imageUrl = `${imageUrl || OPERATOR_AVATAR_PLACEHOLDER}${AVATAR_STREAM_MARKER}${encodeURIComponent(metadata.imageStreamId)}:${partition}`;
             }
             
             return {

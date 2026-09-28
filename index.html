@@ -348,7 +348,7 @@
                 <section class="space-y-3">
                     <h3 class="text-sm font-semibold text-gray-200">Profile</h3>
                     <div class="flex gap-4 items-start">
-                        <img id="operator-form-image-preview" src="https://placehold.co/64x64/1E1E1E/a3a3a3?text=OP" alt="" onerror="this.src='https://placehold.co/64x64/1E1E1E/a3a3a3?text=OP'; this.onerror=null;"
+                        <img id="operator-form-image-preview" src="https://placehold.co/64x64/1E1E1E/a3a3a3?text=OP" alt=""
                              class="w-16 h-16 rounded-full border-2 border-[#333] object-cover flex-shrink-0">
                         <div class="flex-1 min-w-0 space-y-3">
                             <div>
@@ -370,6 +370,58 @@
                             class="w-full p-2.5 bg-[#121212] border border-[#333] rounded-lg text-white text-sm resize-y focus:outline-none focus:ring-2 focus:ring-blue-500/50"></textarea>
                     </div>
                 </section>
+
+                <!-- Avatar stream (optional): avatar hosted on a Streamr stream + storage node, read over HTTPS -->
+                <details id="operator-form-avatar" class="group border border-[#333] rounded-lg">
+                    <summary class="flex items-center justify-between px-3 py-2.5 cursor-pointer select-none text-sm font-semibold text-gray-200 list-none [&::-webkit-details-marker]:hidden">
+                        <span>Avatar stream <span class="text-gray-600 font-normal">(optional)</span></span>
+                        <svg class="w-4 h-4 text-gray-500 transition-transform group-open:rotate-90" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+                    </summary>
+                    <div class="px-3 pb-3 space-y-3">
+                        <p class="text-xs text-gray-500">
+                            Upload the avatar to a stream you own (only you publish, anyone reads), kept by a storage node and loaded over HTTPS.
+                            An IPFS CID, when set, is shown first; the stream avatar is used when there is no CID or it fails to load.
+                        </p>
+                        <label class="flex items-center gap-2 text-sm text-gray-300 cursor-pointer">
+                            <input id="operator-form-avatar-enabled" type="checkbox" class="w-4 h-4 rounded border-[#444] bg-[#121212] text-blue-500 focus:ring-blue-500/50">
+                            Use an avatar stream
+                        </label>
+                        <div id="operator-form-avatar-fields" class="hidden space-y-3">
+                            <div class="text-xs">
+                                <span class="text-gray-400">Stream</span>
+                                <span id="operator-form-avatar-stream-id" class="ml-1 font-mono text-gray-300 break-all">--</span>
+                                <p id="operator-form-avatar-stream-status" class="hidden mt-1 text-xs"></p>
+                            </div>
+                            <div class="flex gap-4 items-center">
+                                <img id="operator-form-avatar-preview" src="https://placehold.co/64x64/1E1E1E/a3a3a3?text=OP" alt=""
+                                     class="w-16 h-16 rounded-full border-2 border-[#333] object-cover flex-shrink-0">
+                                <div class="flex-1 min-w-0">
+                                    <label for="operator-form-avatar-file" class="block text-xs text-gray-400 mb-1">Image <span class="text-gray-600">(cropped to a square, resized to 256&times;256)</span></label>
+                                    <input id="operator-form-avatar-file" type="file" accept="image/png,image/jpeg,image/webp,image/gif"
+                                        class="block w-full text-xs text-gray-400 file:mr-3 file:px-3 file:py-2 file:rounded-lg file:border-0 file:bg-[#333] file:text-white file:text-xs file:font-medium hover:file:bg-[#444] file:cursor-pointer disabled:opacity-50">
+                                    <p id="operator-form-avatar-file-status" class="hidden mt-1 text-xs"></p>
+                                </div>
+                            </div>
+                            <div class="grid sm:grid-cols-[1fr_8rem] gap-3">
+                                <div>
+                                    <label for="operator-form-avatar-storage" class="block text-xs text-gray-400 mb-1">Storage node</label>
+                                    <select id="operator-form-avatar-storage" class="w-full p-2.5 bg-[#121212] border border-[#333] rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 disabled:opacity-50"></select>
+                                    <input id="operator-form-avatar-storage-custom" type="text" placeholder="Storage node address (0x...)" autocomplete="off" spellcheck="false"
+                                        class="hidden mt-2 font-mono w-full p-2.5 bg-[#121212] border border-[#333] rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 disabled:opacity-50">
+                                    <p id="operator-form-avatar-storage-status" class="hidden mt-1 text-xs"></p>
+                                </div>
+                                <div>
+                                    <label for="operator-form-avatar-days" class="block text-xs text-gray-400 mb-1">Keep for (days)</label>
+                                    <input id="operator-form-avatar-days" type="number" min="1" step="1" value="3650" class="w-full p-2.5 bg-[#121212] border border-[#333] rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 disabled:opacity-50">
+                                </div>
+                            </div>
+                            <label id="operator-form-avatar-purge-row" class="hidden flex items-start gap-2 text-sm text-gray-300 cursor-pointer">
+                                <input id="operator-form-avatar-purge" type="checkbox" checked class="mt-0.5 w-4 h-4 rounded border-[#444] bg-[#121212] text-blue-500 focus:ring-blue-500/50">
+                                <span>Delete previous avatars from the storage node <span class="block text-xs text-gray-500">Supported by this storage node (purge). Asks for one signature.</span></span>
+                            </label>
+                        </div>
+                    </div>
+                </details>
 
                 <!-- Economics & nodes -->
                 <section class="grid sm:grid-cols-2 gap-3">

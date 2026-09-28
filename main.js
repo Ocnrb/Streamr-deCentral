@@ -7,6 +7,7 @@ import * as Autostaker from './src/features/autostaker.js';
 import { navigationController } from './src/ui/navigation.js';
 import { OperatorLogic } from './src/features/operator.js';
 import { OperatorForm } from './src/features/operatorForm.js';
+import { installAvatarHydrator } from './src/core/streamAvatar.js';
 import { removeOperatorProfile, getOperatorProfile } from './src/core/profile.js';
 
 // Lazy-loaded modules
@@ -471,6 +472,8 @@ let router = null;
 // --- Initialization ---
 
 async function initializeApp() {
+    // Operator avatars hosted on a stream (IPFS CID > avatar stream > placeholder)
+    installAvatarHydrator();
     await Services.cleanupClient();
     try {
         // Configure Streamr SDK with minimal logging (only errors)
