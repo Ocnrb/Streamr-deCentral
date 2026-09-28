@@ -1734,7 +1734,7 @@ function renderStreamDetail(stream, isSponsored, sponsorshipId) {
         // Render sponsorships list for stream details view
         renderStreamSponsorshipsList(stream.sponsorships);
         // Render storage nodes
-        renderStreamStorageNodes(stream.storageNodes);
+        renderStreamStorageNodes(stream.storageNodes, metadata.storageDays);
     }
     
     // Also render permissions in the sponsored panel if sponsored
@@ -1910,8 +1910,9 @@ function renderStreamSponsorshipsList(sponsorships) {
 /**
  * Render storage nodes for Stream Details view
  * @param {Array} storageNodes - Storage node entries
+ * @param {number} [storageDays] - Stream's on-chain storage TTL in days (metadata.storageDays)
  */
-function renderStreamStorageNodes(storageNodes) {
+function renderStreamStorageNodes(storageNodes, storageDays) {
     const panel = document.getElementById('stream-storage-panel');
     const content = document.getElementById('stream-storage-content');
     const emptyState = document.getElementById('stream-storage-empty');
@@ -1928,15 +1929,20 @@ function renderStreamStorageNodes(storageNodes) {
     }
     
     if (emptyState) emptyState.classList.add('hidden');
-    
+
+    // TTL is set per stream (metadata.storageDays) and applies to every storage node
+    const ttlDays = Number.isFinite(storageDays) && storageDays >= 0 ? storageDays : null;
+    const ttlText = ttlDays !== null
+        ? `${ttlDays} ${ttlDays === 1 ? 'day' : 'days'}`
+        : '—';
+
     const rowsHtml = storageNodes.map(node => {
         const nodeId = node.id || 'Unknown';
         const displayId = nodeId.length > 20 ? nodeId.substring(0, 10) + '...' + nodeId.substring(nodeId.length - 8) : nodeId;
-        
-        // Parse on-chain metadata (NodeRegistry): name, endpoints (urls) and TTL (days)
+
+        // Parse on-chain metadata (NodeRegistry): name and endpoints (urls)
         let nodeName = null;
         let endpoints = [];
-        let ttlDays = null;
         try {
             if (node.metadata) {
                 const meta = JSON.parse(node.metadata);
@@ -1947,15 +1953,12 @@ function renderStreamStorageNodes(storageNodes) {
                 } else if (typeof meta.http === 'string') {
                     endpoints = [meta.http];
                 }
-                const ttl = Number(meta.ttl);
-                if (meta.ttl !== undefined && meta.ttl !== null && Number.isFinite(ttl) && ttl >= 0) {
-                    ttlDays = ttl;
-                }
             }
         } catch (e) { /* ignore */ }
         
-        // Calculate last seen
+        // Last updated (subgraph `lastSeen` = last time the node metadata was updated on-chain)
         let lastSeenText = 'Unknown';
+        let isOnline = false;
         if (parseInt(node.lastSeen) > 0) {
             const lastSeenDate = new Date(parseInt(node.lastSeen) * 1000);
             const now = new Date();
@@ -1965,7 +1968,8 @@ function renderStreamStorageNodes(storageNodes) {
             const diffDays = Math.floor(diffMs / 86400000);
             
             if (diffMins < 5) {
-                lastSeenText = 'Online';
+                lastSeenText = 'Just now';
+                isOnline = true;
             } else if (diffMins < 60) {
                 lastSeenText = `${diffMins}m ago`;
             } else if (diffHours < 24) {
@@ -1975,7 +1979,6 @@ function renderStreamStorageNodes(storageNodes) {
             }
         }
         
-        const isOnline = lastSeenText === 'Online';
         const statusDot = isOnline
             ? '<span class="w-2 h-2 rounded-full bg-green-400 flex-shrink-0"></span>'
             : '<span class="w-2 h-2 rounded-full bg-gray-500 flex-shrink-0"></span>';
@@ -1990,11 +1993,7 @@ function renderStreamStorageNodes(storageNodes) {
                     : `<span class="block font-mono text-xs text-gray-400 break-all">${safeUrl}</span>`;
             }).join('')
             : '<span class="text-gray-600">—</span>';
-        
-        const ttlText = ttlDays !== null
-            ? `${ttlDays} ${ttlDays === 1 ? 'day' : 'days'}`
-            : '—';
-        
+
         return `
             <tr class="hover:bg-white/5">
                 <td class="px-4 py-3">
@@ -2021,7 +2020,7 @@ function renderStreamStorageNodes(storageNodes) {
                         <th class="px-4 py-3 text-left">Node</th>
                         <th class="px-4 py-3 text-left">Endpoints</th>
                         <th class="px-4 py-3 text-right">TTL</th>
-                        <th class="px-4 py-3 text-right">Last Seen</th>
+                        <th class="px-4 py-3 text-right">Last Updated</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-[#333]">
