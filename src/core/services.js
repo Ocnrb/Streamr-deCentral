@@ -1578,7 +1578,10 @@ export async function fetchAllPolygonscanHistory(walletAddress, sponsorshipAddre
     const sponsorshipSet = new Set(sponsorshipAddresses.map(addr => addr.toLowerCase()));
     const nativeToken = POLYGONSCAN_NETWORK.nativeToken;
     
-    const existingHashes = new Set(existingTxs.map(tx => `${tx.txHash}-${tx.timestamp}`));
+    // One key per transfer: a transaction has several (e.g. earnings + tax + stake) and can be split
+    // across two pages, so hash + timestamp would drop the transfers of the second page
+    const transferKey = (tx) => `${tx.txHash}|${tx.token}|${tx.from}|${tx.to}|${tx.rawValue}|${tx.direction}`.toLowerCase();
+    const existingHashes = new Set(existingTxs.map(transferKey));
     let allProcessedTxs = [...existingTxs];
     let page = initialPage;
     let hasMore = true;
@@ -1623,8 +1626,8 @@ export async function fetchAllPolygonscanHistory(walletAddress, sponsorshipAddre
 
             const pageTxs = processPolygonscanPage(normalTxs, tokenTxs, walletAddress, sponsorshipSet, nativeToken);
             
-            const newTxs = pageTxs.filter(tx => !existingHashes.has(`${tx.txHash}-${tx.timestamp}`));
-            newTxs.forEach(tx => existingHashes.add(`${tx.txHash}-${tx.timestamp}`));
+            const newTxs = pageTxs.filter(tx => !existingHashes.has(transferKey(tx)));
+            newTxs.forEach(tx => existingHashes.add(transferKey(tx)));
             allProcessedTxs = [...allProcessedTxs, ...newTxs];
 
             hasMore = (normalTxs.length === OFFSET || tokenTxs.length === OFFSET) && page < MAX_PAGES;

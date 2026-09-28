@@ -81,8 +81,51 @@ const debouncedSearch = Utils.debounce((query) => {
 const INITIAL_GRAPH_LIMIT = 1000;
 const INITIAL_ETHERSCAN_OFFSET = 500;
 
+/**
+ * Stake change of each StakingEvent. The subgraph stores the operator's stake in the sponsorship
+ * after the transaction (not the amount moved), also for earnings withdrawals (stake unchanged), and
+ * no event when the stake goes to 0 (full unstake): compare with the previous event of the same
+ * sponsorship, restarting from 0 after an Unstake seen on Polygonscan.
+ * @returns {Map<string, {delta: number|null, kind: 'stake'|'reduce'|'earnings'|null}>} by event id
+ */
+function computeStakeChanges(graphEvents, polygonscanTxs) {
+    const changes = new Map();
+    const unstakes = (polygonscanTxs || [])
+        .filter(tx => ['Unstake', 'Force Unstake'].includes(tx.methodId) && tx.from)
+        .map(tx => ({ sponsorship: tx.from.toLowerCase(), timestamp: Number(tx.timestamp) }));
+    const bySponsorship = new Map();
+    for (const e of graphEvents || []) {
+        const id = e.sponsorship?.id?.toLowerCase();
+        if (!id) continue;
+        if (!bySponsorship.has(id)) bySponsorship.set(id, []);
+        bySponsorship.get(id).push(e);
+    }
+    for (const [sponsorshipId, events] of bySponsorship) {
+        events.sort((a, b) => Number(a.date) - Number(b.date));
+        events.forEach((e, i) => {
+            const amount = BigInt(e.amount || '0');
+            const prev = events[i - 1];
+            let previous = prev ? BigInt(prev.amount || '0') : null;
+            // Left the sponsorship in between (no event at 0): the stake started again from 0
+            if (prev && unstakes.some(u => u.sponsorship === sponsorshipId && u.timestamp > Number(prev.date) && u.timestamp < Number(e.date))) {
+                previous = 0n;
+            }
+            // Oldest loaded event while older ones exist: unknown change (keep the plain row)
+            if (previous === null && state.historyState.hasMoreGraph) {
+                changes.set(e.id, { delta: null, kind: null });
+                return;
+            }
+            const delta = amount - (previous ?? 0n);
+            const kind = delta > 0n ? 'stake' : (delta < 0n ? 'reduce' : 'earnings');
+            changes.set(e.id, { delta: parseFloat(Utils.convertWeiToData(delta.toString())), kind });
+        });
+    }
+    return changes;
+}
+
 function processSponsorshipHistory(graphEvents, polygonscanTxs, limitToEtherscan = true) {
     const combinedEvents = new Map();
+    const stakeChanges = computeStakeChanges(graphEvents, polygonscanTxs);
     
     let cutoffDate = null;
     if (limitToEtherscan && polygonscanTxs && polygonscanTxs.length > 0) {
@@ -100,13 +143,17 @@ function processSponsorshipHistory(graphEvents, polygonscanTxs, limitToEtherscan
         if (!combinedEvents.has(timestamp)) {
             combinedEvents.set(timestamp, { timestamp, events: [] });
         }
+        const change = stakeChanges.get(e.id) || { delta: null, kind: null };
         combinedEvents.get(timestamp).events.push({
             timestamp: timestamp,
             type: 'graph',
             amount: parseFloat(Utils.convertWeiToData(e.amount)),
+            stakeDelta: change.delta,
+            stakeChange: change.kind,
             token: 'DATA',
             methodId: 'Staking Event',
-            txHash: null,
+            // StakingEvent id is "<sponsorship>-<txHash>"
+            txHash: typeof e.id === 'string' && e.id.includes('-') ? e.id.split('-').pop() : null,
             relatedObject: e.sponsorship
         });
     });

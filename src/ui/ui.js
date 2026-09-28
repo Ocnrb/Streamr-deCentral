@@ -643,7 +643,23 @@ export function renderSponsorshipsHistory(historyGroups, showLoadAllButton = tru
             const link = streamId 
                 ? `<a href="#" class="sponsorship-link text-gray-300 hover:text-white transition-colors" data-stream-id="${escapeHtml(streamId)}" data-sponsorship-id="${escapeHtml(sponsorshipId)}" title="${sponsorshipDisplayText}">${sponsorshipDisplayText}</a>`
                 : `<a href="https://polygonscan.com/address/${sponsorshipId}" target="_blank" rel="noopener noreferrer" class="text-gray-300 hover:text-white transition-colors" title="${sponsorshipDisplayText}">${sponsorshipDisplayText}</a>`;
-            const text = `Action on ${link}`;
+            // Stake change (computeStakeChanges); rows with an unknown change keep the resulting stake
+            const actions = { stake: 'Staked', reduce: 'Stake reduced', earnings: 'Earnings collected' };
+            const action = actions[event.stakeChange] || 'Action';
+            const actionHtml = event.txHash && /^0x[0-9a-fA-F]{64}$/.test(event.txHash)
+                ? `<a href="https://polygonscan.com/tx/${event.txHash}" target="_blank" rel="noopener noreferrer" class="hover:text-white transition-colors">${action}</a>`
+                : action;
+            const text = `${actionHtml} on ${link}`;
+            let amountHtml;
+            if (event.stakeChange === 'earnings') {
+                amountHtml = `<p class="font-mono text-sm text-gray-500" title="Stake unchanged: ${formatBigNumber(Math.round(event.amount).toString())} DATA">—</p>`;
+            } else if (event.stakeChange) {
+                const sign = event.stakeDelta > 0 ? '+' : '−';
+                const abs = Math.round(Math.abs(event.stakeDelta));
+                amountHtml = `<p class="font-mono text-sm text-white" data-tooltip-value="${abs}" title="Stake after: ${formatBigNumber(Math.round(event.amount).toString())} DATA">${sign}${formatBigNumber(abs.toString())} ${escapeHtml(event.token)}</p>`;
+            } else {
+                amountHtml = `<p class="font-mono text-sm text-white" ${event.token.toUpperCase() === 'DATA' ? `data-tooltip-value="${Math.round(event.amount)}"` : ''}>${formatBigNumber(Math.round(event.amount).toString())} ${escapeHtml(event.token)}</p>`;
+            }
             const icon = '<svg class="w-5 h-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path></svg>';
 
             return `
@@ -653,7 +669,7 @@ export function renderSponsorshipsHistory(historyGroups, showLoadAllButton = tru
                     <p class="text-sm text-gray-300 truncate">${text}</p>
                 </div>
                 <div class="text-right flex-shrink-0">
-                    <p class="font-mono text-sm text-white" ${event.token.toUpperCase() === 'DATA' ? `data-tooltip-value="${Math.round(event.amount)}"` : ''}>${formatBigNumber(Math.round(event.amount).toString())} ${escapeHtml(event.token)}</p>
+                    ${amountHtml}
                 </div>
             </div>`;
         }).join('');
