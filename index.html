@@ -845,6 +845,16 @@
                     </svg>
                     <span class="hidden lg:block text-sm font-medium">Autostaker</span>
                 </button>
+                
+                <!-- Subgraph -->
+                <a href="/subgraph" data-nav="subgraph" class="nav-link group flex items-center gap-3 px-3 py-2.5 rounded-md text-gray-400 hover:text-white hover:bg-white/[0.03] transition-all duration-200">
+                    <svg class="w-5 h-5 flex-shrink-0 text-cyan-400/70 group-hover:text-cyan-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                        <ellipse cx="12" cy="5" rx="9" ry="3"/>
+                        <path d="M3 5V19A9 3 0 0 0 21 19V5"/>
+                        <path d="M3 12A9 3 0 0 0 21 12"/>
+                    </svg>
+                    <span class="hidden lg:block text-sm font-medium">Subgraph</span>
+                </a>
             </div>
         </nav>
         
@@ -1061,6 +1071,16 @@
                             <path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/>
                         </svg>
                         <span class="text-sm font-medium">Leaderboard</span>
+                    </a>
+                    
+                    <!-- Subgraph -->
+                    <a href="/subgraph" data-nav="subgraph" class="flex items-center gap-3 px-4 py-3 text-gray-300 hover:bg-[#2a2a2a] transition-colors">
+                        <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <ellipse cx="12" cy="5" rx="9" ry="3"/>
+                        <path d="M3 5V19A9 3 0 0 0 21 19V5"/>
+                        <path d="M3 12A9 3 0 0 0 21 12"/>
+                        </svg>
+                        <span class="text-sm font-medium">Subgraph</span>
                     </a>
                     
                     <!-- Divider -->
@@ -2091,6 +2111,120 @@
                     </div>
                 </div>
             </div>
+        </div>
+
+        <!-- ===== SUBGRAPH VIEW ===== -->
+        <!-- Query builder for every subgraph entity; the entity navigation sits on the right -->
+        <div id="subgraph-view" class="hidden">
+            <div class="flex-1 min-w-0 p-4 md:p-6">
+                <div class="grid grid-cols-1 xl:grid-cols-12 gap-6">
+
+                    <!-- Query Configuration -->
+                    <div class="xl:col-span-5 space-y-6">
+                        <section class="detail-section p-4 sm:p-6">
+                            <div class="flex items-center gap-2 flex-wrap">
+                                <h2 id="sg-entity-title" class="text-lg font-semibold text-white">Operator</h2>
+                                <span id="sg-entity-category" class="px-2 py-0.5 rounded-md text-[10px] font-semibold uppercase tracking-widest text-gray-400 bg-[#121212] border border-[#333]"></span>
+                            </div>
+                            <p id="sg-entity-description" class="text-xs text-gray-500 mt-1"></p>
+
+                            <div class="space-y-4 mt-4">
+                                <!-- Entity Selector (mobile/tablet; the right panel replaces it on desktop) -->
+                                <div class="lg:hidden">
+                                    <label for="sg-entity-select" class="block text-xs font-medium text-gray-500 mb-1.5">Entity</label>
+                                    <select id="sg-entity-select" class="w-full p-3 bg-[#121212] border border-[#333333] rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all"></select>
+                                </div>
+
+                                <!-- Pagination & Sorting (list queries only) -->
+                                <div id="sg-list-options" class="grid grid-cols-2 gap-3">
+                                    <div>
+                                        <label for="sg-limit" class="block text-xs font-medium text-gray-500 mb-1.5">Limit (max 1000)</label>
+                                        <input type="number" id="sg-limit" value="10" min="1" max="1000" class="w-full p-2.5 bg-[#121212] border border-[#333333] rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all">
+                                    </div>
+                                    <div>
+                                        <label for="sg-skip" class="block text-xs font-medium text-gray-500 mb-1.5">Offset (skip)</label>
+                                        <input type="number" id="sg-skip" value="0" min="0" class="w-full p-2.5 bg-[#121212] border border-[#333333] rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all">
+                                    </div>
+                                    <div>
+                                        <label for="sg-order-by" class="block text-xs font-medium text-gray-500 mb-1.5">Order by</label>
+                                        <select id="sg-order-by" class="w-full p-2.5 bg-[#121212] border border-[#333333] rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all"></select>
+                                    </div>
+                                    <div>
+                                        <label for="sg-order-direction" class="block text-xs font-medium text-gray-500 mb-1.5">Direction</label>
+                                        <select id="sg-order-direction" class="w-full p-2.5 bg-[#121212] border border-[#333333] rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all">
+                                            <option value="desc">Descending</option>
+                                            <option value="asc">Ascending</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+                        </section>
+
+                        <!-- Filters -->
+                        <section class="detail-section p-4 sm:p-6">
+                            <div class="flex items-center justify-between mb-4">
+                                <h2 class="text-lg font-semibold text-white">Filters <span id="sg-filter-count" class="ml-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-blue-500/15 text-blue-400 hidden"></span></h2>
+                                <button id="sg-clear-filters" class="text-xs font-medium text-gray-400 hover:text-white transition-colors hidden">Clear all</button>
+                            </div>
+                            <div id="sg-filters"></div>
+                        </section>
+
+                        <!-- GraphQL (auto-generated, editable) -->
+                        <section class="detail-section p-4 sm:p-6">
+                            <div class="flex items-center justify-between mb-3">
+                                <label for="sg-query" class="text-lg font-semibold text-white">GraphQL</label>
+                                <button id="sg-reset-query" class="text-xs font-medium text-gray-400 hover:text-white transition-colors hidden">Reset to form</button>
+                            </div>
+                            <textarea id="sg-query" rows="8" spellcheck="false"
+                                      class="w-full p-3 bg-[#121212] border border-[#333333] rounded-lg text-gray-200 font-mono text-xs sm:text-sm placeholder:text-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all"
+                                      placeholder="Paste your GraphQL query here or edit the preview."></textarea>
+                            <p id="sg-manual-hint" class="text-xs text-amber-500 mt-2 hidden">Manual query active: form filters are ignored.</p>
+
+                            <div class="pt-4 flex flex-col sm:flex-row gap-3 justify-between items-center">
+                                <div class="flex gap-2 w-full sm:w-auto">
+                                    <button id="sg-prev" class="flex-grow sm:flex-grow-0 bg-[#2C2C2C] hover:bg-[#3A3A3A] disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-3 px-4 rounded-lg transition-colors" disabled>&larr; Previous</button>
+                                    <button id="sg-next" class="flex-grow sm:flex-grow-0 bg-[#2C2C2C] hover:bg-[#3A3A3A] disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-3 px-4 rounded-lg transition-colors" disabled>Next &rarr;</button>
+                                </div>
+                                <button id="sg-execute" class="w-full sm:w-auto bg-blue-800 hover:bg-blue-900 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-3 px-6 rounded-lg transition-colors">Execute Query</button>
+                            </div>
+                        </section>
+                    </div>
+
+                    <!-- Result -->
+                    <div class="xl:col-span-7">
+                        <section class="detail-section p-4 sm:p-6 xl:sticky xl:top-20">
+                            <div class="flex items-center justify-between mb-4 gap-3">
+                                <div class="flex items-center gap-3 min-w-0">
+                                    <h2 class="text-lg font-semibold text-white">Result</h2>
+                                    <span id="sg-result-meta" class="text-xs text-gray-500 truncate"></span>
+                                </div>
+                                <button id="sg-copy" class="hidden items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#2C2C2C] hover:bg-[#3A3A3A] text-sm text-gray-300 hover:text-white font-medium transition-colors">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                                    </svg>
+                                    Copy JSON
+                                </button>
+                            </div>
+                            <div id="sg-output" class="bg-[#121212] border border-[#333333] rounded-lg p-4 text-sm text-gray-300 overflow-auto min-h-[300px] max-h-[70vh] xl:max-h-[calc(100vh-11rem)]">
+                                <p class="text-gray-500">Waiting for query execution...</p>
+                            </div>
+                            <p id="sg-error" class="mt-4 p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-sm text-red-400 font-mono whitespace-pre-wrap break-all hidden"></p>
+                        </section>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Entity Navigation (right panel, desktop) -->
+            <aside class="hidden lg:flex flex-col w-64 flex-shrink-0 self-start sticky top-14 -mt-2 h-[calc(100vh-3.5rem)] bg-[#1A1A1A] border-l border-[#2a2a2a]">
+                <div class="h-12 px-5 flex items-center border-b border-[#2a2a2a] flex-shrink-0">
+                    <span class="text-sm font-semibold text-white">Entities</span>
+                </div>
+                <nav id="sg-entity-nav" class="flex-1 py-3 overflow-y-auto"></nav>
+                <div class="border-t border-[#2a2a2a] px-5 py-3 flex-shrink-0">
+                    <p class="text-xs text-gray-500">Uses your The Graph API key from <button id="sg-open-settings" class="text-gray-300 hover:text-white underline underline-offset-2 transition-colors">Settings</button>.</p>
+                </div>
+            </aside>
         </div>
 
     </div>
