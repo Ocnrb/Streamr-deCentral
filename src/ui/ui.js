@@ -633,7 +633,7 @@ export function renderSponsorshipsHistory(historyGroups, showLoadAllButton = tru
     let html = historyGroups.map(group => {
         const date = new Date(group.timestamp * 1000).toLocaleString();
 
-        const graphEventsHtml = group.events.filter(e => e.type === 'graph').map(event => {
+        const graphRowHtml = (event) => {
             const sp = event.relatedObject;
             if (!sp) return '';
             const streamId = sp.stream?.id || '';
@@ -644,12 +644,12 @@ export function renderSponsorshipsHistory(historyGroups, showLoadAllButton = tru
                 ? `<a href="#" class="sponsorship-link text-gray-300 hover:text-white transition-colors" data-stream-id="${escapeHtml(streamId)}" data-sponsorship-id="${escapeHtml(sponsorshipId)}" title="${sponsorshipDisplayText}">${sponsorshipDisplayText}</a>`
                 : `<a href="https://polygonscan.com/address/${sponsorshipId}" target="_blank" rel="noopener noreferrer" class="text-gray-300 hover:text-white transition-colors" title="${sponsorshipDisplayText}">${sponsorshipDisplayText}</a>`;
             // Stake change (computeStakeChanges); rows with an unknown change keep the resulting stake
-            const actions = { stake: 'Staked', reduce: 'Stake reduced', earnings: 'Earnings collected' };
+            const actions = { stake: 'Staked', reduce: 'Stake reduced', earnings: 'Earnings collected', unstake: 'Unstaked' };
             const action = actions[event.stakeChange] || 'Action';
             const actionHtml = event.txHash && /^0x[0-9a-fA-F]{64}$/.test(event.txHash)
                 ? `<a href="https://polygonscan.com/tx/${event.txHash}" target="_blank" rel="noopener noreferrer" class="hover:text-white transition-colors">${action}</a>`
                 : action;
-            const text = `${actionHtml} on ${link}`;
+            const text = `${actionHtml} ${event.stakeChange === 'unstake' ? 'from' : 'on'} ${link}`;
             let amountHtml;
             if (event.stakeChange === 'earnings') {
                 amountHtml = `<p class="font-mono text-sm text-gray-500" title="Stake unchanged: ${formatBigNumber(Math.round(event.amount).toString())} DATA">—</p>`;
@@ -672,9 +672,9 @@ export function renderSponsorshipsHistory(historyGroups, showLoadAllButton = tru
                     ${amountHtml}
                 </div>
             </div>`;
-        }).join('');
+        };
 
-        const scanEventsHtml = group.events.filter(e => e.type === 'scan').map(event => {
+        const scanRowHtml = (event) => {
             
             let directionClass;
             const method = event.methodId;
@@ -723,28 +723,39 @@ export function renderSponsorshipsHistory(historyGroups, showLoadAllButton = tru
                     <p class="font-mono text-sm text-white" ${event.token.toUpperCase() === 'DATA' ? `data-tooltip-value="${Math.round(event.amount)}"` : ''}>${formatBigNumber(Math.round(event.amount).toString())} ${escapeHtml(event.token)}</p>
                 </div>
             </div>`;
-        }).join('');
+        };
 
-        const hasGraphEvents = graphEventsHtml.length > 0;
-        const hasScanEvents = scanEventsHtml.length > 0;
+        // One block per transaction: the sponsorship action (The Graph, or the full exit built from
+        // Polygonscan) followed by its token transfers; transactions without an action keep their rows
+        const clusters = [];
+        const byHash = new Map();
+        for (const event of group.events) {
+            const key = event.txHash ? event.txHash.toLowerCase() : `no-hash-${clusters.length}`;
+            let cluster = byHash.get(key);
+            if (!cluster) {
+                cluster = { graph: [], scan: [] };
+                byHash.set(key, cluster);
+                clusters.push(cluster);
+            }
+            (event.type === 'graph' ? cluster.graph : cluster.scan).push(event);
+        }
+        // Clusters with an action first, in their original order
+        clusters.sort((a, b) => (b.graph.length > 0) - (a.graph.length > 0));
+
+        const clustersHtml = clusters.map((cluster, index) => {
+            const graphHtml = cluster.graph.map(graphRowHtml).join('');
+            const scanHtml = cluster.scan.map(scanRowHtml).join('');
+            return `
+                <div class="${index > 0 ? 'mt-1' : ''}">
+                    ${graphHtml ? `<div class="pl-4 border-l-2 border-gray-700">${graphHtml}</div>` : ''}
+                    ${scanHtml ? `<div class="pl-4">${scanHtml}</div>` : ''}
+                </div>`;
+        }).join('');
 
         return `
         <li class="py-3 border-b border-[#333333]">
             <p class="text-xs text-gray-400 font-mono mb-2">${date}</p>
-            <div>
-                ${hasGraphEvents ? `
-                    <div>
-                        <h4 class="text-sm font-semibold text-white mb-1">Sponsorship Actions</h4>
-                        <div class="pl-4 border-l-2 border-gray-700">${graphEventsHtml}</div>
-                    </div>
-                ` : ''}
-                
-                ${hasScanEvents ? `
-                    <div class="${hasGraphEvents ? 'mt-2' : ''}">
-                         <div class="pl-4">${scanEventsHtml}</div>
-                    </div>
-                ` : ''}
-            </div>
+            <div>${clustersHtml}</div>
         </li>`;
     }).join('');
     

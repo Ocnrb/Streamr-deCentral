@@ -85,9 +85,10 @@ const INITIAL_ETHERSCAN_OFFSET = 500;
  * Stake change of each StakingEvent. The subgraph stores the operator's stake in the sponsorship
  * after the transaction (not the amount moved), also for earnings withdrawals (stake unchanged), and
  * no event when the stake goes to 0 (full unstake): compare with the previous event of the same
- * sponsorship, restarting from 0 after an Unstake seen on Polygonscan. When that previous event is not
- * loaded (operators with 1000+ events), the Polygonscan transfer of the same transaction gives it
- * (Stake to the sponsorship, Reduce Stake from it, or only Collect Earnings).
+ * sponsorship, restarting from 0 after an Unstake seen on Polygonscan. The Polygonscan transfer of the
+ * same transaction, when there is one (Stake to the sponsorship / Reduce Stake from it), is the exact
+ * amount moved and takes priority; it also covers events whose previous one is not loaded
+ * (operators with 1000+ events). Only Collect Earnings in the tx = earnings.
  * @returns {Map<string, {delta: number|null, kind: 'stake'|'reduce'|'earnings'|null}>} by event id
  */
 function computeStakeChanges(graphEvents, polygonscanTxs) {
@@ -124,6 +125,11 @@ function computeStakeChanges(graphEvents, polygonscanTxs) {
     for (const [sponsorshipId, events] of bySponsorship) {
         events.sort((a, b) => Number(a.date) - Number(b.date));
         events.forEach((e, i) => {
+            const scan = fromScan(e, sponsorshipId);
+            if (scan && scan.kind !== 'earnings') {
+                changes.set(e.id, scan);
+                return;
+            }
             const amount = BigInt(e.amount || '0');
             const prev = events[i - 1];
             let previous = prev ? BigInt(prev.amount || '0') : null;
@@ -134,7 +140,7 @@ function computeStakeChanges(graphEvents, polygonscanTxs) {
             // Oldest loaded event while older ones exist: the same transaction on Polygonscan, else
             // unknown change (keep the plain row)
             if (previous === null && state.historyState.hasMoreGraph) {
-                changes.set(e.id, fromScan(e, sponsorshipId) || { delta: null, kind: null });
+                changes.set(e.id, scan || { delta: null, kind: null });
                 return;
             }
             const delta = amount - (previous ?? 0n);
@@ -145,8 +151,29 @@ function computeStakeChanges(graphEvents, polygonscanTxs) {
     return changes;
 }
 
+/**
+ * Transfers with a sponsorship on the other side can't be delegations: the shared Polygonscan
+ * classification only knows the sponsorships of the first load, so after "Load All History" older
+ * ones showed as Delegate (IN) / Undelegate (OUT). Sponsorships known from The Graph fix them.
+ */
+function relabelSponsorshipTransfers(graphEvents, polygonscanTxs) {
+    const sponsorships = new Set([
+        ...(state.historyState.allSponsorshipAddresses || []),
+        ...(graphEvents || []).map(e => e.sponsorship?.id)
+    ].filter(Boolean).map(a => a.toLowerCase()));
+    for (const tx of polygonscanTxs || []) {
+        if (tx.token !== 'DATA') continue;
+        if (tx.direction === 'IN' && ['Delegate', 'Transfer'].includes(tx.methodId) && sponsorships.has(tx.from?.toLowerCase())) {
+            tx.methodId = 'Reduce Stake';
+        } else if (tx.direction === 'OUT' && ['Undelegate', 'Transfer'].includes(tx.methodId) && sponsorships.has(tx.to?.toLowerCase())) {
+            tx.methodId = 'Stake';
+        }
+    }
+}
+
 function processSponsorshipHistory(graphEvents, polygonscanTxs, limitToEtherscan = true) {
     const combinedEvents = new Map();
+    relabelSponsorshipTransfers(state.historyState.graphEvents?.length ? state.historyState.graphEvents : graphEvents, polygonscanTxs);
     const stakeChanges = computeStakeChanges(graphEvents, polygonscanTxs);
     
     let cutoffDate = null;
@@ -193,6 +220,44 @@ function processSponsorshipHistory(graphEvents, polygonscanTxs, limitToEtherscan
             methodId: tx.methodId,
             txHash: tx.txHash,
             relatedObject: tx.direction
+        });
+    });
+
+    // Full exits: the subgraph writes no StakingEvent when the stake goes to 0, so the stake returned by
+    // the sponsorship (Unstake / Force Unstake / Reduce Stake with no event in that tx) gets its row here,
+    // within the period covered by the loaded StakingEvents
+    const allGraphEvents = state.historyState.graphEvents?.length ? state.historyState.graphEvents : (graphEvents || []);
+    const graphTxHashes = new Set(allGraphEvents
+        .map(e => (typeof e.id === 'string' ? e.id.split('-').pop().toLowerCase() : null))
+        .filter(Boolean));
+    const coverageStart = state.historyState.hasMoreGraph && allGraphEvents.length
+        ? Math.min(...allGraphEvents.map(e => Number(e.date)))
+        : -Infinity;
+    const streamOf = new Map();
+    for (const e of allGraphEvents) {
+        if (e.sponsorship?.id && e.sponsorship.stream?.id) streamOf.set(e.sponsorship.id.toLowerCase(), e.sponsorship.stream.id);
+    }
+    for (const stake of state.currentOperatorData?.stakes || []) {
+        if (stake.sponsorship?.id && stake.sponsorship.stream?.id) streamOf.set(stake.sponsorship.id.toLowerCase(), stake.sponsorship.stream.id);
+    }
+    (polygonscanTxs || []).forEach(tx => {
+        const timestamp = Number(tx.timestamp);
+        const sponsorshipId = tx.from?.toLowerCase();
+        if (!['Unstake', 'Force Unstake', 'Reduce Stake'].includes(tx.methodId) || tx.direction !== 'IN' || tx.token !== 'DATA') return;
+        if (!sponsorshipId || !tx.txHash || graphTxHashes.has(tx.txHash.toLowerCase()) || timestamp < coverageStart) return;
+        if (!combinedEvents.has(timestamp)) combinedEvents.set(timestamp, { timestamp, events: [] });
+        const streamId = streamOf.get(sponsorshipId);
+        combinedEvents.get(timestamp).events.push({
+            timestamp,
+            type: 'graph',
+            synthetic: true,
+            amount: 0,
+            stakeDelta: -tx.amount,
+            stakeChange: 'unstake',
+            token: 'DATA',
+            methodId: 'Staking Event',
+            txHash: tx.txHash,
+            relatedObject: { id: sponsorshipId, stream: streamId ? { id: streamId } : null }
         });
     });
 
