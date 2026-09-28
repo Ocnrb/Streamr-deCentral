@@ -1326,6 +1326,10 @@ export const OperatorLogic = {
             } else {
                 content = Utils.formatUsdForTooltip(target.dataset.tooltipValue, state.dataPriceUSD);
             }
+            // Optional second line (e.g. "Stake after: N DATA" in the history)
+            if (content && target.dataset.tooltipExtra) {
+                content = `${Utils.escapeHtml(String(content))}<br><span class="text-gray-400">${Utils.escapeHtml(target.dataset.tooltipExtra)}</span>`;
+            }
             
             if (content) {
                 if (content.includes('<br>')) {
