@@ -1674,6 +1674,7 @@ function renderStreamDetail(stream, isSponsored, sponsorshipId) {
         // Switch to Sponsorship mode (DATA icon + Sponsorship header)
         if (iconNormal) iconNormal.classList.add('hidden');
         if (iconSponsorship) iconSponsorship.classList.remove('hidden');
+        CreateStream.setupEditButton(null);
         if (headerNormal) headerNormal.classList.add('hidden');
         if (headerSponsorship) headerSponsorship.classList.remove('hidden');
         
@@ -1741,6 +1742,8 @@ function renderStreamDetail(stream, isSponsored, sponsorshipId) {
         renderStreamSponsorshipsList(stream.sponsorships);
         // Render storage nodes
         renderStreamStorageNodes(stream.storageNodes, stream.id, metadata.storageDays);
+        // Edit button (only if the connected wallet has EDIT permission)
+        CreateStream.setupEditButton(stream, () => StreamsLogic.loadStreamDetail(stream.id, false, null));
     }
     
     // Also render permissions in the sponsored panel if sponsored
@@ -2028,7 +2031,7 @@ function renderStreamStorageNodes(storageNodes, streamId, storageDays) {
             <table class="w-full text-sm min-w-[500px]">
                 <thead class="text-xs text-gray-500 uppercase bg-[#252525]">
                     <tr>
-                        <th class="px-4 py-3 text-left">Node</th>
+                        <th class="px-4 py-3 text-left">Provider</th>
                         <th class="px-4 py-3 text-left">Endpoints</th>
                         <th class="px-4 py-3 text-right">TTL</th>
                         <th class="px-4 py-3 text-right">Last Updated</th>
