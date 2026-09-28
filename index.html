@@ -5,7 +5,49 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <base href="/">
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://unpkg.com https://d3js.org; style-src 'self' 'unsafe-inline' https://unpkg.com https://fonts.googleapis.com; img-src 'self' data: https:; font-src 'self' https://fonts.gstatic.com; connect-src 'self' https://gateway.thegraph.com https://gateway-arbitrum.network.thegraph.com https://polygon-rpc.com https://polygon.drpc.org https://polygon-bor-rpc.publicnode.com https://polygon.llamarpc.com https://1rpc.io https://api.etherscan.io https://unpkg.com https://rpc-mainnet.matic.quiknode.pro wss: https://ipfs.io https://placehold.co https://*.pombo.cc https://tiles.openfreemap.org https://*.streamr.network https://*.streamr.network:* https://blob-storage-streamr.online https://*.blob-storage-streamr.online;">
-    <title>Streamr deCentral</title>
+    <title>Streamr deCentral | Streamr Network Command Center</title>
+    <meta name="description" content="Control your operator and stake, follow sponsorships, and visualize the Streamr Network live. Advanced tools to create and manage streams.">
+    <meta name="keywords" content="Streamr, Streamr Network, DATA token, operators, delegators, sponsorships, staking, streams, Polygon">
+    <meta name="robots" content="index, follow">
+    <meta name="author" content="Streamr deCentral">
+    <link rel="canonical" href="https://streamr-decentral.vercel.app/">
+
+    <!-- Link previews: Open Graph (Telegram, WhatsApp, Discord, LinkedIn, Facebook...) -->
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="Streamr deCentral">
+    <meta property="og:title" content="Streamr deCentral | Streamr Network Command Center">
+    <meta property="og:description" content="Control your operator and stake, follow sponsorships, and visualize the Streamr Network live. Advanced tools to create and manage streams.">
+    <meta property="og:url" content="https://streamr-decentral.vercel.app/">
+    <meta property="og:image" content="https://streamr-decentral.vercel.app/assets/og-image.jpg">
+    <meta property="og:image:secure_url" content="https://streamr-decentral.vercel.app/assets/og-image.jpg">
+    <meta property="og:image:type" content="image/jpeg">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta property="og:image:alt" content="Streamr deCentral: your command center for the Streamr Network">
+    <meta property="og:locale" content="en_US">
+
+    <!-- Link previews: X (Twitter) -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Streamr deCentral | Streamr Network Command Center">
+    <meta name="twitter:description" content="Control your operator and stake, follow sponsorships, and visualize the Streamr Network live. Advanced tools to create and manage streams.">
+    <meta name="twitter:image" content="https://streamr-decentral.vercel.app/assets/og-image.jpg">
+    <meta name="twitter:image:alt" content="Streamr deCentral: your command center for the Streamr Network">
+
+    <!-- Structured data (search engines) -->
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "WebApplication",
+        "name": "Streamr deCentral",
+        "url": "https://streamr-decentral.vercel.app/",
+        "description": "Control your operator and stake, follow sponsorships, and visualize the Streamr Network live. Advanced tools to create and manage streams.",
+        "applicationCategory": "FinanceApplication",
+        "operatingSystem": "Any (web browser)",
+        "image": "https://streamr-decentral.vercel.app/assets/og-image.jpg",
+        "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+        "about": { "@type": "Thing", "name": "Streamr Network", "sameAs": "https://streamr.network" }
+    }
+    </script>
 
     <link rel="apple-touch-icon" sizes="180x180" href="/favicon/apple-touch-icon.png">
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon/favicon-32x32.png">
@@ -53,6 +95,21 @@
     <script src="https://d3js.org/d3.v7.min.js" defer></script>
 </head>
 <body class="text-gray-200">
+    <noscript>
+        <div style="max-width:720px;margin:48px auto;padding:0 16px;font-family:Inter,sans-serif;color:#e5e7eb">
+            <h1>Streamr deCentral: Streamr Network Command Center</h1>
+            <p>Control your operator and stake, follow sponsorships, and visualize the Streamr Network live. Advanced tools to create and manage streams.</p>
+            <ul>
+                <li><a href="/">Operators</a>: stake, APY, nodes and earnings of every Streamr operator</li>
+                <li><a href="/delegators">Delegators</a>: delegations and returns</li>
+                <li><a href="/streams">Streams and sponsorships</a>: sponsored streams, payouts and funding</li>
+                <li><a href="/governance">Governance</a>: flags, votes and kicks</li>
+                <li><a href="/visual">Network map</a> and <a href="/race">leaderboard</a></li>
+                <li><a href="/subgraph">Subgraph explorer</a></li>
+            </ul>
+            <p>JavaScript is required to use the app.</p>
+        </div>
+    </noscript>
 
     <!-- Login Modal (visible by default until user logs in) -->
     <div id="loginModal" class="fixed inset-0 bg-[#121212] flex items-center justify-center p-4 z-50">
