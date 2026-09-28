@@ -23,6 +23,8 @@ const state = {
     lastResultCount: 0,
     lastJson: '',
     requestId: 0,
+    // Entity navigation categories currently expanded (all collapsed by default)
+    expandedCategories: new Set(),
 };
 
 const el = (id) => document.getElementById(id);
@@ -320,18 +322,14 @@ function renderEntityNavigation() {
         (categories[config.category] ||= []).push({ key, ...config });
     });
 
-    CATEGORY_ORDER.forEach((category, index) => {
+    CATEGORY_ORDER.forEach(category => {
         if (!categories[category]) return;
 
         const optgroup = document.createElement('optgroup');
         optgroup.label = category;
 
-        let navHtml = `
-            ${index > 0 ? '<div class="my-3 mx-3 border-t border-white/[0.04]"></div>' : ''}
-            <div class="px-3 pt-2 pb-1 flex items-center gap-2">
-                <svg class="w-3.5 h-3.5 text-gray-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${CATEGORY_ICONS[category] || ''}</svg>
-                <span class="text-[10px] font-semibold text-gray-600 uppercase tracking-widest">${category}</span>
-            </div>`;
+        const expanded = state.expandedCategories.has(category);
+        let itemsHtml = '';
 
         categories[category].forEach(entity => {
             const option = document.createElement('option');
@@ -340,15 +338,55 @@ function renderEntityNavigation() {
             optgroup.appendChild(option);
 
             // Internal link: handled by the app router (/subgraph/:entity)
-            navHtml += `
+            itemsHtml += `
                 <a href="/subgraph/${entity.key}" data-entity="${entity.key}" title="${entity.description}"
-                   class="nav-link flex items-center px-3 py-2 rounded-md text-sm font-medium text-gray-400 hover:text-white hover:bg-white/[0.03] transition-all duration-200">
+                   class="nav-link flex items-center pl-9 pr-3 py-2 rounded-md text-sm font-medium text-gray-400 hover:text-white hover:bg-white/[0.03] transition-all duration-200">
                     ${entity.label}
                 </a>`;
         });
 
         select.appendChild(optgroup);
-        nav.insertAdjacentHTML('beforeend', `<div class="px-2 space-y-0.5">${navHtml}</div>`);
+        nav.insertAdjacentHTML('beforeend', `
+            <div class="px-2">
+                <button type="button" data-category-toggle="${category}" aria-expanded="${expanded}"
+                        class="group w-full flex items-center gap-2 px-3 py-2 rounded-md hover:bg-white/[0.03] transition-colors">
+                    <svg class="w-4 h-4 flex-shrink-0 text-gray-500 group-hover:text-gray-300 transition-colors" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${CATEGORY_ICONS[category] || ''}</svg>
+                    <span data-category-label class="text-[11px] font-semibold text-gray-500 group-hover:text-gray-300 uppercase tracking-widest transition-colors">${category}</span>
+                    <span data-category-active class="hidden w-1.5 h-1.5 rounded-full bg-blue-500" title="Contains the selected entity"></span>
+                    <span class="ml-auto text-[10px] text-gray-600">${categories[category].length}</span>
+                    <svg data-category-chevron class="w-3.5 h-3.5 text-gray-600 transition-transform duration-200 ${expanded ? 'rotate-90' : ''}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+                </button>
+                <div data-category-items="${category}" class="${expanded ? '' : 'hidden'} space-y-0.5 pb-1">${itemsHtml}</div>
+            </div>`);
+    });
+}
+
+/**
+ * Expands or collapses a category of the entity navigation.
+ */
+function toggleCategory(category) {
+    const expanded = !state.expandedCategories.has(category);
+    if (expanded) state.expandedCategories.add(category);
+    else state.expandedCategories.delete(category);
+
+    const toggle = document.querySelector(`#sg-entity-nav [data-category-toggle="${category}"]`);
+    toggle.setAttribute('aria-expanded', expanded);
+    toggle.querySelector('[data-category-chevron]').classList.toggle('rotate-90', expanded);
+    document.querySelector(`#sg-entity-nav [data-category-items="${category}"]`).classList.toggle('hidden', !expanded);
+}
+
+/**
+ * Highlights the selected entity and marks its category (visible even when collapsed).
+ */
+function updateNavigationActiveState() {
+    const activeCategory = ENTITY_CONFIG[state.entityName]?.category;
+    document.querySelectorAll('#sg-entity-nav .nav-link').forEach(link => {
+        link.classList.toggle('active', link.dataset.entity === state.entityName);
+    });
+    document.querySelectorAll('#sg-entity-nav [data-category-toggle]').forEach(toggle => {
+        const isActive = toggle.dataset.categoryToggle === activeCategory;
+        toggle.querySelector('[data-category-active]').classList.toggle('hidden', !isActive);
+        toggle.querySelector('[data-category-label]').classList.toggle('text-white', isActive);
     });
 }
 
@@ -364,9 +402,7 @@ function renderEntity() {
     el('sg-entity-title').textContent = config.label;
     el('sg-entity-category').textContent = config.category;
     el('sg-entity-description').textContent = config.description;
-    document.querySelectorAll('#sg-entity-nav .nav-link').forEach(link => {
-        link.classList.toggle('active', link.dataset.entity === state.entityName);
-    });
+    updateNavigationActiveState();
     navigationController.updatePageTitle('subgraph', `Subgraph · ${config.label}`);
 
     // Sorting options
@@ -570,6 +606,10 @@ export const SubgraphLogic = {
      * Wires the static controls of the Subgraph view (called once when the module loads).
      */
     setupEventListeners() {
+        el('sg-entity-nav').addEventListener('click', (e) => {
+            const toggle = e.target.closest('[data-category-toggle]');
+            if (toggle) toggleCategory(toggle.dataset.categoryToggle);
+        });
         el('sg-entity-select').addEventListener('change', (e) => window.router.navigate(`/subgraph/${e.target.value}`));
         ['sg-limit', 'sg-skip'].forEach(id => el(id).addEventListener('input', updateQueryPreview));
         ['sg-order-by', 'sg-order-direction'].forEach(id => el(id).addEventListener('change', updateQueryPreview));

@@ -876,7 +876,7 @@ export const ENTITY_CONFIG = {
 };
 
 // Category display order for the entity navigation
-export const CATEGORY_ORDER = ['Staking', 'Events', 'Governance', 'Data', 'Network', 'Metrics', 'Marketplace'];
+export const CATEGORY_ORDER = ['Network', 'Data', 'Metrics', 'Staking', 'Events', 'Governance', 'Marketplace'];
 
 // Category icons (inner SVG markup, 24x24 viewBox, stroke based)
 export const CATEGORY_ICONS = {
