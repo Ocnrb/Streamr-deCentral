@@ -1,7 +1,7 @@
 {
   "name": "Streamr deCentral",
   "short_name": "Streamr deCentral",
-  "description": "Manage operators and stakes, follow sponsorships and visualize the Streamr Network live.",
+  "description": "Control operators and stakes, follow sponsorships and visualize the Streamr Network live. Advanced tools to create and manage streams.",
   "start_url": "/",
   "display": "standalone",
   "scope": "/",
