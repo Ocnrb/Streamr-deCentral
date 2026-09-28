@@ -6,6 +6,7 @@
 import * as Constants from '../core/constants.js';
 import * as Utils from '../core/utils.js';
 import * as UI from '../ui/ui.js';
+import { OperatorForm } from './operatorForm.js';
 import * as Services from '../core/services.js';
 
 const { logger } = Utils;
@@ -670,108 +671,9 @@ async function handleEditOperatorSettingsClick() {
         UI.showToast({ type: 'warning', title: 'Wallet Required', message: 'Please connect your wallet.' });
         return;
     }
-    if (sessionStorage.getItem('authMethod') !== 'privateKey') {
-        if (!await Services.checkAndSwitchNetwork()) return;
-    }
-
-    UI.populateOperatorSettingsModal(state.currentOperatorData);
-    UI.setModalState('operator-settings-modal', 'input');
-
-    const originalConfirmBtn = document.getElementById('operator-settings-modal-confirm');
-    const confirmBtn = originalConfirmBtn.cloneNode(true);
-    originalConfirmBtn.parentNode.replaceChild(confirmBtn, originalConfirmBtn);
-
-    const enableConfirm = () => { confirmBtn.disabled = false; };
-    UI.operatorSettingsModalNameInput.addEventListener('input', enableConfirm, { once: true });
-    UI.operatorSettingsModalDescriptionInput.addEventListener('input', enableConfirm, { once: true });
-    UI.operatorSettingsModalCutInput.addEventListener('input', enableConfirm, { once: true });
-    UI.operatorSettingsModalRedundancyInput.addEventListener('input', enableConfirm, { once: true });
-
-    confirmBtn.addEventListener('click', async () => {
-        confirmBtn.disabled = true;
-        confirmBtn.innerHTML = `<div class="w-4 h-4 border-2 border-white rounded-full border-t-transparent btn-spinner"></div> Processing...`;
-        UI.setModalState('operator-settings-modal', 'loading', { text: "Checking for changes...", subtext: "Please wait." });
-
-        const oldMetadata = Utils.parseOperatorMetadata(state.currentOperatorData.metadataJsonString);
-        let oldRedundancy = '1';
-        try {
-            if (state.currentOperatorData.metadataJsonString) {
-                 const meta = JSON.parse(state.currentOperatorData.metadataJsonString);
-                 if (meta && meta.redundancyFactor !== undefined) oldRedundancy = String(meta.redundancyFactor);
-            }
-        } catch(e) {}
-        const oldCut = (BigInt(state.currentOperatorData.operatorsCutFraction) * 100n) / BigInt('1000000000000000000');
-
-        const newName = UI.operatorSettingsModalNameInput.value;
-        const newDescription = UI.operatorSettingsModalDescriptionInput.value;
-        const newRedundancy = UI.operatorSettingsModalRedundancyInput.value;
-        const newCut = UI.operatorSettingsModalCutInput.value;
-
-        const metadataChanged = newName !== (oldMetadata.name || '') ||
-                                newDescription !== (oldMetadata.description || '') ||
-                                newRedundancy !== oldRedundancy;
-        
-        const cutChanged = newCut !== oldCut.toString();
-
-        if (!metadataChanged && !cutChanged) {
-            UI.setModalState('operator-settings-modal', 'input');
-            UI.showToast({ type: 'info', title: 'No Changes', message: 'You have not made any changes.' });
-            confirmBtn.disabled = false;
-            confirmBtn.textContent = 'Confirm Changes';
-            return;
-        }
-
-        let txHash1 = null;
-        let txHash2 = null;
-
-        try {
-            if (metadataChanged) {
-                UI.setModalState('operator-settings-modal', 'loading', { text: "Updating Metadata...", subtext: "Please confirm in your wallet." });
-                const newMetadata = {
-                    name: newName,
-                    description: newDescription,
-                    imageIpfsCid: oldMetadata.imageUrl ? oldMetadata.imageUrl.split('/').pop() : null,
-                    redundancyFactor: parseInt(newRedundancy, 10)
-                };
-                txHash1 = await Services.updateOperatorMetadata(state.signer, state.currentOperatorId, JSON.stringify(newMetadata));
-                if (!txHash1) {
-                    confirmBtn.disabled = false;
-                    confirmBtn.textContent = 'Confirm Changes';
-                    return;
-                }
-            }
-
-            if (cutChanged) {
-                UI.setModalState('operator-settings-modal', 'loading', { text: "Updating Owner's Cut...", subtext: "Please confirm in your wallet." });
-                txHash2 = await Services.updateOperatorCut(state.signer, state.currentOperatorId, newCut);
-                if (!txHash2) {
-                     confirmBtn.disabled = false;
-                     confirmBtn.textContent = 'Confirm Changes';
-                     return;
-                }
-            }
-
-            UI.setModalState('operator-settings-modal', 'success', {
-                txHash: txHash1,
-                tx1Text: txHash1 ? "Metadata Update Successful!" : "",
-                txHash2: txHash2,
-                tx2Text: txHash2 ? "Owner's Cut Update Successful!" : ""
-            });
-            
-            const lastTxHash = txHash2 || txHash1;
-            if (lastTxHash) {
-                await OperatorLogic.refreshWithRetry(lastTxHash);
-            } else {
-                await OperatorLogic.refreshData(true);
-            }
-
-        } catch (e) {
-            UI.setModalState('operator-settings-modal', 'error', { message: Utils.getFriendlyErrorMessage(e) });
-        } finally {
-            confirmBtn.disabled = false;
-            confirmBtn.textContent = 'Confirm Changes';
-        }
-    });
+    if (!state.currentOperatorData) return;
+    // Same modal as "Create Operator", in edit mode; refresh the page once the changes are indexed
+    OperatorForm.openEdit(state.currentOperatorData, () => OperatorLogic.refreshData(true));
 }
 
 async function handleLoadMoreDelegators(button) {

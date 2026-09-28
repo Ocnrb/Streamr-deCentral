@@ -38,11 +38,6 @@ export const stakeModalAmount = document.getElementById('stake-modal-amount');
 export const stakeModalCurrentStake = document.getElementById('stake-modal-current-stake');
 export const stakeModalFreeFunds = document.getElementById('stake-modal-free-funds');
 // Operator Settings Modal Elements
-export const operatorSettingsModal = document.getElementById('operatorSettingsModal');
-export const operatorSettingsModalNameInput = document.getElementById('operator-settings-modal-name');
-export const operatorSettingsModalDescriptionInput = document.getElementById('operator-settings-modal-description-input');
-export const operatorSettingsModalCutInput = document.getElementById('operator-settings-modal-cut');
-export const operatorSettingsModalRedundancyInput = document.getElementById('operator-settings-modal-redundancy');
 
 
 // --- Module State ---
@@ -414,8 +409,7 @@ export function setModalState(baseId, state, options = {}) {
     // Get the parent modal element
     const modalMap = {
         'tx-modal': transactionModal,
-        'stake-modal': stakeModal,
-        'operator-settings-modal': operatorSettingsModal
+        'stake-modal': stakeModal
     };
     const modalElement = modalMap[baseId];
 
@@ -431,13 +425,6 @@ export function setModalState(baseId, state, options = {}) {
             modalLoadingToasts.delete(baseId);
         }
         
-        if (baseId === 'operator-settings-modal') {
-             const confirmBtn = document.getElementById('operator-settings-modal-confirm');
-             if (confirmBtn) {
-                confirmBtn.disabled = true;
-                confirmBtn.textContent = 'Confirm Changes';
-             }
-        }
 
     } else if (state === 'loading') {
         // Close modal and show loading toast
@@ -1064,29 +1051,6 @@ export function renderOperatorEarningsChart(labels, dailyData, cumulativeData, i
     });
 }
 
-export function populateOperatorSettingsModal(operatorData) {
-    const { name, description } = parseOperatorMetadata(operatorData.metadataJsonString);
-    let redundancyFactor = '1';
-    try {
-        if (operatorData.metadataJsonString) {
-            const meta = JSON.parse(operatorData.metadataJsonString);
-            if (meta && meta.redundancyFactor !== undefined) {
-                redundancyFactor = meta.redundancyFactor;
-            }
-        }
-    } catch (e) { /* ignore */ }
-
-    const ownersCutPercent = (BigInt(operatorData.operatorsCutFraction) * 100n) / BigInt('1000000000000000000');
-
-    operatorSettingsModalNameInput.value = name || '';
-    operatorSettingsModalDescriptionInput.value = description || '';
-    operatorSettingsModalCutInput.value = ownersCutPercent.toString();
-    operatorSettingsModalRedundancyInput.value = redundancyFactor;
-    
-    document.getElementById('operator-settings-modal-confirm').disabled = false;
-    operatorSettingsModal.classList.remove('hidden');
-}
-
 /**
  * Update the earnings display for a specific sponsorship
  * @param {string} sponsorshipId - The sponsorship contract address (lowercase)
@@ -1148,8 +1112,10 @@ export function renderOperatorDetails(data, globalState) {
     const apyColorClass = roundedApy === 0 ? 'text-red-400' : 'text-green-400';
     const ownersCutPercent = (BigInt(op.operatorsCutFraction) * 100n) / BigInt('1000000000000000000');
     
-    const isOwner = globalState.myRealAddress && op.owner && globalState.myRealAddress.toLowerCase() === op.owner.toLowerCase();
-    const editSettingsButtonHtml = isOwner ? `
+    const myAddress = globalState.myRealAddress?.toLowerCase();
+    const isOwner = myAddress && op.owner && myAddress === op.owner.toLowerCase();
+    const isController = myAddress && op.controllers?.some(c => c.toLowerCase() === myAddress);
+    const editSettingsButtonHtml = (isOwner || isController) ? `
         <div class="mb-4">
             <button id="edit-operator-settings-btn" class="bg-gray-700 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-lg transition-colors flex items-center text-sm">
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">

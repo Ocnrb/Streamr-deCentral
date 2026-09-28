@@ -21,7 +21,7 @@ import {
     buildPolygonscanUrl,
     STORAGE_KEYS
 } from './constants.js';
-import { showToast, setModalState, txModalAmount, txModalBalanceValue, txModalMinimumValue, stakeModalAmount, stakeModalCurrentStake, stakeModalFreeFunds, dataPriceValueEl, transactionModal, stakeModal, operatorSettingsModal } from '../ui/ui.js';
+import { showToast, setModalState, txModalAmount, txModalBalanceValue, txModalMinimumValue, stakeModalAmount, stakeModalCurrentStake, stakeModalFreeFunds, dataPriceValueEl, transactionModal, stakeModal } from '../ui/ui.js';
 import { getFriendlyErrorMessage, convertWeiToData, parseDateFromCsv, parseOperatorMetadata, logger } from './utils.js';
 
 // Note: etherscanApiKey is now managed via getEtherscanApiKey() from constants.js
@@ -2165,41 +2165,6 @@ export async function fetchMyStake(operatorId, myRealAddress, signer) {
     } catch (e) {
         console.error("Failed to get user's stake:", e);
         return '0';
-    }
-}
-
-export async function updateOperatorMetadata(signer, operatorId, newMetadataJson) {
-    try {
-        const operatorContract = new ethers.Contract(operatorId, OPERATOR_CONTRACT_ABI, signer);
-        const gasOverrides = await getGasOverrides(signer.provider);
-        const tx = await operatorContract.updateMetadata(newMetadataJson, gasOverrides);
-        const receipt = await tx.wait();
-        return receipt.transactionHash;
-    } catch (e) {
-        console.error("Metadata update failed:", e);
-        setModalState('operator-settings-modal', 'error', { message: getFriendlyErrorMessage(e) });
-        return null;
-    }
-}
-
-export async function updateOperatorCut(signer, operatorId, newCutPercent) {
-    try {
-        const percent = parseFloat(newCutPercent);
-        if (isNaN(percent) || percent < 0 || percent > 100) {
-            throw new Error("Invalid percentage value. Must be between 0 and 100.");
-        }
-        
-        const cutWei = ethers.utils.parseEther((percent / 100).toString());
-        
-        const operatorContract = new ethers.Contract(operatorId, OPERATOR_CONTRACT_ABI, signer);
-        const gasOverrides = await getGasOverrides(signer.provider);
-        const tx = await operatorContract.updateOperatorsCutFraction(cutWei, gasOverrides);
-        const receipt = await tx.wait();
-        return receipt.transactionHash;
-    } catch (e) {
-        console.error("Operator cut update failed:", e);
-        setModalState('operator-settings-modal', 'error', { message: getFriendlyErrorMessage(e) });
-        return null;
     }
 }
 
