@@ -410,23 +410,31 @@ export const RaceLogic = {
                 return;
             }
             
+            // Settled once: a worker answer arriving after the timeout fallback must not replace the
+            // timeline (and reset the date label) behind the frame being shown
+            let settled = false;
+            const settle = () => {
+                if (settled) return false;
+                settled = true;
+                clearTimeout(timeoutId);
+                return true;
+            };
+
             const timeoutId = setTimeout(() => {
+                if (!settle()) return;
                 console.warn('Race processor timeout, falling back to sync');
                 this.processTimelineSync(buckets, operatorIds);
                 resolve();
             }, 30000); // 30 second timeout
             
             worker.onmessage = (e) => {
-                clearTimeout(timeoutId);
+                if (!settle()) return;
                 
                 if (e.data.success) {
                     this.state.timelineData = e.data.timelineData;
                     
                     if (this.els.slider) {
                         this.els.slider.max = Math.max(0, this.state.timelineData.length - 1);
-                    }
-                    if (this.state.timelineData.length > 0 && this.els.lblCurrentDate) {
-                        this.els.lblCurrentDate.textContent = this.state.timelineData[0].formattedDate;
                     }
                     
                     console.log(`[Worker] Processed ${e.data.frameCount} frames in ${e.data.processingTime}ms`);
@@ -439,7 +447,7 @@ export const RaceLogic = {
             };
             
             worker.onerror = (error) => {
-                clearTimeout(timeoutId);
+                if (!settle()) return;
                 console.warn('Race Worker error, falling back to sync:', error);
                 this.processTimelineSync(buckets, operatorIds);
                 resolve();
@@ -528,10 +536,8 @@ export const RaceLogic = {
             };
         });
 
+        // The date label follows the frame shown (renderFrame)
         if (this.els.slider) this.els.slider.max = Math.max(0, this.state.timelineData.length - 1);
-        if(this.state.timelineData.length > 0 && this.els.lblCurrentDate) {
-            this.els.lblCurrentDate.textContent = this.state.timelineData[0].formattedDate;
-        }
         
         const processingTime = (performance.now() - startTime).toFixed(2);
         console.log(`[Sync] Processed ${this.state.timelineData.length} frames in ${processingTime}ms`);
