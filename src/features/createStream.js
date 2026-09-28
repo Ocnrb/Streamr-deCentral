@@ -362,6 +362,7 @@ function formatTxError(error) {
     if (text.includes('error_storageNodeNotRegistered')) return 'One of the storage nodes is not registered in the Storage Node Registry.';
     if (text.includes('error_noEditPermission')) return 'This wallet has no edit permission on the stream.';
     if (text.includes('error_noSharePermission')) return 'This wallet has no grant permission on the stream.';
+    if (text.includes('error_noDeletePermission')) return 'This wallet has no delete permission on the stream.';
     if (text.toLowerCase().includes('insufficient funds')) return 'Insufficient POL to pay for gas.';
     if (Services.isRateLimitError(error)) return 'RPC rate limited. Please try again in a few seconds.';
     return Utils.getFriendlyErrorMessage(error);
@@ -734,6 +735,23 @@ async function estimateStepGas(step, form, changes) {
 }
 
 /**
+ * Expected gas price: base fee + priority fee (capped at the max fee we send)
+ */
+async function getExpectedGasPrice() {
+    const provider = Services.getReadOnlyProvider();
+    const [feeData, overrides] = await Promise.all([
+        Services.readWithFallback(() => provider.getFeeData()),
+        Services.getGasOverrides(provider)
+    ]);
+    let gasPrice = overrides.maxFeePerGas;
+    if (feeData.lastBaseFeePerGas) {
+        const expected = feeData.lastBaseFeePerGas.add(overrides.maxPriorityFeePerGas);
+        if (expected.lt(gasPrice)) gasPrice = expected;
+    }
+    return gasPrice;
+}
+
+/**
  * Estimate gas and POL cost of all transactions
  */
 async function updateEstimate() {
@@ -748,8 +766,6 @@ async function updateEstimate() {
     const errors = validateForm(form);
     const changes = buildChanges(form);
     const txSteps = planSteps(form, changes).filter(s => !s.noTx);
-
-    const provider = Services.getReadOnlyProvider();
 
     // Balance (independent of the form)
     Services.readWithFallback(() => Services.getReadOnlyProvider().getBalance(state.owner))
@@ -785,18 +801,10 @@ async function updateEstimate() {
     noteEl.textContent = '';
 
     try {
-        const estimates = await Promise.all(txSteps.map(step => estimateStepGas(step, form, changes)));
-
-        // Expected price: base fee + priority fee (capped at the max fee we send)
-        const [feeData, overrides] = await Promise.all([
-            Services.readWithFallback(() => provider.getFeeData()),
-            Services.getGasOverrides(provider)
+        const [estimates, gasPrice] = await Promise.all([
+            Promise.all(txSteps.map(step => estimateStepGas(step, form, changes))),
+            getExpectedGasPrice()
         ]);
-        let gasPrice = overrides.maxFeePerGas;
-        if (feeData.lastBaseFeePerGas) {
-            const expected = feeData.lastBaseFeePerGas.add(overrides.maxPriorityFeePerGas);
-            if (expected.lt(gasPrice)) gasPrice = expected;
-        }
 
         if (seq !== state.estimateSeq) return;
 
@@ -1105,6 +1113,162 @@ async function handleSubmit() {
 }
 
 // ============================================
+// Delete (edit mode, wallet with DELETE permission)
+// ============================================
+
+const HOLD_TO_DELETE_MS = 2000;
+const hold = { start: null, raf: null };
+
+function showDeleteError(message) {
+    const el = $('create-stream-delete-error');
+    if (!el) return;
+    el.textContent = message || '';
+    el.classList.toggle('hidden', !message);
+}
+
+function setDeleteLabel(html) {
+    const label = $('create-stream-delete-label');
+    if (label) label.innerHTML = html;
+}
+
+function setHoldProgress(progress) {
+    const fill = $('create-stream-delete-fill');
+    if (!fill) return;
+    // Snap back smoothly when released, follow the finger/mouse exactly while holding
+    fill.style.transition = progress === 0 ? 'width 200ms ease-out' : 'none';
+    fill.style.width = `${progress * 100}%`;
+    $('create-stream-delete-label')?.classList.toggle('text-white', progress > 0);
+    if (!state.submitting) {
+        setDeleteLabel(progress > 0 ? 'Keep holding...' : 'Hold 2s to delete');
+    }
+}
+
+function startHold(e) {
+    const btn = $('create-stream-delete-hold');
+    if (!btn || btn.disabled || state.submitting || hold.raf) return;
+    if (e.type === 'keydown') {
+        if (e.repeat || (e.key !== ' ' && e.key !== 'Enter')) return;
+        e.preventDefault();
+    }
+    hold.start = performance.now();
+    const tick = (now) => {
+        const progress = Math.min((now - hold.start) / HOLD_TO_DELETE_MS, 1);
+        setHoldProgress(progress);
+        if (progress >= 1) {
+            hold.raf = null;
+            hold.start = null;
+            runDelete();
+            return;
+        }
+        hold.raf = requestAnimationFrame(tick);
+    };
+    hold.raf = requestAnimationFrame(tick);
+}
+
+function cancelHold() {
+    if (hold.raf) cancelAnimationFrame(hold.raf);
+    hold.raf = null;
+    hold.start = null;
+    if (!state.submitting) setHoldProgress(0);
+}
+
+/**
+ * Switch between the edit form and the delete confirmation panel
+ */
+function showDeletePanel(show) {
+    cancelHold();
+    $('create-stream-form')?.classList.toggle('hidden', show);
+    $('create-stream-footer')?.classList.toggle('hidden', show);
+    $('create-stream-delete-panel')?.classList.toggle('hidden', !show);
+    $('create-stream-title').textContent = show ? 'Delete Stream' : 'Edit Stream';
+    showDeleteError('');
+    if (!show) return;
+
+    $('create-stream-delete-id').textContent = state.edit.streamId;
+    const holdBtn = $('create-stream-delete-hold');
+    if (holdBtn) holdBtn.disabled = false;
+    setHoldProgress(0);
+
+    const { sponsorshipCount, runningSponsorships } = state.edit;
+    const sponsorshipNote = $('create-stream-delete-sponsorships');
+    if (sponsorshipNote) {
+        sponsorshipNote.textContent = sponsorshipCount > 0
+            ? `This stream has ${sponsorshipCount} ${sponsorshipCount === 1 ? 'sponsorship' : 'sponsorships'}${runningSponsorships > 0 ? ` (${runningSponsorships} running)` : ''}. Deleting the stream does not close them or return their funds.`
+            : '';
+        sponsorshipNote.classList.toggle('hidden', sponsorshipCount === 0);
+    }
+
+    estimateDeleteCost();
+}
+
+async function estimateDeleteCost() {
+    const costEl = $('create-stream-delete-cost');
+    if (!costEl) return;
+    costEl.textContent = 'Estimating...';
+    try {
+        const streamId = state.edit.streamId;
+        const [gas, gasPrice] = await Promise.all([
+            Services.readWithFallback(() => getReadRegistry().estimateGas.deleteStream(streamId, { from: state.owner })),
+            getExpectedGasPrice()
+        ]);
+        if (state.edit?.streamId !== streamId) return;
+        costEl.textContent = `≈ ${formatPol(gas.mul(gasPrice))}`;
+    } catch (e) {
+        logger.warn('Delete cost estimate failed:', e);
+        costEl.textContent = '--';
+        showDeleteError(`Could not estimate: ${formatTxError(e)}`);
+    }
+}
+
+async function runDelete() {
+    const streamId = state.edit.streamId;
+    const holdBtn = $('create-stream-delete-hold');
+    const backBtn = $('create-stream-delete-back');
+    const spinner = '<span class="w-4 h-4 border-2 border-white rounded-full border-t-transparent animate-spin"></span>';
+
+    state.submitting = true;
+    if (holdBtn) holdBtn.disabled = true;
+    if (backBtn) backBtn.disabled = true;
+    showDeleteError('');
+    setDeleteLabel(`${spinner}<span class="text-white">Confirm in your wallet...</span>`);
+
+    try {
+        const tx = await sendTx((signer, overrides) =>
+            new ethers.Contract(STREAM_REGISTRY_ADDRESS, STREAM_REGISTRY_ABI, signer).deleteStream(streamId, overrides));
+        setDeleteLabel(`${spinner}<span class="text-white">Deleting...</span>`);
+        await tx.wait();
+
+        // Wait (bounded) for the subgraph so the streams list doesn't show it anymore
+        setDeleteLabel(`${spinner}<span class="text-white">Waiting for the indexer...</span>`);
+        const sanitizedId = streamId.replace(/"/g, '\\"');
+        const indexed = await waitUntil(async () => {
+            const data = await Services.runQuery(`{ stream(id: "${sanitizedId}") { id } }`);
+            return !data.stream;
+        }, INDEX_WAIT_TIMEOUT_MS, INDEX_WAIT_INTERVAL_MS);
+
+        state.submitting = false;
+        state.flow = null;
+        $('createStreamModal')?.classList.add('hidden');
+        UI.showToast({
+            type: 'success',
+            title: 'Stream Deleted',
+            message: indexed
+                ? Utils.escapeHtml(streamId)
+                : `${Utils.escapeHtml(streamId)} - it may take a minute to disappear from the list.`,
+            duration: 8000
+        });
+        window.router.navigate('/streams');
+    } catch (error) {
+        logger.error('Delete stream failed:', error);
+        state.submitting = false;
+        if (holdBtn) holdBtn.disabled = false;
+        if (backBtn) backBtn.disabled = false;
+        setHoldProgress(0);
+        showDeleteError(formatTxError(error));
+    }
+}
+
+// ============================================
 // Modal lifecycle
 // ============================================
 
@@ -1119,8 +1283,10 @@ function resetForm() {
     state.balanceWei = null;
 
     const isEdit = state.mode === 'edit';
+    showDeletePanel(false);
     $('create-stream-title').textContent = isEdit ? 'Edit Stream' : 'Create Stream';
     $('create-stream-id-inputs').classList.toggle('hidden', isEdit);
+    $('create-stream-danger-zone').classList.toggle('hidden', !(isEdit && state.edit.canDelete));
     $('create-stream-ens').value = '';
     $('create-stream-name').value = '';
     $('create-stream-storage-custom').value = '';
@@ -1184,6 +1350,7 @@ async function openModal(mode) {
         const self = state.edit.permissions.get(state.owner) || NO_PERMISSIONS;
         state.edit.selfPermissions = self;
         state.edit.canGrant = self.grant;
+        state.edit.canDelete = self.delete;
     } else {
         state.edit = null;
     }
@@ -1221,6 +1388,8 @@ function openEdit(stream, onSaved) {
         permissions,
         storageNodeList: stream.storageNodes || [],
         storageNodes: new Set((stream.storageNodes || []).map(n => n.id.toLowerCase())),
+        sponsorshipCount: (stream.sponsorships || []).length,
+        runningSponsorships: (stream.sponsorships || []).filter(s => s.isRunning).length,
         onSaved
     };
     openModal('edit');
@@ -1337,6 +1506,23 @@ function setupListeners() {
         renderStorageList();
         onFormChanged();
     });
+
+    // Delete: open confirmation, back, hold-to-delete (mouse, touch and keyboard)
+    $('create-stream-delete-open')?.addEventListener('click', () => showDeletePanel(true));
+    $('create-stream-delete-back')?.addEventListener('click', () => showDeletePanel(false));
+    const holdBtn = $('create-stream-delete-hold');
+    if (holdBtn) {
+        holdBtn.addEventListener('pointerdown', (e) => {
+            if (e.button !== 0) return;
+            holdBtn.setPointerCapture?.(e.pointerId);
+            startHold(e);
+        });
+        ['pointerup', 'pointercancel', 'lostpointercapture'].forEach(type => holdBtn.addEventListener(type, cancelHold));
+        holdBtn.addEventListener('keydown', startHold);
+        holdBtn.addEventListener('keyup', cancelHold);
+        holdBtn.addEventListener('blur', cancelHold);
+        holdBtn.addEventListener('contextmenu', (e) => e.preventDefault()); // long-press menu on mobile
+    }
 
     // Close on backdrop click / Escape
     $('createStreamModal')?.addEventListener('click', (e) => {

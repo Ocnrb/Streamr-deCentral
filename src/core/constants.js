@@ -311,6 +311,7 @@ export const STREAM_REGISTRY_ABI = [
     'function createStreamWithENS(string ensName, string streamIdPath, string metadataJsonString)',
     `function setPermissions(string streamId, address[] users, ${STREAM_PERMISSION_TUPLE}[] permissions)`,
     'function updateStreamMetadata(string streamId, string metadata)',
+    'function deleteStream(string streamId)',
     'function exists(string streamId) view returns (bool)',
     'function ensCache() view returns (address)'
 ];
