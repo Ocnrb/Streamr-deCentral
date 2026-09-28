@@ -1221,7 +1221,7 @@ export async function fetchContractLogs(address, maxPages = 5) {
     return logs;
 }
 
-export async function fetchPolygonscanHistory(walletAddress, offset = 500, sponsorshipAddresses = []) {
+export async function fetchPolygonscanHistory(walletAddress, offset = 500, sponsorshipAddresses = [], page = 1) {
     const apiKey = getEtherscanApiKey();
     
     // Create a Set of known sponsorship addresses (smart contracts) for quick lookup
@@ -1236,6 +1236,7 @@ export async function fetchPolygonscanHistory(walletAddress, offset = 500, spons
         module: 'account',
         action: 'txlist',
         address: walletAddress,
+        page,
         offset
     });
     
@@ -1243,6 +1244,7 @@ export async function fetchPolygonscanHistory(walletAddress, offset = 500, spons
         module: 'account',
         action: 'tokentx',
         address: walletAddress,
+        page,
         offset
     });
 

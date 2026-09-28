@@ -2785,6 +2785,41 @@ function renderFundingHistory(events) {
  * Load and render on-chain history for a sponsorship contract
  * @param {string} sponsorshipAddress - The sponsorship contract address
  */
+const ONCHAIN_HISTORY_PAGE_SIZE = 100;
+
+// On-chain history of the sponsorship shown (pages of Polygonscan results, loaded with "Load more")
+const onchainHistory = { address: null, page: 0, hasMore: false, txs: [], names: new Map(), loading: false };
+
+function onchainTxKey(tx) {
+    return `${tx.txHash}|${tx.token}|${tx.from}|${tx.to}|${tx.rawValue}`.toLowerCase();
+}
+
+/**
+ * Fetches one page of the sponsorship's history, merges it (no duplicates), labels the transfers and
+ * resolves the names of operators that left
+ */
+async function fetchOnchainHistoryPage(page) {
+    const address = onchainHistory.address;
+    const result = await Services.fetchPolygonscanHistory(address, ONCHAIN_HISTORY_PAGE_SIZE, [address], page);
+    if (onchainHistory.address !== address) return false; // another sponsorship was opened meanwhile
+    const pageTxs = result.transactions || (Array.isArray(result) ? result : []);
+    const known = new Set(onchainHistory.txs.map(onchainTxKey));
+    onchainHistory.txs.push(...pageTxs.filter(tx => !known.has(onchainTxKey(tx))));
+    onchainHistory.page = page;
+    onchainHistory.hasMore = Boolean(result.hasMore);
+
+    // Label what each DATA transfer out of the sponsorship was (unstake / earnings / reduce stake / flag rewards)
+    await classifySponsorshipTransfers(address, onchainHistory.txs);
+
+    // Names of operators that already left the sponsorship (not in the current stakes)
+    const missing = onchainHistory.txs.flatMap(tx => [tx.from, tx.to])
+        .filter(a => typeof a === 'string' && !onchainHistory.names.has(a.toLowerCase()));
+    const names = await fetchOperatorNames(missing)
+        .catch(e => { logger.warn('Could not resolve operator names:', e); return new Map(); });
+    names.forEach((name, addr) => onchainHistory.names.set(addr, name));
+    return onchainHistory.address === address;
+}
+
 async function loadSponsorshipOnchainHistory(sponsorshipAddress) {
     const container = document.getElementById('sponsorship-history-list');
     const emptyState = document.getElementById('sponsorship-history-empty');
@@ -2798,60 +2833,61 @@ async function loadSponsorshipOnchainHistory(sponsorshipAddress) {
         </div>
     `;
     if (emptyState) emptyState.classList.add('hidden');
+
+    Object.assign(onchainHistory, { address: sponsorshipAddress, page: 0, hasMore: false, txs: [], names: new Map(), loading: false });
+    sponsorshipLogsCache.delete(sponsorshipAddress.toLowerCase());
+
+    const syncHeights = () => {
+        requestAnimationFrame(() => syncTileHeights());
+        // Additional sync for Funding/History after longer delay
+        setTimeout(() => syncTileHeights(), 300);
+    };
     
     try {
-        // Fetch transaction history from Polygonscan
-        const result = await Services.fetchPolygonscanHistory(sponsorshipAddress, 100, [sponsorshipAddress]);
-        const transactions = result.transactions || result || [];
+        if (!await fetchOnchainHistoryPage(1)) return;
         
-        if (transactions.length === 0) {
+        if (onchainHistory.txs.length === 0) {
             container.innerHTML = '';
             if (emptyState) emptyState.classList.remove('hidden');
-            
-            // Sync tile heights even when no transactions
-            requestAnimationFrame(() => {
-                syncTileHeights();
-            });
-            setTimeout(() => {
-                syncTileHeights();
-            }, 300);
+            syncHeights();
             return;
         }
         
-        // Label what each DATA transfer out of the sponsorship was (unstake / earnings / reduce stake)
-        await classifySponsorshipTransfers(sponsorshipAddress, transactions);
-
-        // Names of operators that already left the sponsorship (not in the current stakes)
-        const extraNames = await fetchOperatorNames(transactions.flatMap(tx => [tx.from, tx.to]))
-            .catch(e => { logger.warn('Could not resolve operator names:', e); return new Map(); });
-
-        // Render the transactions
-        renderSponsorshipOnchainHistory(transactions, 'sponsorships', extraNames);
-        
-        // Sync tile heights after history content is loaded
-        requestAnimationFrame(() => {
-            syncTileHeights();
-        });
-        
-        // Additional sync for Funding/History after longer delay
-        setTimeout(() => {
-            syncTileHeights();
-        }, 300);
+        renderSponsorshipOnchainHistory(onchainHistory.txs, 'sponsorships', onchainHistory.names, onchainHistory.hasMore);
+        syncHeights();
     } catch (error) {
         logger.error('Failed to load sponsorship on-chain history:', error);
         container.innerHTML = `<div class="px-4 py-4 text-gray-500 text-center text-sm">Failed to load on-chain history</div>`;
-        
-        // Still sync tile heights even on error
-        requestAnimationFrame(() => {
-            syncTileHeights();
-        });
-        
-        // Additional sync for Funding/History after longer delay
-        setTimeout(() => {
-            syncTileHeights();
-        }, 300);
+        syncHeights();
     }
 }
+
+/**
+ * "Load more": next page of the sponsorship's on-chain history
+ */
+async function loadMoreOnchainHistory(button) {
+    if (onchainHistory.loading || !onchainHistory.hasMore) return;
+    onchainHistory.loading = true;
+    button.disabled = true;
+    button.innerHTML = `<span class="w-3.5 h-3.5 border-2 border-gray-400 rounded-full border-t-transparent animate-spin"></span> Loading...`;
+    const container = document.getElementById('sponsorship-history-list');
+    const scrollTop = container?.scrollTop || 0;
+    try {
+        if (!await fetchOnchainHistoryPage(onchainHistory.page + 1)) return;
+        renderSponsorshipOnchainHistory(onchainHistory.txs, 'sponsorships', onchainHistory.names, onchainHistory.hasMore);
+        if (container) container.scrollTop = scrollTop;
+    } catch (error) {
+        logger.error('Failed to load more on-chain history:', error);
+        button.disabled = false;
+        button.textContent = 'Load more';
+        UI.showToast({ type: 'error', title: 'Error', message: 'Failed to load more history.' });
+    } finally {
+        onchainHistory.loading = false;
+    }
+}
+
+// Sponsorship address -> Promise of its event logs
+const sponsorshipLogsCache = new Map();
 
 // Sponsorship events used to tell the DATA transfers to operators apart
 const SPONSORSHIP_EVENT_TOPICS = {
@@ -2884,12 +2920,16 @@ async function classifySponsorshipTransfers(sponsorshipAddress, transactions) {
     const payouts = transactions.filter(isPayout);
     if (!payouts.length) return;
 
-    let logs = null;
-    try {
-        logs = await Services.fetchContractLogs(sponsorshipAddress);
-    } catch (e) {
-        logger.warn('Could not load sponsorship events:', e);
+    // Events are fetched once per sponsorship view (Load more reuses them)
+    const cacheKey = sponsorship;
+    if (!sponsorshipLogsCache.has(cacheKey)) {
+        sponsorshipLogsCache.set(cacheKey, Services.fetchContractLogs(sponsorshipAddress).catch(e => {
+            logger.warn('Could not load sponsorship events:', e);
+            sponsorshipLogsCache.delete(cacheKey);
+            return null;
+        }));
     }
+    const logs = await sponsorshipLogsCache.get(cacheKey);
 
     if (logs && logs.length) {
         const topicAddress = (topic) => '0x' + topic.slice(26).toLowerCase();
@@ -2994,8 +3034,9 @@ async function fetchOperatorNames(addresses) {
  * @param {Array} transactions - Array of transaction objects from Polygonscan
  * @param {string} context - 'operators' or 'sponsorships' to determine badge colors
  * @param {Map<string, string>} [extraNames] - names of operators not in the current stakes
+ * @param {boolean} [showLoadMore] - add a "Load more" button (more pages on Polygonscan)
  */
-function renderSponsorshipOnchainHistory(transactions, context = 'sponsorships', extraNames = new Map()) {
+function renderSponsorshipOnchainHistory(transactions, context = 'sponsorships', extraNames = new Map(), showLoadMore = false) {
     const container = document.getElementById('sponsorship-history-list');
     if (!container) return;
     
@@ -3019,7 +3060,7 @@ function renderSponsorshipOnchainHistory(transactions, context = 'sponsorships',
     // Sort by timestamp descending (most recent first)
     const sortedTxs = [...transactions].sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
     
-    const html = sortedTxs.slice(0, 100).map(tx => {
+    const html = sortedTxs.map(tx => {
         const date = tx.timestamp ? new Date(tx.timestamp * 1000).toLocaleString() : 'Unknown';
         let method = tx.methodId || 'Unknown';
         const direction = tx.direction || tx.relatedObject || 'IN';
@@ -3096,7 +3137,19 @@ function renderSponsorshipOnchainHistory(transactions, context = 'sponsorships',
         `;
     }).join('');
     
-    container.innerHTML = html;
+    // Same subtle style as the other "Load more" buttons; the handler is delegated (set once)
+    const loadMore = showLoadMore ? `
+        <div class="py-3 text-center">
+            <button type="button" data-onchain-load-more class="bg-[#2C2C2C] hover:bg-[#3C3C3C] text-white font-medium py-2 px-5 rounded-lg text-xs transition-colors inline-flex items-center gap-2 disabled:opacity-60">Load more</button>
+        </div>` : '';
+    container.innerHTML = html + loadMore;
+    if (!container.dataset.loadMoreBound) {
+        container.dataset.loadMoreBound = '1';
+        container.addEventListener('click', (e) => {
+            const button = e.target.closest('[data-onchain-load-more]');
+            if (button) loadMoreOnchainHistory(button);
+        });
+    }
 }
 
 /**
