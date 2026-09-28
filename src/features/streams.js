@@ -1929,22 +1929,34 @@ function renderStreamStorageNodes(storageNodes) {
     
     if (emptyState) emptyState.classList.add('hidden');
     
-    const html = storageNodes.map(node => {
+    const rowsHtml = storageNodes.map(node => {
         const nodeId = node.id || 'Unknown';
         const displayId = nodeId.length > 20 ? nodeId.substring(0, 10) + '...' + nodeId.substring(nodeId.length - 8) : nodeId;
         
-        // Parse metadata for node name if available
+        // Parse on-chain metadata (NodeRegistry): name, endpoints (urls) and TTL (days)
         let nodeName = null;
+        let endpoints = [];
+        let ttlDays = null;
         try {
             if (node.metadata) {
                 const meta = JSON.parse(node.metadata);
-                nodeName = meta.name;
+                nodeName = typeof meta.name === 'string' ? meta.name : null;
+                // SDK format is { urls: [...] }; legacy nodes use { http: "..." }
+                if (Array.isArray(meta.urls)) {
+                    endpoints = meta.urls.filter(u => typeof u === 'string');
+                } else if (typeof meta.http === 'string') {
+                    endpoints = [meta.http];
+                }
+                const ttl = Number(meta.ttl);
+                if (meta.ttl !== undefined && meta.ttl !== null && Number.isFinite(ttl) && ttl >= 0) {
+                    ttlDays = ttl;
+                }
             }
         } catch (e) { /* ignore */ }
         
         // Calculate last seen
         let lastSeenText = 'Unknown';
-        if (node.lastSeen) {
+        if (parseInt(node.lastSeen) > 0) {
             const lastSeenDate = new Date(parseInt(node.lastSeen) * 1000);
             const now = new Date();
             const diffMs = now - lastSeenDate;
@@ -1965,24 +1977,59 @@ function renderStreamStorageNodes(storageNodes) {
         
         const isOnline = lastSeenText === 'Online';
         const statusDot = isOnline
-            ? '<span class="w-2 h-2 rounded-full bg-green-400"></span>'
-            : '<span class="w-2 h-2 rounded-full bg-gray-500"></span>';
+            ? '<span class="w-2 h-2 rounded-full bg-green-400 flex-shrink-0"></span>'
+            : '<span class="w-2 h-2 rounded-full bg-gray-500 flex-shrink-0"></span>';
+        
+        // Endpoints - only http(s) URLs become links
+        const endpointsHtml = endpoints.length > 0
+            ? endpoints.map(url => {
+                const safeUrl = Utils.escapeHtml(url);
+                const isHttp = /^https?:\/\//i.test(url);
+                return isHttp
+                    ? `<a href="${safeUrl}" target="_blank" rel="noopener noreferrer" class="block font-mono text-xs text-blue-400 hover:text-blue-300 break-all">${safeUrl}</a>`
+                    : `<span class="block font-mono text-xs text-gray-400 break-all">${safeUrl}</span>`;
+            }).join('')
+            : '<span class="text-gray-600">—</span>';
+        
+        const ttlText = ttlDays !== null
+            ? `${ttlDays} ${ttlDays === 1 ? 'day' : 'days'}`
+            : '—';
         
         return `
-            <div class="flex items-center justify-between p-3 bg-[#252525] rounded-lg">
-                <div class="flex items-center gap-3">
-                    ${statusDot}
-                    <div>
-                        ${nodeName ? `<span class="text-white font-medium">${Utils.escapeHtml(nodeName)}</span>` : ''}
-                        <span class="font-mono text-sm ${nodeName ? 'text-gray-500 ml-2' : 'text-gray-300'}" title="${nodeId}">${displayId}</span>
+            <tr class="hover:bg-white/5">
+                <td class="px-4 py-3">
+                    <div class="flex items-center gap-3">
+                        ${statusDot}
+                        <div class="min-w-0">
+                            ${nodeName ? `<span class="block text-white font-medium">${Utils.escapeHtml(nodeName)}</span>` : ''}
+                            <span class="font-mono text-sm ${nodeName ? 'text-gray-500' : 'text-gray-300'}" title="${Utils.escapeHtml(nodeId)}">${Utils.escapeHtml(displayId)}</span>
+                        </div>
                     </div>
-                </div>
-                <span class="text-sm ${isOnline ? 'text-green-400' : 'text-gray-500'}">${lastSeenText}</span>
-            </div>
+                </td>
+                <td class="px-4 py-3">${endpointsHtml}</td>
+                <td class="px-4 py-3 text-right whitespace-nowrap ${ttlDays !== null ? 'text-gray-300' : 'text-gray-600'}">${ttlText}</td>
+                <td class="px-4 py-3 text-right whitespace-nowrap ${isOnline ? 'text-green-400' : 'text-gray-500'}">${lastSeenText}</td>
+            </tr>
         `;
     }).join('');
     
-    content.innerHTML = html;
+    content.innerHTML = `
+        <div class="overflow-x-auto">
+            <table class="w-full text-sm min-w-[500px]">
+                <thead class="text-xs text-gray-500 uppercase bg-[#252525]">
+                    <tr>
+                        <th class="px-4 py-3 text-left">Node</th>
+                        <th class="px-4 py-3 text-left">Endpoints</th>
+                        <th class="px-4 py-3 text-right">TTL</th>
+                        <th class="px-4 py-3 text-right">Last Seen</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-[#333]">
+                    ${rowsHtml}
+                </tbody>
+            </table>
+        </div>
+    `;
 }
 
 /**
