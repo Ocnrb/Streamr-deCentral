@@ -782,26 +782,28 @@ export function renderSponsorshipsHistory(historyGroups, showLoadAllButton = tru
         };
         const clustersHtml = clusters.map((cluster, index) => {
             const merged = new Set();
-            const graphRows = [];   // left-bordered action block
+            // Each action is its own block: a short, slightly thicker bar on the left, rows close
+            // together, and some space between blocks
+            const actionBlocks = [];
             for (const event of cluster.graph) {
                 const methods = matchingMethods[event.stakeChange];
                 const match = methods && cluster.scan.find(t => !merged.has(t) && methods.includes(t.methodId) && t.token === 'DATA'
                     && (event.stakeChange === 'earnings' || Math.abs(Math.abs(t.amount) - Math.abs(event.stakeDelta)) < 1));
                 if (!match) {
-                    graphRows.push(graphRowHtml(event));
+                    actionBlocks.push(graphRowHtml(event));
                     continue;
                 }
                 merged.add(match);
-                graphRows.push(actionHeaderHtml(event));
-                graphRows.push(event.stakeChange === 'earnings'
+                actionBlocks.push(actionHeaderHtml(event) + (event.stakeChange === 'earnings'
                     ? scanRowHtml(match, event.relatedObject)
-                    : graphRowHtml(event, scanBadgeHtml(match)));
+                    : graphRowHtml(event, scanBadgeHtml(match))));
             }
-            const graphHtml = graphRows.join('');
+            const graphHtml = actionBlocks.map(block => `
+                <div class="relative pl-4 [&>div]:py-1.5 before:content-[''] before:absolute before:left-0 before:top-2 before:bottom-2 before:w-[3px] before:rounded-full before:bg-[#444]">${block}</div>`).join('');
             const scanHtml = cluster.scan.filter(t => !merged.has(t)).map(t => scanRowHtml(t)).join('');
             return `
-                <div class="${index > 0 ? 'mt-1' : ''}">
-                    ${graphHtml ? `<div class="pl-4 border-l-2 border-gray-700">${graphHtml}</div>` : ''}
+                <div class="${index > 0 ? 'mt-2' : ''}">
+                    ${graphHtml ? `<div class="space-y-2">${graphHtml}</div>` : ''}
                     ${scanHtml ? `<div class="pl-4">${scanHtml}</div>` : ''}
                 </div>`;
         }).join('');
