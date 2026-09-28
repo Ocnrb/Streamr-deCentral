@@ -2542,7 +2542,26 @@ export function renderProfileShortcut() {
  * @param {string} operatorName - Current operator name
  * @param {string|null} operatorImageUrl - Current operator image URL
  */
+/**
+ * The saved profile stores the name and avatar URL of when it was saved (e.g. an IPFS link that no
+ * longer works, before the avatar stream): update them when they changed, and refresh the shortcut.
+ * @returns {boolean} whether the saved profile changed
+ */
+export function syncSavedOperatorProfile(operatorId, operatorName, operatorImageUrl) {
+    const profile = getOperatorProfile();
+    const id = (profile?.id || profile?.operatorId || '').toLowerCase();
+    if (!profile || !operatorId || id !== operatorId.toLowerCase()) return false;
+    const name = operatorName || id;
+    const imageUrl = operatorImageUrl || null;
+    if (profile.name === name && (profile.imageUrl || null) === imageUrl) return false;
+    saveOperatorProfile(id, name, imageUrl);
+    renderProfileShortcut();
+    return true;
+}
+
 export function updateProfileButton(operatorId, operatorName, operatorImageUrl) {
+    syncSavedOperatorProfile(operatorId, operatorName, operatorImageUrl);
+
     const desktopBtn = document.getElementById('desktop-save-profile-btn');
     const mobileBtn = document.getElementById('mobile-save-profile-btn');
     
