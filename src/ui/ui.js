@@ -694,7 +694,11 @@ export function renderSponsorshipsHistory(historyGroups, showLoadAllButton = tru
                 // From the operator's side: staking moves DATA out of the operator (−), reducing / unstaking back in (+)
                 const sign = event.stakeDelta > 0 ? '−' : '+';
                 const abs = Math.round(Math.abs(event.stakeDelta));
-                amountHtml = `<p class="font-mono text-sm text-white" data-tooltip-value="${abs}" data-tooltip-extra="Stake after: ${formatBigNumber(Math.round(event.amount).toString())} DATA">${sign}${formatBigNumber(abs.toString())} ${escapeHtml(event.token)}</p>`;
+                // Tooltip: value (USD), then the stake in the sponsorship before and after (one per line)
+                const stakeAfter = Math.max(0, Math.round(event.amount));
+                const stakeBefore = Math.max(0, Math.round(event.amount - event.stakeDelta));
+                const extra = `Stake before: ${formatBigNumber(stakeBefore.toString())} DATA|Stake after: ${formatBigNumber(stakeAfter.toString())} DATA`;
+                amountHtml = `<p class="font-mono text-sm text-white" data-tooltip-value="${abs}" data-tooltip-extra="${escapeHtml(extra)}">${sign}${formatBigNumber(abs.toString())} ${escapeHtml(event.token)}</p>`;
             } else {
                 amountHtml = `<p class="font-mono text-sm text-white" ${event.token.toUpperCase() === 'DATA' ? `data-tooltip-value="${Math.round(event.amount)}"` : ''}>${formatBigNumber(Math.round(event.amount).toString())} ${escapeHtml(event.token)}</p>`;
             }
