@@ -32,6 +32,11 @@ self.addEventListener('fetch', event => {
       return;
   }
 
+  // Requests that must not be cached (e.g. storage node health checks) go straight to the network
+  if (event.request.cache === 'no-store') {
+      return;
+  }
+
   event.respondWith(
     caches.open(CACHE_NAME).then(cache => {
       // 1. Try to fetch the resource from the network.
