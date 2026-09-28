@@ -2116,13 +2116,14 @@
         </div>
 
         <!-- ===== SUBGRAPH VIEW ===== -->
-        <!-- Query builder for every subgraph entity; the entity navigation sits on the right -->
-        <div id="subgraph-view" class="hidden">
-            <div class="flex-1 min-w-0 p-4 md:p-6">
-                <div class="grid grid-cols-1 xl:grid-cols-12 gap-6">
+        <!-- Query builder for every subgraph entity; the entity navigation is a fixed panel on the right.
+             From xl the view fills the viewport (no page scroll): builder and result scroll independently. -->
+        <div id="subgraph-view" class="hidden xl:h-[calc(100dvh-5rem)] xl:overflow-hidden">
+            <div id="sg-content" class="flex-1 min-w-0 p-4 md:p-6 lg:mr-64 xl:h-full transition-[margin] duration-300">
+                <div class="grid grid-cols-1 xl:grid-cols-12 xl:grid-rows-[minmax(0,1fr)] gap-6 xl:h-full">
 
-                    <!-- Query Configuration -->
-                    <div class="xl:col-span-5 space-y-6">
+                    <!-- Query Configuration (own scroll from xl) -->
+                    <div class="xl:col-span-5 space-y-6 xl:h-full xl:overflow-y-auto xl:overscroll-contain xl:pr-1">
                         <section class="detail-section p-4 sm:p-6">
                             <div class="flex items-center gap-2 flex-wrap">
                                 <h2 id="sg-entity-title" class="text-lg font-semibold text-white">Operator</h2>
@@ -2168,7 +2169,24 @@
                                 <h2 class="text-lg font-semibold text-white">Filters <span id="sg-filter-count" class="ml-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-blue-500/15 text-blue-400 hidden"></span></h2>
                                 <button id="sg-clear-filters" class="text-xs font-medium text-gray-400 hover:text-white transition-colors hidden">Clear all</button>
                             </div>
-                            <div id="sg-filters"></div>
+                            <!-- Active filter rows (or info text for meta/no-filter entities) -->
+                            <div id="sg-filters" class="space-y-3"></div>
+
+                            <!-- Add filter: searchable menu of the entity's remaining filters -->
+                            <div id="sg-add-filter-wrap" class="relative mt-3">
+                                <button id="sg-add-filter" type="button" aria-haspopup="true" aria-expanded="false"
+                                        class="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-dashed border-[#444] text-sm font-medium text-gray-400 hover:text-white hover:border-[#666] transition-colors">
+                                    <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
+                                    Add filter
+                                </button>
+                                <div id="sg-add-filter-menu" class="hidden absolute z-30 left-0 mt-2 w-full max-w-sm bg-[#1E1E1E] border border-[#333333] rounded-lg shadow-2xl overflow-hidden">
+                                    <div class="p-2 border-b border-[#333333]">
+                                        <input id="sg-add-filter-search" type="text" autocomplete="off" placeholder="Search filters..."
+                                               class="w-full p-2 bg-[#121212] border border-[#333333] rounded-md text-white text-sm placeholder:text-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50">
+                                    </div>
+                                    <div id="sg-add-filter-list" class="max-h-72 overflow-y-auto overscroll-contain py-1"></div>
+                                </div>
+                            </div>
                         </section>
 
                         <!-- GraphQL (auto-generated, editable) -->
@@ -2181,21 +2199,22 @@
                                       class="w-full p-3 bg-[#121212] border border-[#333333] rounded-lg text-gray-200 font-mono text-xs sm:text-sm placeholder:text-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all"
                                       placeholder="Paste your GraphQL query here or edit the preview."></textarea>
                             <p id="sg-manual-hint" class="text-xs text-amber-500 mt-2 hidden">Manual query active: form filters are ignored.</p>
-
-                            <div class="pt-4 flex flex-col sm:flex-row gap-3 justify-between items-center">
-                                <div class="flex gap-2 w-full sm:w-auto">
-                                    <button id="sg-prev" class="flex-grow sm:flex-grow-0 bg-[#2C2C2C] hover:bg-[#3A3A3A] disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-3 px-4 rounded-lg transition-colors" disabled>&larr; Previous</button>
-                                    <button id="sg-next" class="flex-grow sm:flex-grow-0 bg-[#2C2C2C] hover:bg-[#3A3A3A] disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-3 px-4 rounded-lg transition-colors" disabled>Next &rarr;</button>
-                                </div>
-                                <button id="sg-execute" class="w-full sm:w-auto bg-blue-800 hover:bg-blue-900 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-3 px-6 rounded-lg transition-colors">Execute Query</button>
-                            </div>
                         </section>
+
+                        <!-- Actions: pinned to the bottom of the builder column from xl -->
+                        <div class="flex flex-col sm:flex-row xl:flex-col 2xl:flex-row gap-3 justify-between xl:sticky xl:bottom-0 xl:z-10 xl:bg-[#121212] xl:pt-3 xl:pb-1 xl:border-t xl:border-[#2a2a2a]">
+                            <div class="flex gap-2">
+                                <button id="sg-prev" class="flex-1 sm:flex-none xl:flex-1 2xl:flex-none whitespace-nowrap bg-[#2C2C2C] hover:bg-[#3A3A3A] disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-3 px-4 rounded-lg transition-colors" disabled>&larr; Previous</button>
+                                <button id="sg-next" class="flex-1 sm:flex-none xl:flex-1 2xl:flex-none whitespace-nowrap bg-[#2C2C2C] hover:bg-[#3A3A3A] disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-3 px-4 rounded-lg transition-colors" disabled>Next &rarr;</button>
+                            </div>
+                            <button id="sg-execute" title="Execute query (Ctrl/Cmd + Enter)" class="whitespace-nowrap bg-blue-800 hover:bg-blue-900 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-3 px-6 rounded-lg transition-colors">Execute Query</button>
+                        </div>
                     </div>
 
-                    <!-- Result -->
-                    <div class="xl:col-span-7">
-                        <section class="detail-section p-4 sm:p-6 xl:sticky xl:top-20">
-                            <div class="flex items-center justify-between mb-4 gap-3">
+                    <!-- Result (fills the column height from xl; the JSON scrolls inside) -->
+                    <div class="xl:col-span-7 xl:h-full xl:min-h-0">
+                        <section class="detail-section p-4 sm:p-6 xl:h-full xl:flex xl:flex-col">
+                            <div class="flex items-center justify-between mb-4 gap-3 flex-shrink-0">
                                 <div class="flex items-center gap-3 min-w-0">
                                     <h2 class="text-lg font-semibold text-white">Result</h2>
                                     <span id="sg-result-meta" class="text-xs text-gray-500 truncate"></span>
@@ -2208,17 +2227,17 @@
                                     Copy JSON
                                 </button>
                             </div>
-                            <div id="sg-output" class="bg-[#121212] border border-[#333333] rounded-lg p-4 text-sm text-gray-300 overflow-auto min-h-[300px] max-h-[70vh] xl:max-h-[calc(100vh-11rem)]">
+                            <div id="sg-output" class="bg-[#121212] border border-[#333333] rounded-lg p-4 text-sm text-gray-300 overflow-auto overscroll-contain min-h-[300px] max-h-[70vh] xl:flex-1 xl:min-h-0 xl:max-h-none">
                                 <p class="text-gray-500">Waiting for query execution...</p>
                             </div>
-                            <p id="sg-error" class="mt-4 p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-sm text-red-400 font-mono whitespace-pre-wrap break-all hidden"></p>
+                            <p id="sg-error" class="mt-4 p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-sm text-red-400 font-mono whitespace-pre-wrap break-all max-h-40 overflow-auto flex-shrink-0 hidden"></p>
                         </section>
                     </div>
                 </div>
             </div>
 
             <!-- Entity Navigation (right panel, desktop) - collapsible to an icon rail -->
-            <aside id="sg-entity-panel" class="hidden lg:flex flex-col w-64 flex-shrink-0 self-start sticky top-14 -mt-2 h-[calc(100vh-3.5rem)] bg-[#1A1A1A] border-l border-[#2a2a2a] transition-[width] duration-300">
+            <aside id="sg-entity-panel" class="hidden lg:flex flex-col w-64 fixed top-14 right-0 bottom-0 z-20 bg-[#1A1A1A] border-l border-[#2a2a2a] transition-[width] duration-300">
                 <div class="h-12 flex items-center border-b border-[#2a2a2a] flex-shrink-0 px-2">
                     <button id="sg-panel-toggle" type="button" aria-expanded="true" title="Collapse panel"
                             class="p-2 rounded-md text-gray-400 hover:text-white hover:bg-white/5 transition-colors flex-shrink-0">
@@ -2231,8 +2250,8 @@
                     </button>
                     <span data-panel-expanded class="ml-1 text-sm font-semibold text-white whitespace-nowrap">Entities</span>
                 </div>
-                <nav id="sg-entity-nav" data-panel-expanded class="flex-1 py-3 overflow-y-auto"></nav>
-                <nav id="sg-entity-rail" data-panel-collapsed class="hidden flex-1 py-3 overflow-y-auto flex-col items-center gap-1"></nav>
+                <nav id="sg-entity-nav" data-panel-expanded class="flex-1 py-3 overflow-y-auto overscroll-contain"></nav>
+                <nav id="sg-entity-rail" data-panel-collapsed class="hidden flex-1 py-3 overflow-y-auto overscroll-contain flex-col items-center gap-1"></nav>
                 <div data-panel-expanded class="border-t border-[#2a2a2a] px-5 py-3 flex-shrink-0">
                     <p class="text-xs text-gray-500">Uses your The Graph API key from <button id="sg-open-settings" class="text-gray-300 hover:text-white underline underline-offset-2 transition-colors">Settings</button>.</p>
                 </div>

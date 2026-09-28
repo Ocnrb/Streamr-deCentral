@@ -28,6 +28,8 @@ const state = {
     expandedCategories: new Set(),
     // Right panel collapsed to the icon rail (remembered per browser)
     panelCollapsed: false,
+    // Filters shown for the current entity, in the order they were added
+    activeFilters: [],
 };
 
 const el = (id) => document.getElementById(id);
@@ -194,6 +196,105 @@ function generateFilterInput(filter) {
             <label for="${filter.id}" class="block text-xs font-medium text-gray-500 mb-1.5">${filter.label}</label>
             ${inputHtml}
         </div>`;
+}
+
+// Groups used by the "Add filter" menu
+const FILTER_GROUPS = [
+    { label: 'Addresses & IDs', types: ['address', 'text'] },
+    { label: 'Amounts & counts', types: ['wei', 'number', 'fraction'] },
+    { label: 'Dates', types: ['datetime'] },
+    { label: 'Options', types: ['boolean', 'toggle', 'select'] },
+];
+
+const REMOVE_ICON = '<svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>';
+
+/**
+ * Renders the active filter rows (or the empty state).
+ * Existing rows keep their values: only missing rows are created and removed ones dropped.
+ */
+function renderActiveFilters() {
+    const config = ENTITY_CONFIG[state.entityName];
+    const container = el('sg-filters');
+    const removable = config.queryType === 'list';
+
+    container.querySelector('[data-filters-empty]')?.remove();
+    container.querySelectorAll('[data-filter-row]').forEach(row => {
+        if (!state.activeFilters.includes(row.dataset.filterRow)) row.remove();
+    });
+
+    state.activeFilters.forEach(id => {
+        if (container.querySelector(`[data-filter-row="${id}"]`)) return;
+        const filter = config.filters.find(f => f.id === id);
+        container.insertAdjacentHTML('beforeend', `
+            <div data-filter-row="${id}" class="flex items-end gap-2">
+                <div class="flex-1 min-w-0">${generateFilterInput(filter)}</div>
+                ${removable ? `<button type="button" data-remove-filter="${id}" title="Remove filter"
+                        class="p-2.5 rounded-lg text-gray-500 hover:text-red-400 hover:bg-red-500/10 transition-colors flex-shrink-0">${REMOVE_ICON}</button>` : ''}
+            </div>`);
+        if (filter.defaultValue) el(id).value = filter.defaultValue;
+    });
+
+    if (!state.activeFilters.length) {
+        container.insertAdjacentHTML('beforeend', '<p data-filters-empty class="text-sm text-gray-500">No filters applied.</p>');
+    }
+
+    const remaining = removable ? config.filters.filter(f => !state.activeFilters.includes(f.id)).length : 0;
+    el('sg-add-filter-wrap').classList.toggle('hidden', remaining === 0);
+}
+
+/**
+ * Adds a filter row, preselecting option-type filters so they apply right away.
+ */
+function addFilter(id) {
+    const filter = ENTITY_CONFIG[state.entityName].filters.find(f => f.id === id);
+    if (!filter || state.activeFilters.includes(id)) return;
+
+    state.activeFilters.push(id);
+    renderActiveFilters();
+
+    const input = el(id);
+    if (filter.type === 'toggle') input.value = 'on';
+    else if (filter.type === 'boolean') input.value = 'true';
+    else if (filter.type === 'select') input.value = filter.options[0];
+    input.focus();
+    updateQueryPreview();
+}
+
+function removeFilter(id) {
+    state.activeFilters = state.activeFilters.filter(f => f !== id);
+    renderActiveFilters();
+    updateQueryPreview();
+}
+
+/**
+ * Renders the "Add filter" menu list, grouped by type and filtered by the search text.
+ */
+function renderAddFilterMenu() {
+    const config = ENTITY_CONFIG[state.entityName];
+    const search = el('sg-add-filter-search').value.trim().toLowerCase();
+    const available = config.filters.filter(f =>
+        !state.activeFilters.includes(f.id) && (!search || f.label.toLowerCase().includes(search) || f.field.toLowerCase().includes(search)));
+
+    let html = '';
+    FILTER_GROUPS.forEach(group => {
+        const items = available.filter(f => group.types.includes(f.type));
+        if (!items.length) return;
+        html += `<div class="px-3 pt-2 pb-1 text-[10px] font-semibold text-gray-600 uppercase tracking-widest">${group.label}</div>`;
+        html += items.map(f => `
+            <button type="button" data-add-filter="${f.id}"
+                    class="w-full text-left px-3 py-2 text-sm text-gray-300 hover:bg-[#2a2a2a] hover:text-white focus:bg-[#2a2a2a] focus:outline-none transition-colors">${f.label}</button>`).join('');
+    });
+    el('sg-add-filter-list').innerHTML = html || '<p class="px-3 py-3 text-sm text-gray-500">No matching filters.</p>';
+}
+
+function setAddFilterMenuOpen(open) {
+    el('sg-add-filter-menu').classList.toggle('hidden', !open);
+    el('sg-add-filter').setAttribute('aria-expanded', open);
+    if (open) {
+        el('sg-add-filter-search').value = '';
+        renderAddFilterMenu();
+        el('sg-add-filter-search').focus();
+    }
 }
 
 /**
@@ -388,6 +489,9 @@ function setPanelCollapsed(collapsed) {
     const panel = el('sg-entity-panel');
     panel.classList.toggle('w-64', !collapsed);
     panel.classList.toggle('w-14', collapsed);
+    // The panel is fixed: the content keeps clear of it with a matching margin
+    el('sg-content').classList.toggle('lg:mr-64', !collapsed);
+    el('sg-content').classList.toggle('lg:mr-14', collapsed);
     panel.querySelectorAll('[data-panel-expanded]').forEach(node => node.classList.toggle('hidden', collapsed));
     el('sg-entity-rail').classList.toggle('hidden', !collapsed);
     el('sg-entity-rail').classList.toggle('flex', collapsed);
@@ -461,6 +565,9 @@ function renderEntity() {
 
     // Filters
     const container = el('sg-filters');
+    setAddFilterMenuOpen(false);
+    state.activeFilters = [];
+    el('sg-add-filter-wrap').classList.add('hidden');
     if (config.queryType === 'meta') {
         container.innerHTML = `
             <p class="text-sm text-gray-400">This query returns subgraph metadata.</p>
@@ -468,20 +575,19 @@ function renderEntity() {
     } else if (!config.filters?.length) {
         container.innerHTML = '<p class="text-sm text-gray-500">No filters available for this entity.</p>';
     } else {
-        let html = `<div class="grid grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2 gap-3">${config.filters.map(generateFilterInput).join('')}</div>`;
+        container.innerHTML = '';
         if (config.queryType === 'single') {
             const hint = config.listFallback
                 ? 'Enter an ID to fetch a specific record, or leave it empty to get the first one.'
                 : 'This entity requires an ID for lookup.';
-            html = `
-                <div class="mb-4 p-3 rounded-lg bg-blue-500/10 border border-blue-500/30">
+            container.innerHTML = `
+                <div class="p-3 rounded-lg bg-blue-500/10 border border-blue-500/30">
                     <p class="text-sm text-blue-300"><strong>Single entity query.</strong> ${hint}</p>
-                </div>` + html;
+                </div>`;
         }
-        container.innerHTML = html;
-        config.filters.forEach(filter => {
-            if (filter.defaultValue && el(filter.id)) el(filter.id).value = filter.defaultValue;
-        });
+        // Single queries always show their (ID) filter; list queries start with none
+        state.activeFilters = config.queryType === 'single' ? config.filters.map(f => f.id) : [];
+        renderActiveFilters();
     }
 
     updateQueryPreview();
@@ -505,7 +611,8 @@ function updateQueryPreview() {
     const count = [...document.querySelectorAll('#sg-filters input, #sg-filters select')].filter(i => i.value.trim() !== '').length;
     el('sg-filter-count').textContent = count;
     el('sg-filter-count').classList.toggle('hidden', count === 0);
-    el('sg-clear-filters').classList.toggle('hidden', count === 0);
+    const isList = ENTITY_CONFIG[state.entityName]?.queryType === 'list';
+    el('sg-clear-filters').classList.toggle('hidden', isList ? state.activeFilters.length === 0 : count === 0);
 
     updateButtons();
 }
@@ -679,11 +786,67 @@ export const SubgraphLogic = {
             updateQueryPreview();
         });
         el('sg-clear-filters').addEventListener('click', () => {
-            document.querySelectorAll('#sg-filters input, #sg-filters select').forEach(i => { i.value = ''; });
+            if (ENTITY_CONFIG[state.entityName]?.queryType === 'list') {
+                state.activeFilters = [];
+                renderActiveFilters();
+            } else {
+                document.querySelectorAll('#sg-filters input, #sg-filters select').forEach(i => { i.value = ''; });
+            }
             updateQueryPreview();
+        });
+        el('sg-filters').addEventListener('click', (e) => {
+            const remove = e.target.closest('[data-remove-filter]');
+            if (remove) removeFilter(remove.dataset.removeFilter);
+        });
+
+        // "Add filter" menu
+        el('sg-add-filter').addEventListener('click', () => {
+            setAddFilterMenuOpen(el('sg-add-filter-menu').classList.contains('hidden'));
+        });
+        el('sg-add-filter-search').addEventListener('input', renderAddFilterMenu);
+        el('sg-add-filter-search').addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                const first = el('sg-add-filter-list').querySelector('[data-add-filter]');
+                if (first) {
+                    setAddFilterMenuOpen(false);
+                    addFilter(first.dataset.addFilter);
+                }
+            } else if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                el('sg-add-filter-list').querySelector('[data-add-filter]')?.focus();
+            }
+        });
+        el('sg-add-filter-list').addEventListener('click', (e) => {
+            const item = e.target.closest('[data-add-filter]');
+            if (!item) return;
+            setAddFilterMenuOpen(false);
+            addFilter(item.dataset.addFilter);
+        });
+        el('sg-add-filter-list').addEventListener('keydown', (e) => {
+            const items = [...el('sg-add-filter-list').querySelectorAll('[data-add-filter]')];
+            const index = items.indexOf(document.activeElement);
+            if (e.key === 'ArrowDown' && index < items.length - 1) { e.preventDefault(); items[index + 1].focus(); }
+            if (e.key === 'ArrowUp') { e.preventDefault(); (index > 0 ? items[index - 1] : el('sg-add-filter-search')).focus(); }
+        });
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && !el('sg-add-filter-menu').classList.contains('hidden')) {
+                setAddFilterMenuOpen(false);
+                el('sg-add-filter').focus();
+            }
+        });
+        document.addEventListener('click', (e) => {
+            if (!el('sg-add-filter-wrap').contains(e.target)) setAddFilterMenuOpen(false);
         });
 
         el('sg-execute').addEventListener('click', executeQuery);
+        // Ctrl/Cmd + Enter runs the query from anywhere in the view
+        el('subgraph-view').addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && (e.ctrlKey || e.metaKey) && !el('sg-execute').disabled) {
+                e.preventDefault();
+                executeQuery();
+            }
+        });
         el('sg-prev').addEventListener('click', () => changePage(-1));
         el('sg-next').addEventListener('click', () => changePage(1));
         el('sg-copy').addEventListener('click', copyResults);
