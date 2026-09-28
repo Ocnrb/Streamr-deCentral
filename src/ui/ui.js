@@ -650,7 +650,8 @@ export function renderSponsorshipsHistory(historyGroups, showLoadAllButton = tru
             const actionHtml = event.txHash && /^0x[0-9a-fA-F]{64}$/.test(event.txHash)
                 ? `<a href="https://polygonscan.com/tx/${event.txHash}" target="_blank" rel="noopener noreferrer" class="hover:text-white transition-colors">${action}</a>`
                 : action;
-            const text = `${actionHtml} ${event.stakeChange === 'unstake' ? 'from' : 'on'} ${link}`;
+            // Merged rows (badge) sit under "Action on <sponsorship>": no need to repeat it
+            const text = badge ? actionHtml : `${actionHtml} ${event.stakeChange === 'unstake' ? 'from' : 'on'} ${link}`;
             let amountHtml;
             if (event.stakeChange === 'earnings') {
                 amountHtml = `<p class="font-mono text-sm text-gray-500" data-tooltip-content="Stake unchanged: ${formatBigNumber(Math.round(event.amount).toString())} DATA">—</p>`;
@@ -795,7 +796,7 @@ export function renderSponsorshipsHistory(historyGroups, showLoadAllButton = tru
                 }
                 merged.add(match);
                 actionBlocks.push(actionHeaderHtml(event) + (event.stakeChange === 'earnings'
-                    ? scanRowHtml(match, event.relatedObject)
+                    ? scanRowHtml(match)
                     : graphRowHtml(event, scanBadgeHtml(match))));
             }
             const graphHtml = actionBlocks.map(block => `
