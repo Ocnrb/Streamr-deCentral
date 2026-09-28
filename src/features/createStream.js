@@ -294,6 +294,29 @@ function renderPermRows() {
         </tr>
     `;
 
+    // Public row (read-only) reflecting the selected access preset
+    const xIcon = `<svg class="w-4 h-4 text-gray-600 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>`;
+    let publicRow = '';
+    if (state.access !== 'private') {
+        const publicPerms = {
+            publish: state.access === 'public-publish' || state.access === 'public-all',
+            subscribe: state.access === 'public-subscribe' || state.access === 'public-all',
+            edit: false,
+            delete: false,
+            grant: false
+        };
+        publicRow = `
+            <tr>
+                <td class="px-3 py-2">
+                    <span class="text-xs text-blue-400 font-medium">Public</span>
+                    <span class="ml-1 text-[10px] text-gray-500">(anyone)</span>
+                </td>
+                ${PERMISSION_KEYS.map(key => `<td class="px-2 py-2 text-center">${publicPerms[key] ? checkIcon : xIcon}</td>`).join('')}
+                <td class="px-2 py-2"></td>
+            </tr>
+        `;
+    }
+
     const rows = state.permRows.map(row => `
         <tr data-row-id="${row.id}">
             <td class="px-3 py-2">
@@ -313,7 +336,7 @@ function renderPermRows() {
         </tr>
     `).join('');
 
-    tbody.innerHTML = ownerRow + rows;
+    tbody.innerHTML = ownerRow + publicRow + rows;
 }
 
 function nodeLabel(node) {
@@ -926,6 +949,7 @@ function setupListeners() {
         if (!btn) return;
         state.access = btn.dataset.access;
         renderAccess();
+        renderPermRows();
         onFormChanged();
     });
 
