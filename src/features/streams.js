@@ -3118,10 +3118,10 @@ function setupChartEventListeners() {
             
             // Update pill styling
             chartTypeTabs.querySelectorAll('button').forEach(b => {
-                b.classList.remove('bg-blue-600', 'text-white');
+                b.classList.remove('bg-blue-800', 'text-white');
                 b.classList.add('text-gray-400');
             });
-            btn.classList.add('bg-blue-600', 'text-white');
+            btn.classList.add('bg-blue-800', 'text-white');
             btn.classList.remove('text-gray-400');
             
             updateUnifiedChart();
@@ -3140,10 +3140,10 @@ function setupChartEventListeners() {
             
             // Update pill styling
             viewButtons.querySelectorAll('button').forEach(b => {
-                b.classList.remove('bg-blue-600', 'text-white');
+                b.classList.remove('bg-blue-800', 'text-white');
                 b.classList.add('text-gray-300');
             });
-            btn.classList.add('bg-blue-600', 'text-white');
+            btn.classList.add('bg-blue-800', 'text-white');
             btn.classList.remove('text-gray-300');
             
             updateUnifiedChart();
@@ -3162,10 +3162,10 @@ function setupChartEventListeners() {
             
             // Update pill styling
             timeframeButtons.querySelectorAll('button').forEach(b => {
-                b.classList.remove('bg-blue-600', 'text-white', 'shadow-sm');
+                b.classList.remove('bg-blue-800', 'text-white', 'shadow-sm');
                 b.classList.add('text-gray-300');
             });
-            btn.classList.add('bg-blue-600', 'text-white', 'shadow-sm');
+            btn.classList.add('bg-blue-800', 'text-white', 'shadow-sm');
             btn.classList.remove('text-gray-300');
             
             updateUnifiedChart();
