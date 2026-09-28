@@ -13,6 +13,7 @@
 
 import { runQuery } from './services.js';
 import { AVATAR_STREAM_MARKER as MARKER, OPERATOR_AVATAR_PLACEHOLDER, isValidProfileStreamId } from './utils.js';
+import { STREAMR_SDK_CONTRACTS_CONFIG } from './constants.js';
 
 export { isValidProfileStreamId };
 
@@ -132,6 +133,37 @@ function parseMarker(src) {
     return { key: `${streamId}:${Number(partition) || 0}`, streamId, partition: Number(partition) || 0, base: src.slice(0, index) };
 }
 
+/**
+ * IPFS thumbnail (wsrv.nl) -> the same file straight from the IPFS gateway (same #avatar-stream marker)
+ * @returns {string|null} the direct URL, or null when src is not a thumbnail
+ */
+export function directIpfsUrl(src) {
+    if (typeof src !== 'string' || !src.startsWith('https://wsrv.nl/')) return null;
+    const index = src.indexOf(MARKER);
+    const base = index === -1 ? src : src.slice(0, index);
+    try {
+        const direct = new URL(base).searchParams.get('url');
+        if (!direct || !direct.startsWith('https://ipfs.io/ipfs/')) return null;
+        return direct + (index === -1 ? '' : src.slice(index));
+    } catch (e) {
+        return null;
+    }
+}
+
+/**
+ * Error handler of the operator avatar <img> (avatarImgHtml): the IPFS thumbnail failed -> try the
+ * gateway directly; that failed too -> placeholder (then the hydrator uses the avatar stream, if any).
+ */
+function avatarFallback(img) {
+    const direct = directIpfsUrl(img.getAttribute('src'));
+    if (direct) {
+        img.src = direct;
+        return;
+    }
+    img.onerror = null;
+    img.src = OPERATOR_AVATAR_PLACEHOLDER;
+}
+
 function applyStreamAvatar(img) {
     const key = img.dataset.avatarStream;
     if (!key || img.dataset.avatarStreamLoading === key) return;
@@ -139,8 +171,9 @@ function applyStreamAvatar(img) {
     img.dataset.avatarStreamLoading = key;
     loadStreamAvatar(key.slice(0, sep), Number(key.slice(sep + 1))).then(dataUrl => {
         const src = img.getAttribute('src') || '';
-        // Still the same operator, and still showing the placeholder (or the failed IPFS image)
-        if (!dataUrl || img.dataset.avatarStream !== key || src.startsWith('data:')) return;
+        // Still the same operator, and still on the placeholder: IPFS (thumbnail or direct) wins when it loads
+        const base = src.includes(MARKER) ? src.slice(0, src.indexOf(MARKER)) : src;
+        if (!dataUrl || img.dataset.avatarStream !== key || !isPlaceholder(base)) return;
         img.src = dataUrl;
         // Some lists hide the image on error and show an initial instead
         if (img.style.display === 'none') {
@@ -189,8 +222,10 @@ export function installAvatarHydrator() {
     // IPFS image failed without an onerror handler that switches to the placeholder
     document.addEventListener('error', (event) => {
         const img = event.target;
-        if (img?.tagName === 'IMG' && img.dataset.avatarStream) applyStreamAvatar(img);
+        // A failed thumbnail is retried from the IPFS gateway first (avatarFallback)
+        if (img?.tagName === 'IMG' && img.dataset.avatarStream && !directIpfsUrl(img.getAttribute('src'))) applyStreamAvatar(img);
     }, true);
+    window.__avatarFallback = avatarFallback;
     window.__streamAvatarHydrator = observer;
     hydrateTree(document.body);
 }
@@ -209,7 +244,7 @@ function loadImage(src) {
 
 /**
  * Operator avatar for canvas drawings (Network Map, charts), same priority as the <img> avatars:
- * IPFS (official) > avatar stream > nothing (the caller draws its own fallback).
+ * IPFS thumbnail > IPFS gateway > avatar stream > nothing (the caller draws its own fallback).
  * @param {string|null} imageUrl - from parseOperatorMetadata (may carry the avatar stream marker)
  * @returns {Promise<HTMLImageElement|null>} a loaded image, or null
  */
@@ -221,6 +256,13 @@ export async function loadOperatorAvatarImage(imageUrl) {
         try {
             return await loadImage(base);
         } catch (e) {
+            // Thumbnail failed: the same file from the IPFS gateway
+            const direct = directIpfsUrl(base);
+            if (direct) {
+                try {
+                    return await loadImage(direct);
+                } catch (e2) { /* fall through to the avatar stream */ }
+            }
             if (!marker) return null;
         }
     }
@@ -278,7 +320,7 @@ export async function publishAvatar(signer, streamId, content) {
 
     // Kept alive until the storage node has the message (destroy() when done): tearing the
     // network node down right after publish() can drop the message before it propagates
-    const client = new StreamrClient({ auth, logLevel: 'error' });
+    const client = new StreamrClient({ auth, logLevel: 'error', contracts: STREAMR_SDK_CONTRACTS_CONFIG });
     const destroy = () => { client.destroy().catch(() => {}); };
     try {
         const message = await client.publish({ id: streamId, partition: AVATAR_PARTITION }, content);

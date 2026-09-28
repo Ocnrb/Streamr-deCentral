@@ -178,17 +178,28 @@ export const STREAMR_CONFIG_ABI = [{ "inputs": [], "name": "minimumDelegationWei
 
 export const SUBGRAPH_ID = 'EGWFdhhiWypDuz22Uy7b3F69E9MEkyfU9iAQMttkH5Rj';
 export const DATA_HISTORY_STREAM_ID = '0xd5a8024414f59cf0c453c35fc3655a31251645f6/DATA_History';
-export const POLYGON_RPC_URL = 'https://polygon-rpc.com';
+export const POLYGON_RPC_URL = 'https://polygon.drpc.org';
 
 // Polygon RPC fallback URLs (used when primary RPC is rate limited)
-// Order: primary first, then most reliable fallbacks
+// Order: primary first, then most reliable fallbacks. polygon-rpc.com now answers 401 without an
+// API key: kept last only as a final fallback.
 export const POLYGON_RPC_FALLBACKS = [
-    'https://polygon-rpc.com',
     'https://polygon.drpc.org',
     'https://polygon-bor-rpc.publicnode.com',
     'https://polygon.llamarpc.com',
-    'https://1rpc.io/matic'
+    'https://1rpc.io/matic',
+    'https://polygon-rpc.com'
 ];
+
+// RPCs for the Streamr SDK clients: the same as the current @streamr/config. The bundled SDK still
+// lists polygon-rpc.com first, which now answers 401 (Unauthorized).
+export const STREAMR_SDK_CONTRACTS_CONFIG = {
+    rpcs: [
+        { url: 'https://polygon.drpc.org' },
+        { url: 'https://rpc-mainnet.matic.quiknode.pro' },
+        { url: 'https://polygon-bor-rpc.publicnode.com' }
+    ]
+};
 
 // ============================================
 // API Keys Configuration
