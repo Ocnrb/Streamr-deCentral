@@ -890,7 +890,7 @@ export const SubgraphLogic = {
         }
         if (!entityName) {
             // Keep the entity in the URL so back/forward restore the right one
-            window.history.replaceState({}, '', `/subgraph/${state.entityName}`);
+            window.history.replaceState(window.history.state, '', `/subgraph/${state.entityName}`);
         }
         state.entityName = entityName || state.entityName;
         renderEntity();

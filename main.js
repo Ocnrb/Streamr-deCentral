@@ -14,11 +14,13 @@ let VisualLogic = null;
 let DelegatorsLogic = null;
 let StreamsLogic = null;
 let SubgraphLogic = null;
+let GovernanceLogic = null;
 let raceModuleLoading = false;
 let visualModuleLoading = false;
 let delegatorsModuleLoading = false;
 let streamsModuleLoading = false;
 let subgraphModuleLoading = false;
+let governanceModuleLoading = false;
 
 // PWA Installation - use global variable set by inline script in HTML
 // The inline script captures beforeinstallprompt early, before modules load
@@ -348,6 +350,40 @@ async function loadSubgraphModule() {
         throw error;
     } finally {
         subgraphModuleLoading = false;
+    }
+}
+
+/**
+ * Lazy load the Governance module
+ * @returns {Promise<object>} The GovernanceLogic module
+ */
+async function loadGovernanceModule() {
+    if (GovernanceLogic) return GovernanceLogic;
+    if (governanceModuleLoading) {
+        // Wait for existing load to complete
+        while (governanceModuleLoading) {
+            await new Promise(resolve => setTimeout(resolve, 50));
+        }
+        return GovernanceLogic;
+    }
+
+    governanceModuleLoading = true;
+
+    try {
+        const module = await import('./src/features/governance.js');
+        GovernanceLogic = module.GovernanceLogic;
+        GovernanceLogic.setupEventListeners();
+        return GovernanceLogic;
+    } catch (error) {
+        UI.showToast({
+            type: 'error',
+            title: 'Failed to load Governance View',
+            message: error.message,
+            duration: 5000
+        });
+        throw error;
+    } finally {
+        governanceModuleLoading = false;
     }
 }
 
@@ -1464,6 +1500,7 @@ function setupRouter() {
         if (VisualLogic) VisualLogic.stop();
         if (DelegatorsLogic) DelegatorsLogic.deactivate();
         if (StreamsLogic) StreamsLogic.stop();
+        if (GovernanceLogic) GovernanceLogic.stop();
         if (SubgraphLogic) SubgraphLogic.stop();
         
         UI.displayView('list');
@@ -1481,6 +1518,7 @@ function setupRouter() {
         if (VisualLogic) VisualLogic.stop();
         if (DelegatorsLogic) DelegatorsLogic.deactivate();
         if (StreamsLogic) StreamsLogic.stop();
+        if (GovernanceLogic) GovernanceLogic.stop();
         if (SubgraphLogic) SubgraphLogic.stop();
         
         UI.displayView('detail');
@@ -1497,6 +1535,7 @@ function setupRouter() {
         if (VisualLogic) VisualLogic.stop();
         if (DelegatorsLogic) DelegatorsLogic.deactivate();
         if (StreamsLogic) StreamsLogic.stop();
+        if (GovernanceLogic) GovernanceLogic.stop();
         if (SubgraphLogic) SubgraphLogic.stop();
         
         UI.displayView('race');
@@ -1520,6 +1559,7 @@ function setupRouter() {
         if (RaceLogic) RaceLogic.stop();
         if (DelegatorsLogic) DelegatorsLogic.deactivate();
         if (StreamsLogic) StreamsLogic.stop();
+        if (GovernanceLogic) GovernanceLogic.stop();
         if (SubgraphLogic) SubgraphLogic.stop();
         
         UI.displayView('visual');
@@ -1551,6 +1591,7 @@ function setupRouter() {
         if (RaceLogic) RaceLogic.stop();
         if (VisualLogic) VisualLogic.stop();
         if (StreamsLogic) StreamsLogic.stop();
+        if (GovernanceLogic) GovernanceLogic.stop();
         if (SubgraphLogic) SubgraphLogic.stop();
         
         UI.displayView('delegators-list');
@@ -1578,6 +1619,7 @@ function setupRouter() {
         if (RaceLogic) RaceLogic.stop();
         if (VisualLogic) VisualLogic.stop();
         if (StreamsLogic) StreamsLogic.stop();
+        if (GovernanceLogic) GovernanceLogic.stop();
         if (SubgraphLogic) SubgraphLogic.stop();
         
         UI.displayView('delegator-detail');
@@ -1606,6 +1648,7 @@ function setupRouter() {
         if (VisualLogic) VisualLogic.stop();
         if (DelegatorsLogic) DelegatorsLogic.deactivate();
         if (StreamsLogic) StreamsLogic.stop();
+        if (GovernanceLogic) GovernanceLogic.stop();
         if (SubgraphLogic) SubgraphLogic.stop();
         
         UI.displayView('streams-list');
@@ -1633,6 +1676,7 @@ function setupRouter() {
         if (VisualLogic) VisualLogic.stop();
         if (DelegatorsLogic) DelegatorsLogic.deactivate();
         if (StreamsLogic) StreamsLogic.stop();
+        if (GovernanceLogic) GovernanceLogic.stop();
         if (SubgraphLogic) SubgraphLogic.stop();
         
         UI.displayView('stream-detail');
@@ -1671,6 +1715,7 @@ function setupRouter() {
         if (VisualLogic) VisualLogic.stop();
         if (DelegatorsLogic) DelegatorsLogic.deactivate();
         if (StreamsLogic) StreamsLogic.stop();
+        if (GovernanceLogic) GovernanceLogic.stop();
         
         UI.displayView('subgraph');
         UI.hideProfileButtons();
@@ -1686,6 +1731,31 @@ function setupRouter() {
     };
     router.addRoute('/subgraph', () => showSubgraph());
     router.addRoute('/subgraph/:entity', (params) => showSubgraph(params.entity));
+
+    // Governance routes - optionally with a flag open in the detail drawer
+    const showGovernance = async (flagId) => {
+        OperatorLogic.stop();
+        Services.unsubscribeFromCoordinationStream();
+        if (RaceLogic) RaceLogic.stop();
+        if (VisualLogic) VisualLogic.stop();
+        if (DelegatorsLogic) DelegatorsLogic.deactivate();
+        if (StreamsLogic) StreamsLogic.stop();
+        if (SubgraphLogic) SubgraphLogic.stop();
+
+        UI.displayView('governance');
+        UI.hideProfileButtons();
+        navigationController.updateActiveState('governance');
+
+        try {
+            const governanceModule = await loadGovernanceModule();
+            governanceModule.show(flagId);
+        } catch (error) {
+            console.error('Failed to load governance module:', error);
+            router.navigate('/');
+        }
+    };
+    router.addRoute('/governance', () => showGovernance());
+    router.addRoute('/governance/flag/:id', (params) => showGovernance(params.id));
 }
 
 // --- Event Listener Setup ---
