@@ -2817,8 +2817,12 @@ async function loadSponsorshipOnchainHistory(sponsorshipAddress) {
             return;
         }
         
+        // Names of operators that already left the sponsorship (not in the current stakes)
+        const extraNames = await fetchOperatorNames(transactions.flatMap(tx => [tx.from, tx.to]))
+            .catch(e => { logger.warn('Could not resolve operator names:', e); return new Map(); });
+
         // Render the transactions
-        renderSponsorshipOnchainHistory(transactions, 'sponsorships');
+        renderSponsorshipOnchainHistory(transactions, 'sponsorships', extraNames);
         
         // Sync tile heights after history content is loaded
         requestAnimationFrame(() => {
@@ -2846,11 +2850,35 @@ async function loadSponsorshipOnchainHistory(sponsorshipAddress) {
 }
 
 /**
+ * Operator names for addresses (lowercase address -> name), for the operators that are not in the
+ * sponsorship's current stakes (e.g. they unstaked): the history keeps showing their name
+ * @param {Array<string>} addresses
+ * @returns {Promise<Map<string, string>>}
+ */
+async function fetchOperatorNames(addresses) {
+    const staked = new Set((detailState.sponsorshipStakes || []).map(s => s.operator?.id?.toLowerCase()));
+    staked.add(detailState.currentSponsorshipId?.toLowerCase()); // the sponsorship itself
+    const ids = [...new Set(addresses.filter(a => typeof a === 'string').map(a => a.toLowerCase()))]
+        .filter(a => /^0x[0-9a-f]{40}$/.test(a) && !staked.has(a));
+    const names = new Map();
+    for (let i = 0; i < ids.length; i += 100) {
+        const chunk = ids.slice(i, i + 100);
+        const data = await Services.runQuery(`{ operators(where: { id_in: ${JSON.stringify(chunk)} }, first: 100) { id metadataJsonString } }`);
+        for (const op of data?.operators || []) {
+            const { name } = Utils.parseOperatorMetadata(op.metadataJsonString);
+            if (name) names.set(op.id.toLowerCase(), name);
+        }
+    }
+    return names;
+}
+
+/**
  * Render on-chain history transactions
  * @param {Array} transactions - Array of transaction objects from Polygonscan
  * @param {string} context - 'operators' or 'sponsorships' to determine badge colors
+ * @param {Map<string, string>} [extraNames] - names of operators not in the current stakes
  */
-function renderSponsorshipOnchainHistory(transactions, context = 'sponsorships') {
+function renderSponsorshipOnchainHistory(transactions, context = 'sponsorships', extraNames = new Map()) {
     const container = document.getElementById('sponsorship-history-list');
     if (!container) return;
     
@@ -2859,8 +2887,8 @@ function renderSponsorshipOnchainHistory(transactions, context = 'sponsorships')
         return;
     }
     
-    // Build operator lookup map from stakes (address -> name)
-    const operatorNameMap = new Map();
+    // Build operator lookup map (address -> name): current stakes + operators that left
+    const operatorNameMap = new Map(extraNames);
     for (const stake of detailState.sponsorshipStakes || []) {
         if (stake.operator?.id) {
             const addr = stake.operator.id.toLowerCase();
