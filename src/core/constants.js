@@ -291,6 +291,37 @@ export const DELEGATOR_TIMEFRAMES = {
     'all': 'all'
 };
 
+// ============================================
+// Stream creation (StreamRegistry / StreamStorageRegistry on Polygon)
+// ============================================
+export const STREAM_REGISTRY_ADDRESS = '0x0D483E10612F327FC11965Fc82E90dC19b141641';
+export const STREAM_STORAGE_REGISTRY_ADDRESS = '0xe8e2660CeDf2a59C917a5ED05B72df4146b58399';
+
+// Permissions set for this address apply to everyone (public stream)
+export const PUBLIC_PERMISSION_ADDRESS = '0x0000000000000000000000000000000000000000';
+
+// Same limit as the Streamr SDK
+export const MAX_STREAM_PARTITIONS = 100;
+export const DEFAULT_STORAGE_DAYS = 365;
+
+const STREAM_PERMISSION_TUPLE = '(bool canEdit, bool canDelete, uint256 publishExpiration, uint256 subscribeExpiration, bool canGrant)';
+
+export const STREAM_REGISTRY_ABI = [
+    `function createStreamWithPermissions(string streamIdPath, string metadataJsonString, address[] users, ${STREAM_PERMISSION_TUPLE}[] permissions)`,
+    'function createStreamWithENS(string ensName, string streamIdPath, string metadataJsonString)',
+    `function setPermissions(string streamId, address[] users, ${STREAM_PERMISSION_TUPLE}[] permissions)`,
+    'function exists(string streamId) view returns (bool)',
+    'function ensCache() view returns (address)'
+];
+
+export const STREAM_STORAGE_REGISTRY_ABI = [
+    'function addAndRemoveStorageNodes(string streamId, address[] addNodes, address[] removeNodes)'
+];
+
+export const ENS_CACHE_ABI = [
+    'function owners(string ensName) view returns (address)'
+];
+
 
 
 
