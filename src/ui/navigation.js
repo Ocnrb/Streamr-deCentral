@@ -41,7 +41,8 @@ class NavigationController {
             'visual': 'Network Map',
             'race': 'Leaderboard',
             'delegators': 'Delegators',
-            'streams': 'Streams'
+            'streams': 'Streams',
+            'subgraph': 'Subgraph'
         };
         
         this.currentPage = 'operators';

@@ -13,10 +13,12 @@ let RaceLogic = null;
 let VisualLogic = null;
 let DelegatorsLogic = null;
 let StreamsLogic = null;
+let SubgraphLogic = null;
 let raceModuleLoading = false;
 let visualModuleLoading = false;
 let delegatorsModuleLoading = false;
 let streamsModuleLoading = false;
+let subgraphModuleLoading = false;
 
 // PWA Installation - use global variable set by inline script in HTML
 // The inline script captures beforeinstallprompt early, before modules load
@@ -312,6 +314,40 @@ async function loadStreamsModule() {
         throw error;
     } finally {
         streamsModuleLoading = false;
+    }
+}
+
+/**
+ * Lazy load the Subgraph module
+ * @returns {Promise<object>} The SubgraphLogic module
+ */
+async function loadSubgraphModule() {
+    if (SubgraphLogic) return SubgraphLogic;
+    if (subgraphModuleLoading) {
+        // Wait for existing load to complete
+        while (subgraphModuleLoading) {
+            await new Promise(resolve => setTimeout(resolve, 50));
+        }
+        return SubgraphLogic;
+    }
+    
+    subgraphModuleLoading = true;
+    
+    try {
+        const module = await import('./src/features/subgraph.js');
+        SubgraphLogic = module.SubgraphLogic;
+        SubgraphLogic.setupEventListeners();
+        return SubgraphLogic;
+    } catch (error) {
+        UI.showToast({
+            type: 'error',
+            title: 'Failed to load Subgraph View',
+            message: error.message,
+            duration: 5000
+        });
+        throw error;
+    } finally {
+        subgraphModuleLoading = false;
     }
 }
 
@@ -1428,6 +1464,7 @@ function setupRouter() {
         if (VisualLogic) VisualLogic.stop();
         if (DelegatorsLogic) DelegatorsLogic.deactivate();
         if (StreamsLogic) StreamsLogic.stop();
+        if (SubgraphLogic) SubgraphLogic.stop();
         
         UI.displayView('list');
         UI.hideProfileButtons();
@@ -1444,6 +1481,7 @@ function setupRouter() {
         if (VisualLogic) VisualLogic.stop();
         if (DelegatorsLogic) DelegatorsLogic.deactivate();
         if (StreamsLogic) StreamsLogic.stop();
+        if (SubgraphLogic) SubgraphLogic.stop();
         
         UI.displayView('detail');
         navigationController.updateActiveState('operators');
@@ -1459,6 +1497,7 @@ function setupRouter() {
         if (VisualLogic) VisualLogic.stop();
         if (DelegatorsLogic) DelegatorsLogic.deactivate();
         if (StreamsLogic) StreamsLogic.stop();
+        if (SubgraphLogic) SubgraphLogic.stop();
         
         UI.displayView('race');
         UI.hideProfileButtons();
@@ -1481,6 +1520,7 @@ function setupRouter() {
         if (RaceLogic) RaceLogic.stop();
         if (DelegatorsLogic) DelegatorsLogic.deactivate();
         if (StreamsLogic) StreamsLogic.stop();
+        if (SubgraphLogic) SubgraphLogic.stop();
         
         UI.displayView('visual');
         UI.hideProfileButtons();
@@ -1511,6 +1551,7 @@ function setupRouter() {
         if (RaceLogic) RaceLogic.stop();
         if (VisualLogic) VisualLogic.stop();
         if (StreamsLogic) StreamsLogic.stop();
+        if (SubgraphLogic) SubgraphLogic.stop();
         
         UI.displayView('delegators-list');
         UI.hideProfileButtons();
@@ -1537,6 +1578,7 @@ function setupRouter() {
         if (RaceLogic) RaceLogic.stop();
         if (VisualLogic) VisualLogic.stop();
         if (StreamsLogic) StreamsLogic.stop();
+        if (SubgraphLogic) SubgraphLogic.stop();
         
         UI.displayView('delegator-detail');
         UI.hideProfileButtons();
@@ -1564,6 +1606,7 @@ function setupRouter() {
         if (VisualLogic) VisualLogic.stop();
         if (DelegatorsLogic) DelegatorsLogic.deactivate();
         if (StreamsLogic) StreamsLogic.stop();
+        if (SubgraphLogic) SubgraphLogic.stop();
         
         UI.displayView('streams-list');
         UI.hideProfileButtons();
@@ -1590,6 +1633,7 @@ function setupRouter() {
         if (VisualLogic) VisualLogic.stop();
         if (DelegatorsLogic) DelegatorsLogic.deactivate();
         if (StreamsLogic) StreamsLogic.stop();
+        if (SubgraphLogic) SubgraphLogic.stop();
         
         UI.displayView('stream-detail');
         UI.hideProfileButtons();
@@ -1618,6 +1662,30 @@ function setupRouter() {
             router.navigate('/streams');
         }
     });
+
+    // Subgraph explorer routes - optionally with an entity (e.g. /subgraph/operators)
+    const showSubgraph = async (entityName) => {
+        OperatorLogic.stop();
+        Services.unsubscribeFromCoordinationStream();
+        if (RaceLogic) RaceLogic.stop();
+        if (VisualLogic) VisualLogic.stop();
+        if (DelegatorsLogic) DelegatorsLogic.deactivate();
+        if (StreamsLogic) StreamsLogic.stop();
+        
+        UI.displayView('subgraph');
+        UI.hideProfileButtons();
+        navigationController.updateActiveState('subgraph');
+        
+        try {
+            const subgraphModule = await loadSubgraphModule();
+            subgraphModule.show(entityName);
+        } catch (error) {
+            console.error('Failed to load subgraph module:', error);
+            router.navigate('/');
+        }
+    };
+    router.addRoute('/subgraph', () => showSubgraph());
+    router.addRoute('/subgraph/:entity', (params) => showSubgraph(params.entity));
 }
 
 // --- Event Listener Setup ---
