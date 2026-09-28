@@ -271,7 +271,7 @@ function renderCutLock() {
     if (input) input.disabled = locked || state.submitting;
     setStatus('operator-form-cut-status', locked
         ? "Locked while the operator is staked in sponsorships. Unstake from all sponsorships to change it."
-        : 'Share of the earnings that goes to the operator owner.', locked ? 'warn' : 'info');
+        : 'Share of the earnings that goes directly to you.', locked ? 'warn' : 'info');
 }
 
 function renderExistingOperator() {
