@@ -2076,14 +2076,51 @@ async function probeUrl(url) {
 }
 
 /**
+ * Check whether a URL is allowed by the page's CSP connect-src (meta tag in index.html).
+ * Storage node hosts must be listed there; blocked hosts can't be probed.
+ * Supports 'self', scheme sources (https:) and host sources with *. subdomain and :* port wildcards.
+ */
+function isAllowedByCsp(url) {
+    const meta = document.querySelector('meta[http-equiv="Content-Security-Policy"]');
+    const connectSrc = meta?.content.match(/connect-src([^;]*)/);
+    if (!connectSrc) return true;
+
+    let target;
+    try {
+        target = new URL(url);
+    } catch (e) {
+        return false;
+    }
+    const targetPort = target.port || (target.protocol === 'https:' ? '443' : '80');
+
+    return connectSrc[1].trim().split(/\s+/).some(source => {
+        if (source === "'self'") return target.origin === window.location.origin;
+        if (/^[a-z]+:$/i.test(source)) return target.protocol === source.toLowerCase();
+
+        const match = source.match(/^([a-z]+):\/\/([^:/]+)(?::(\d+|\*))?/i);
+        if (!match) return false;
+        const [, scheme, host, port] = match;
+        if (`${scheme.toLowerCase()}:` !== target.protocol) return false;
+
+        const hostOk = host.startsWith('*.')
+            ? target.hostname.endsWith(host.slice(1))
+            : target.hostname === host.toLowerCase();
+        const portOk = port === '*' || (port || (scheme.toLowerCase() === 'https' ? '443' : '80')) === targetPort;
+        return hostOk && portOk;
+    });
+}
+
+/**
  * Probe a storage node endpoint. The node root has no route on Streamr nodes (404),
  * so several paths are tried in parallel and any 200 counts:
  * - the registered URL as-is
  * - /capabilities (pombo storage nodes)
  * - /streams/{id}/storage/partitions/0 (Streamr storage plugin: 200 if the node stores the stream)
- * @returns {Promise<{status: 'ok'|'reachable'|'down', url: string|null}>}
+ * @returns {Promise<{status: 'ok'|'reachable'|'down'|'blocked', url: string|null}>}
  */
 async function probeStorageEndpoint(url, streamId) {
+    if (!isAllowedByCsp(url)) return { status: 'blocked', url };
+
     const base = url.replace(/\/+$/, '');
     const urls = [
         url,
@@ -2119,13 +2156,17 @@ function checkStorageNodeEndpoints(nodeEndpoints, streamId) {
         const ok = results.find(r => r.status === 'ok');
         const reachable = results.find(r => r.status === 'reachable');
         const isUp = Boolean(ok || reachable);
+        // Unknown only if nothing answered and some endpoint couldn't be checked
+        const isBlocked = !isUp && results.some(r => r.status === 'blocked');
         dot.classList.remove('bg-yellow-500', 'animate-pulse');
-        dot.classList.add(isUp ? 'bg-green-500' : 'bg-red-500');
+        dot.classList.add(isUp ? 'bg-green-500' : isBlocked ? 'bg-gray-500' : 'bg-red-500');
         dot.title = ok
             ? `Online - ${ok.url} responded 200`
             : reachable
                 ? `Online - ${reachable.url} reachable (status hidden by CORS)`
-                : 'Offline - no endpoint responded 200';
+                : isBlocked
+                    ? 'Status unknown - endpoint host blocked by CSP (add it to connect-src in index.html)'
+                    : 'Offline - no endpoint responded 200';
     });
 }
 
