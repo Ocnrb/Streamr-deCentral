@@ -42,7 +42,8 @@ class NavigationController {
             'race': 'Leaderboard',
             'delegators': 'Delegators',
             'streams': 'Streams',
-            'subgraph': 'Subgraph'
+            'subgraph': 'Subgraph',
+            'governance': 'Governance'
         };
         
         this.currentPage = 'operators';

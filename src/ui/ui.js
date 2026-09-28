@@ -366,6 +366,8 @@ export function displayView(view) {
     if (streamDetailEl) streamDetailEl.style.display = 'none';
     const subgraphEl = document.getElementById('subgraph-view');
     if (subgraphEl) subgraphEl.style.display = 'none';
+    const governanceEl = document.getElementById('governance-view');
+    if (governanceEl) governanceEl.style.display = 'none';
 
     // Show/hide navigation based on view (visual is fullscreen)
     const bottomNav = document.getElementById('bottom-nav');
@@ -391,6 +393,8 @@ export function displayView(view) {
     } else if (view === 'stream-detail') {
         if (streamDetailEl) streamDetailEl.style.display = 'block';
         window.scrollTo(0, 0);
+    } else if (view === 'governance') {
+        if (governanceEl) governanceEl.style.display = 'block';
     } else if (view === 'subgraph') {
         // Flex row: query builder + entity navigation panel on the right
         if (subgraphEl) subgraphEl.style.display = 'flex';
