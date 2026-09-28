@@ -2730,10 +2730,7 @@ function renderOperatorsList(stakes) {
         const stakeAmount = Utils.formatBigNumber(Utils.convertWeiToData(stake.amountWei));
         const rawStake = Utils.convertWeiToData(stake.amountWei);
         
-        // Generate profile image or fallback avatar
-        const profileImage = imageUrl 
-            ? `<img src="${Utils.escapeHtml(imageUrl)}" alt="${Utils.escapeHtml(opName)}" class="w-7 h-7 rounded-full object-cover border border-[#444] flex-shrink-0" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"/><div class="w-7 h-7 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 items-center justify-center text-white text-xs font-bold flex-shrink-0 hidden">${opName.charAt(0).toUpperCase()}</div>`
-            : `<div class="w-7 h-7 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">${opName.charAt(0).toUpperCase()}</div>`;
+        const profileImage = Utils.avatarImgHtml(imageUrl, { alt: opName, className: 'w-7 h-7 border border-[#444]' });
         
         return `
             <div class="flex justify-between items-center px-4 md:px-6 py-3 border-b border-[#333] last:border-b-0 hover:bg-white/5 transition-colors">

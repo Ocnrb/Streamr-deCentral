@@ -1,4 +1,4 @@
-import { escapeHtml, formatBigNumber, convertWeiToData, createAddressLink, createEntityLink, createDelegatorLink, createSponsorshipLink, parseOperatorMetadata, calculateWeightedApy } from '../core/utils.js';
+import { escapeHtml, formatBigNumber, convertWeiToData, createAddressLink, createEntityLink, createDelegatorLink, createSponsorshipLink, parseOperatorMetadata, calculateWeightedApy, avatarImgHtml, OPERATOR_AVATAR_PLACEHOLDER } from '../core/utils.js';
 import { getMaticBalance } from '../core/services.js';
 import { regionToLocationMap } from './locationData.js';
 import { MAX_STREAM_MESSAGES } from '../core/constants.js';
@@ -517,7 +517,6 @@ function createOperatorCardHtml(op) {
     if (imageUrl && !imageUrl.startsWith('http://') && !imageUrl.startsWith('https://')) {
         imageUrl = null;
     }
-    const placeholderUrl = 'https://placehold.co/64x64/1E1E1E/a3a3a3?text=OP';
     const weightedApy = calculateWeightedApy(op.stakes);
     const totalStakedData = convertWeiToData(op.valueWithoutEarnings);
     const safeOperatorName = escapeHtml(name || op.id);
@@ -528,7 +527,7 @@ function createOperatorCardHtml(op) {
 
     return `
      <div class="operator-card bg-[#1E1E1E] p-5 rounded-xl border border-[#333333] card flex flex-col items-center text-center" data-operator-id="${op.id}">
-         <img src="${imageUrl || placeholderUrl}" loading="lazy" onerror="this.src='${placeholderUrl}'; this.onerror=null;" alt="Operator Avatar" class="avatar-container w-16 h-16 rounded-full border-2 border-[#333333] object-cover mb-4" ${description ? `data-tooltip-content="${escapeHtml(description)}"` : ''}>
+         ${avatarImgHtml(imageUrl, { alt: 'Operator Avatar', className: 'avatar-container w-16 h-16 border-2 border-[#333333] mb-4', attrs: description ? `data-tooltip-content="${escapeHtml(description)}"` : '' })}
          <div class="w-full">
              <h3 class="operator-name font-bold text-lg text-white truncate" title="${safeOperatorName}">${safeOperatorName}</h3>
              ${name ? `<div class="font-mono text-xs text-gray-500 truncate mt-1">${createAddressLink(op.id)}</div>` : ''}
@@ -1094,7 +1093,6 @@ export function renderOperatorDetails(data, globalState) {
         imageUrl = null;
     }
     const safeOperatorName = escapeHtml(name || op.id);
-    const placeholderUrl = 'https://placehold.co/80x80/1E1E1E/a3a3a3?text=OP';
 
     let redundancyFactor = '1 (Default)';
     try {
@@ -1130,7 +1128,7 @@ export function renderOperatorDetails(data, globalState) {
     const headerStatsHtml = `
         <div class="detail-section px-4 sm:px-6 pt-4 sm:pt-6 pb-2">
             <div class="flex items-start gap-4 sm:gap-6">
-                <img src="${imageUrl || placeholderUrl}" loading="lazy" onerror="this.src='${placeholderUrl}';" alt="Operator Avatar" class="w-14 h-14 sm:w-20 sm:h-20 rounded-full border-2 border-[#333333] flex-shrink-0 object-cover" ${description ? `data-tooltip-content="${escapeHtml(description)}"` : ''}>
+                ${avatarImgHtml(imageUrl, { alt: 'Operator Avatar', className: 'w-14 h-14 sm:w-20 sm:h-20 border-2 border-[#333333]', attrs: description ? `data-tooltip-content="${escapeHtml(description)}"` : '' })}
                 <div class="flex-1 min-w-0">
                     <h2 class="text-lg sm:text-2xl lg:text-3xl font-bold text-white break-words" ${description ? `data-tooltip-content="${escapeHtml(description)}"` : ''}>${safeOperatorName}</h2>
                     ${name ? `<div class="font-mono text-xs sm:text-sm text-gray-400 mt-1 break-all">${createAddressLink(op.id)}</div>` : ''}
@@ -2278,7 +2276,7 @@ export function setAutostakerLoading(loading, tab = 'all') {
 
 // --- Profile Shortcut Functions ---
 
-const placeholderAvatarUrl = 'https://placehold.co/64x64/1E1E1E/a3a3a3?text=OP';
+const placeholderAvatarUrl = OPERATOR_AVATAR_PLACEHOLDER;
 
 /**
  * Render the profile shortcut in sidebar and mobile nav

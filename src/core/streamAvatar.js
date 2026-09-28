@@ -197,6 +197,38 @@ export function installAvatarHydrator() {
 
 export { OPERATOR_AVATAR_PLACEHOLDER };
 
+function loadImage(src) {
+    return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.onload = () => (img.naturalWidth ? resolve(img) : reject(new Error('empty image')));
+        img.onerror = () => reject(new Error(`Failed to load ${src}`));
+        img.src = src;
+    });
+}
+
+/**
+ * Operator avatar for canvas drawings (Network Map, charts), same priority as the <img> avatars:
+ * IPFS (official) > avatar stream > nothing (the caller draws its own fallback).
+ * @param {string|null} imageUrl - from parseOperatorMetadata (may carry the avatar stream marker)
+ * @returns {Promise<HTMLImageElement|null>} a loaded image, or null
+ */
+export async function loadOperatorAvatarImage(imageUrl) {
+    if (typeof imageUrl !== 'string' || !imageUrl.startsWith('https://')) return null;
+    const marker = parseMarker(imageUrl);
+    const base = marker ? marker.base : imageUrl;
+    if (base && !isPlaceholder(base)) {
+        try {
+            return await loadImage(base);
+        } catch (e) {
+            if (!marker) return null;
+        }
+    }
+    if (!marker) return null;
+    const dataUrl = await loadStreamAvatar(marker.streamId, marker.partition).catch(() => null);
+    return dataUrl ? loadImage(dataUrl).catch(() => null) : null;
+}
+
 // ============================================
 // Upload: resize, publish, verify, purge
 // ============================================

@@ -665,7 +665,7 @@ function renderImagePreview() {
     // Same priority as the rest of the app: IPFS CID (official) > avatar stream > placeholder
     const av = $('operator-form-avatar-enabled')?.checked ? state.avatar : null;
     const streamAvatar = av?.prepared?.dataUrl || av?.currentAvatar;
-    const next = valid ? `https://ipfs.io/ipfs/${cid}` : (streamAvatar || Utils.OPERATOR_AVATAR_PLACEHOLDER);
+    const next = valid ? Utils.ipfsAvatarUrl(cid) : (streamAvatar || Utils.OPERATOR_AVATAR_PLACEHOLDER);
     if (img.getAttribute('src') !== next) img.src = next;
     setStatus('operator-form-image-status', cid && !valid ? 'Not a valid IPFS CID.' : '', 'error');
 }

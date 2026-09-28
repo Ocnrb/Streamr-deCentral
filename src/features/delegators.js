@@ -12,7 +12,8 @@ import {
     POLYGONSCAN_METHOD_IDS,
     DATA_TOKEN_ADDRESS_POLYGON
 } from '../core/constants.js';
-import { formatBigNumber, shortAddress, parseOperatorMetadata, formatUsdForTooltip } from '../core/utils.js';
+import { formatBigNumber, shortAddress, parseOperatorMetadata, formatUsdForTooltip, avatarImgHtml } from '../core/utils.js';
+import { loadOperatorAvatarImage } from '../core/streamAvatar.js';
 import { showToast, customTooltip, updateDelegatorProfileButton, handleDelegatorProfileButtonClick, renderProfileShortcut } from '../ui/ui.js';
 
 // ============================================
@@ -668,15 +669,7 @@ function renderDelegationsTable(delegations) {
         row.innerHTML = `
             <td class="px-6 py-4 font-medium">
                 <div class="flex items-center gap-2">
-                    ${imageUrl 
-                        ? `<img src="${imageUrl}" alt="${name}" class="h-6 w-6 rounded-full object-cover ${isUndelegated ? 'opacity-50 grayscale' : ''}" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
-                           <div class="h-6 w-6 rounded-full items-center justify-center text-[10px] font-bold text-white shadow-sm ${isUndelegated ? 'bg-gray-700' : 'bg-gradient-to-br from-orange-400 to-red-500'}" style="display:none;">
-                               ${name.charAt(0).toUpperCase()}
-                           </div>`
-                        : `<div class="h-6 w-6 rounded-full flex items-center justify-center text-[10px] font-bold text-white shadow-sm ${isUndelegated ? 'bg-gray-700' : 'bg-gradient-to-br from-orange-400 to-red-500'}">
-                               ${name.charAt(0).toUpperCase()}
-                           </div>`
-                    }
+                    ${avatarImgHtml(imageUrl, { alt: name, className: `h-6 w-6 ${isUndelegated ? 'opacity-50 grayscale' : ''}` })}
                     <div class="flex flex-col">
                         <span class="truncate max-w-[150px] ${isUndelegated ? 'text-gray-500' : 'text-white'}" title="${name}">${name}</span>
                         <span class="text-[10px] text-gray-500 font-mono">${shortAddress(del.operator.id)}</span>
@@ -761,15 +754,7 @@ function renderInlineDelegationsTable(delegations) {
         row.innerHTML = `
             <td class="px-3 md:px-6 py-3 md:py-4">
                 <a href="/operator/${del.operator.id}" class="flex items-center gap-2 md:gap-3 hover:opacity-80 transition-opacity" data-nav-link>
-                    ${imageUrl 
-                        ? `<img src="${imageUrl}" alt="${name}" class="h-8 w-8 md:h-10 md:w-10 rounded-full object-cover flex-shrink-0 ${isUndelegated ? 'opacity-50 grayscale' : ''}" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
-                           <div class="h-8 w-8 md:h-10 md:w-10 rounded-full items-center justify-center text-xs md:text-sm font-bold text-white shadow-sm flex-shrink-0 ${isUndelegated ? 'bg-gray-700' : 'bg-gradient-to-br from-orange-400 to-red-500'}" style="display:none;">
-                               ${name.charAt(0).toUpperCase()}
-                           </div>`
-                        : `<div class="h-8 w-8 md:h-10 md:w-10 rounded-full flex items-center justify-center text-xs md:text-sm font-bold text-white shadow-sm flex-shrink-0 ${isUndelegated ? 'bg-gray-700' : 'bg-gradient-to-br from-orange-400 to-red-500'}">
-                               ${name.charAt(0).toUpperCase()}
-                           </div>`
-                    }
+                    ${avatarImgHtml(imageUrl, { alt: name, className: `h-8 w-8 md:h-10 md:w-10 ${isUndelegated ? 'opacity-50 grayscale' : ''}` })}
                     <span class="text-sm md:text-base truncate max-w-[100px] md:max-w-[200px] ${isUndelegated ? 'text-gray-500' : 'text-gray-300'}" title="${name}">${name}</span>
                 </a>
             </td>
@@ -1253,17 +1238,14 @@ function renderMapChart() {
             }
         }
         
-        if (opId && imageUrl && !images[opId]) {
-            const img = new Image();
-            img.crossOrigin = 'anonymous';
-            img.src = imageUrl;
-            images[opId] = img;
-            img.onload = () => {
+        if (opId && imageUrl && !(opId in images)) {
+            // Same avatar priority as the rest of the app: IPFS > avatar stream (> no image)
+            images[opId] = null;
+            loadOperatorAvatarImage(imageUrl).then(img => {
+                if (!img) return;
+                images[opId] = img;
                 if (state.charts.map) state.charts.map.update('none');
-            };
-            img.onerror = () => {
-                // Silently handle image load errors
-            };
+            });
         }
         
         const signedAmount = tx.type === 'Undelegated' ? -tx.amount : tx.amount;

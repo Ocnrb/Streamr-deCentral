@@ -1,4 +1,4 @@
-﻿import { formatBigNumber } from '../core/utils.js';
+﻿import { formatBigNumber, parseOperatorMetadata, avatarImgHtml } from '../core/utils.js';
 import { getGraphUrl } from '../core/constants.js';
 
 // START DATE: November 25, 2023
@@ -327,6 +327,7 @@ export const RaceLogic = {
                     const meta = parseMetadata(op.metadataJsonString, op.id);
                     this.state.operatorMetaMap[op.id] = {
                         name: meta.name,
+                        imageUrl: parseOperatorMetadata(op.metadataJsonString).imageUrl,
                         color: BAR_COLORS[parseInt(op.id.slice(-2), 16) % BAR_COLORS.length]
                     };
                 });
@@ -568,8 +569,9 @@ export const RaceLogic = {
                 el.style.top = '700px'; 
                 el.innerHTML = `
                     <div class="w-6 text-[12px] text-gray-500 font-bold text-right shrink-0 rank-num"></div>
-                    <div class="w-48 flex items-center justify-end shrink-0">
-                        <span class="text-[12px] font-medium text-gray-300 truncate max-w-full text-right operator-name"></span>
+                    <div class="w-48 flex items-center justify-end gap-2 shrink-0 min-w-0">
+                        <span class="text-[12px] font-medium text-gray-300 truncate text-right operator-name"></span>
+                        ${avatarImgHtml(this.state.operatorMetaMap[item.id]?.imageUrl, { className: 'w-4 h-4' })}
                     </div>
                     <div class="flex-1 flex items-center gap-2 h-full bar-track">
                         <div class="bar-fill shadow-sm bg-opacity-90 relative"></div>
