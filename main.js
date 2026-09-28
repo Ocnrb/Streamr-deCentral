@@ -6,6 +6,7 @@ import { Router } from './src/core/router.js';
 import * as Autostaker from './src/features/autostaker.js';
 import { navigationController } from './src/ui/navigation.js';
 import { OperatorLogic } from './src/features/operator.js';
+import { OperatorForm } from './src/features/operatorForm.js';
 import { removeOperatorProfile, getOperatorProfile } from './src/core/profile.js';
 
 // Lazy-loaded modules
@@ -1505,6 +1506,7 @@ function setupRouter() {
         
         UI.displayView('list');
         UI.hideProfileButtons();
+        OperatorForm.setup(); // Create Operator button (enabled with a connected wallet)
         navigationController.updateActiveState('operators');
         navigationController.updatePageTitle('operators');
         syncOperatorState();
@@ -1968,7 +1970,6 @@ function setupEventListeners() {
     // Modals
     document.getElementById('tx-modal-cancel').addEventListener('click', () => UI.transactionModal.classList.add('hidden'));
     document.getElementById('stake-modal-cancel').addEventListener('click', () => UI.stakeModal.classList.add('hidden'));
-    document.getElementById('operator-settings-modal-cancel').addEventListener('click', () => UI.operatorSettingsModal.classList.add('hidden'));
     
     // Settings modal cancel/save handlers
     document.getElementById('settings-cancel-btn').addEventListener('click', () => UI.settingsModal.classList.add('hidden'));

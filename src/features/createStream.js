@@ -408,7 +408,7 @@ function renderAccess() {
     if (!container) return;
     container.querySelectorAll('button[data-access]').forEach(btn => {
         const active = btn.dataset.access === state.access;
-        btn.classList.toggle('bg-blue-600', active);
+        btn.classList.toggle('bg-blue-800', active);
         btn.classList.toggle('text-white', active);
         btn.classList.toggle('text-gray-400', !active);
     });

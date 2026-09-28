@@ -1436,10 +1436,10 @@ function updateDelegatorChartButtons() {
     const chartTypeTabs = document.querySelectorAll('#delegator-chart-type-tabs button');
     chartTypeTabs.forEach(button => {
         if (button.dataset.chartType === state.chartType) {
-            button.classList.add('bg-blue-600', 'text-white');
+            button.classList.add('bg-blue-800', 'text-white');
             button.classList.remove('text-gray-400', 'hover:text-white');
         } else {
-            button.classList.remove('bg-blue-600', 'text-white');
+            button.classList.remove('bg-blue-800', 'text-white');
             button.classList.add('text-gray-400', 'hover:text-white');
         }
     });
@@ -1459,10 +1459,10 @@ function updateDelegatorChartButtons() {
     timeframeButtons.forEach(button => {
         const btnTimeframe = button.dataset.delegatorTimeframe;
         if (btnTimeframe === state.timeframe) {
-            button.classList.add('bg-blue-600', 'text-white');
+            button.classList.add('bg-blue-800', 'text-white');
             button.classList.remove('hover:bg-[#444444]', 'text-gray-300');
         } else {
-            button.classList.remove('bg-blue-600', 'text-white');
+            button.classList.remove('bg-blue-800', 'text-white');
             button.classList.add('hover:bg-[#444444]', 'text-gray-300');
         }
     });
@@ -1867,7 +1867,7 @@ export const DelegatorsLogic = {
         document.querySelectorAll('[data-delegator-timeframe]').forEach(btn => {
             const btnDays = btn.dataset.delegatorTimeframe;
             if (btnDays === days) {
-                btn.className = "px-3 py-1 text-xs font-bold rounded-md bg-blue-600 text-white transition shadow-sm";
+                btn.className = "px-3 py-1 text-xs font-bold rounded-md bg-blue-800 text-white transition shadow-sm";
             } else {
                 btn.className = "px-3 py-1 text-xs font-bold rounded-md hover:bg-[#444444] text-gray-300 transition";
             }

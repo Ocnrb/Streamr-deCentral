@@ -324,6 +324,25 @@ export const ENS_CACHE_ABI = [
     'function owners(string ensName) view returns (address)'
 ];
 
+// ============================================
+// Operator creation (OperatorFactory on Polygon, addresses from @streamr/config)
+// ============================================
+export const OPERATOR_FACTORY_ADDRESS = '0x935734e66729b69260543Cf6e5EfeB42AC962183';
+
+// Default policies trusted by the factory: [0] delegation, [1] exchange rate, [2] undelegation
+export const OPERATOR_DEFAULT_POLICIES = [
+    '0x8e449F0B1AFAD807135B5Ea829F41851d5DE1426',
+    '0xE8F511bB4888D16D81acab7ab1c05A356E37237f',
+    '0x5c81fA1e79318386Dd82Ef059bCB194DbA87De45'
+];
+
+export const OPERATOR_FACTORY_ABI = [
+    'function deployOperator(uint256 operatorsCutFraction, string operatorTokenName, string operatorMetadataJson, address[3] policies, uint256[3] policyParams) returns (address)',
+    'function operators(address operatorWallet) view returns (address)',
+    'error OperatorAlreadyDeployed(address operatorContractAddress)',
+    'error PolicyNotTrusted()'
+];
+
 
 
 

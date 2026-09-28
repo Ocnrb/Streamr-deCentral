@@ -21,6 +21,7 @@
     --color-amber-500: oklch(76.9% 0.188 70.08);
     --color-amber-600: oklch(66.6% 0.179 58.318);
     --color-amber-900: oklch(41.4% 0.112 45.904);
+    --color-yellow-300: oklch(90.5% 0.182 98.111);
     --color-yellow-400: oklch(85.2% 0.199 91.936);
     --color-yellow-500: oklch(79.5% 0.184 86.047);
     --color-lime-500: oklch(76.8% 0.233 130.85);
@@ -45,7 +46,6 @@
     --color-blue-400: oklch(70.7% 0.165 254.624);
     --color-blue-500: oklch(62.3% 0.214 259.815);
     --color-blue-600: oklch(54.6% 0.245 262.881);
-    --color-blue-700: oklch(48.8% 0.243 264.376);
     --color-blue-800: oklch(42.4% 0.199 265.638);
     --color-blue-900: oklch(37.9% 0.146 265.522);
     --color-indigo-500: oklch(58.5% 0.233 277.117);
@@ -347,6 +347,9 @@
   .top-full {
     top: 100%;
   }
+  .-right-1\.5 {
+    right: calc(var(--spacing) * -1.5);
+  }
   .right-0 {
     right: calc(var(--spacing) * 0);
   }
@@ -361,6 +364,9 @@
   }
   .right-4 {
     right: calc(var(--spacing) * 4);
+  }
+  .-bottom-1 {
+    bottom: calc(var(--spacing) * -1);
   }
   .bottom-0 {
     bottom: calc(var(--spacing) * 0);
@@ -953,6 +959,9 @@
   }
   .list-disc {
     list-style-type: disc;
+  }
+  .list-none {
+    list-style-type: none;
   }
   .grid-cols-1 {
     grid-template-columns: repeat(1, minmax(0, 1fr));
@@ -1562,9 +1571,6 @@
   .bg-blue-600 {
     background-color: var(--color-blue-600);
   }
-  .bg-blue-700 {
-    background-color: var(--color-blue-700);
-  }
   .bg-blue-800 {
     background-color: var(--color-blue-800);
   }
@@ -1750,6 +1756,9 @@
   }
   .bg-violet-500 {
     background-color: var(--color-violet-500);
+  }
+  .bg-white {
+    background-color: var(--color-white);
   }
   .bg-white\/5 {
     background-color: color-mix(in srgb, #fff 5%, transparent);
@@ -2179,6 +2188,9 @@
   .text-blue-600 {
     color: var(--color-blue-600);
   }
+  .text-blue-800 {
+    color: var(--color-blue-800);
+  }
   .text-cyan-400 {
     color: var(--color-cyan-400);
   }
@@ -2235,6 +2247,9 @@
   }
   .text-white {
     color: var(--color-white);
+  }
+  .text-yellow-300 {
+    color: var(--color-yellow-300);
   }
   .text-yellow-400 {
     color: var(--color-yellow-400);
@@ -2331,8 +2346,15 @@
       --tw-ring-color: color-mix(in oklab, var(--color-blue-500) 20%, transparent);
     }
   }
+  .ring-blue-800 {
+    --tw-ring-color: var(--color-blue-800);
+  }
   .blur {
     --tw-blur: blur(8px);
+    filter: var(--tw-blur,) var(--tw-brightness,) var(--tw-contrast,) var(--tw-grayscale,) var(--tw-hue-rotate,) var(--tw-invert,) var(--tw-saturate,) var(--tw-sepia,) var(--tw-drop-shadow,);
+  }
+  .brightness-0 {
+    --tw-brightness: brightness(0%);
     filter: var(--tw-blur,) var(--tw-brightness,) var(--tw-contrast,) var(--tw-grayscale,) var(--tw-hue-rotate,) var(--tw-invert,) var(--tw-saturate,) var(--tw-sepia,) var(--tw-drop-shadow,);
   }
   .grayscale {
@@ -2423,6 +2445,11 @@
       display: none;
     }
   }
+  .group-open\:rotate-90 {
+    &:is(:where(.group):is([open], :popover-open, :open) *) {
+      rotate: 90deg;
+    }
+  }
   .group-hover\:bg-\[\#333\] {
     &:is(:where(.group):hover *) {
       @media (hover: hover) {
@@ -2493,9 +2520,9 @@
       }
     }
   }
-  .peer-checked\:bg-blue-600 {
+  .peer-checked\:bg-blue-800 {
     &:is(:where(.peer):checked ~ *) {
-      background-color: var(--color-blue-600);
+      background-color: var(--color-blue-800);
     }
   }
   .peer-checked\:bg-green-600 {
@@ -2751,20 +2778,6 @@
     &:hover {
       @media (hover: hover) {
         background-color: #555555;
-      }
-    }
-  }
-  .hover\:bg-blue-600 {
-    &:hover {
-      @media (hover: hover) {
-        background-color: var(--color-blue-600);
-      }
-    }
-  }
-  .hover\:bg-blue-700 {
-    &:hover {
-      @media (hover: hover) {
-        background-color: var(--color-blue-700);
       }
     }
   }
@@ -3053,11 +3066,11 @@
       opacity: 50%;
     }
   }
-  .disabled\:hover\:bg-blue-600 {
+  .disabled\:hover\:bg-blue-800 {
     &:disabled {
       &:hover {
         @media (hover: hover) {
-          background-color: var(--color-blue-600);
+          background-color: var(--color-blue-800);
         }
       }
     }
@@ -3920,6 +3933,11 @@
       grid-template-columns: minmax(0,1fr) minmax(0,1fr) 5.5rem;
     }
   }
+  .\[\&\:\:-webkit-details-marker\]\:hidden {
+    &::-webkit-details-marker {
+      display: none;
+    }
+  }
 }
 @layer base {
   body {
@@ -4467,7 +4485,7 @@
     }
   }
   @media (max-width: 767px) {
-    #settingsModal > div, #transactionModal > div, #stakeModal > div, #operatorSettingsModal > div {
+    #settingsModal > div, #transactionModal > div, #stakeModal > div, #operatorFormModal > div {
       max-width: calc(100% - 2rem);
       margin: 1rem;
       max-height: calc(100vh - 2rem);
