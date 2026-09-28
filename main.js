@@ -471,6 +471,24 @@ let router = null;
 
 // --- Initialization ---
 
+/**
+ * The saved operator profile keeps the avatar of when it was saved: recompute it from the operator's
+ * current metadata (IPFS > avatar stream > placeholder) and update the shortcut when it changed
+ */
+async function refreshSavedOperatorProfile() {
+    const profile = getOperatorProfile();
+    const id = (profile?.id || profile?.operatorId || '').toLowerCase();
+    if (!/^0x[0-9a-f]{40}$/.test(id)) return;
+    try {
+        const data = await Services.runQuery(`{ operator(id: "${id}") { id metadataJsonString } }`);
+        if (!data?.operator) return;
+        const { name, imageUrl } = Utils.parseOperatorMetadata(data.operator.metadataJsonString);
+        UI.syncSavedOperatorProfile(id, name || id, imageUrl);
+    } catch (e) {
+        console.warn('Could not refresh the saved operator profile:', e);
+    }
+}
+
 // The mouse wheel over a focused number input changes its value in most browsers: blur it so the
 // wheel scrolls the page / modal instead
 document.addEventListener('wheel', (e) => {
@@ -543,8 +561,9 @@ async function initializeApp() {
             bottomNav.className = 'md:hidden fixed bottom-0 left-0 right-0 z-40 bg-[#1A1A1A]/95 backdrop-blur-md border-t border-[#2a2a2a] safe-area-bottom';
         }
 
-        // Initialize profile shortcut in sidebar/nav
+        // Initialize profile shortcut in sidebar/nav, then refresh its name / avatar from the subgraph
         UI.renderProfileShortcut();
+        refreshSavedOperatorProfile();
 
         // Initialize router and handle current route
         router.init();
