@@ -1734,7 +1734,7 @@ function renderStreamDetail(stream, isSponsored, sponsorshipId) {
         // Render sponsorships list for stream details view
         renderStreamSponsorshipsList(stream.sponsorships);
         // Render storage nodes
-        renderStreamStorageNodes(stream.storageNodes, metadata.storageDays);
+        renderStreamStorageNodes(stream.storageNodes, stream.id, metadata.storageDays);
     }
     
     // Also render permissions in the sponsored panel if sponsored
@@ -1910,9 +1910,10 @@ function renderStreamSponsorshipsList(sponsorships) {
 /**
  * Render storage nodes for Stream Details view
  * @param {Array} storageNodes - Storage node entries
+ * @param {string} streamId - Stream ID (used for the endpoint health check)
  * @param {number} [storageDays] - Stream's on-chain storage TTL in days (metadata.storageDays)
  */
-function renderStreamStorageNodes(storageNodes, storageDays) {
+function renderStreamStorageNodes(storageNodes, streamId, storageDays) {
     const panel = document.getElementById('stream-storage-panel');
     const content = document.getElementById('stream-storage-content');
     const emptyState = document.getElementById('stream-storage-empty');
@@ -1936,7 +1937,9 @@ function renderStreamStorageNodes(storageNodes, storageDays) {
         ? `${ttlDays} ${ttlDays === 1 ? 'day' : 'days'}`
         : '—';
 
-    const rowsHtml = storageNodes.map(node => {
+    const nodeEndpoints = []; // endpoints per row, for the health check
+
+    const rowsHtml = storageNodes.map((node, index) => {
         const nodeId = node.id || 'Unknown';
         const displayId = nodeId.length > 20 ? nodeId.substring(0, 10) + '...' + nodeId.substring(nodeId.length - 8) : nodeId;
 
@@ -1955,10 +1958,12 @@ function renderStreamStorageNodes(storageNodes, storageDays) {
                 }
             }
         } catch (e) { /* ignore */ }
-        
+
+        const httpEndpoints = endpoints.filter(url => /^https?:\/\//i.test(url));
+        nodeEndpoints.push(httpEndpoints);
+
         // Last updated (subgraph `lastSeen` = last time the node metadata was updated on-chain)
         let lastSeenText = 'Unknown';
-        let isOnline = false;
         if (parseInt(node.lastSeen) > 0) {
             const lastSeenDate = new Date(parseInt(node.lastSeen) * 1000);
             const now = new Date();
@@ -1969,7 +1974,6 @@ function renderStreamStorageNodes(storageNodes, storageDays) {
             
             if (diffMins < 5) {
                 lastSeenText = 'Just now';
-                isOnline = true;
             } else if (diffMins < 60) {
                 lastSeenText = `${diffMins}m ago`;
             } else if (diffHours < 24) {
@@ -1979,10 +1983,11 @@ function renderStreamStorageNodes(storageNodes, storageDays) {
             }
         }
         
-        const statusDot = isOnline
-            ? '<span class="w-2 h-2 rounded-full bg-green-400 flex-shrink-0"></span>'
-            : '<span class="w-2 h-2 rounded-full bg-gray-500 flex-shrink-0"></span>';
-        
+        // Status dot - updated by checkStorageNodeEndpoints() once the endpoints are probed
+        const statusDot = httpEndpoints.length > 0
+            ? `<span data-storage-node-status="${index}" class="w-2 h-2 rounded-full bg-yellow-500 animate-pulse flex-shrink-0 cursor-help" title="Checking endpoints..."></span>`
+            : '<span class="w-2 h-2 rounded-full bg-gray-500 flex-shrink-0 cursor-help" title="No HTTP endpoints registered"></span>';
+
         // Endpoints - only http(s) URLs become links
         const endpointsHtml = endpoints.length > 0
             ? endpoints.map(url => {
@@ -2007,7 +2012,7 @@ function renderStreamStorageNodes(storageNodes, storageDays) {
                 </td>
                 <td class="px-4 py-3">${endpointsHtml}</td>
                 <td class="px-4 py-3 text-right whitespace-nowrap ${ttlDays !== null ? 'text-gray-300' : 'text-gray-600'}">${ttlText}</td>
-                <td class="px-4 py-3 text-right whitespace-nowrap ${isOnline ? 'text-green-400' : 'text-gray-500'}">${lastSeenText}</td>
+                <td class="px-4 py-3 text-right whitespace-nowrap text-gray-500">${lastSeenText}</td>
             </tr>
         `;
     }).join('');
@@ -2029,6 +2034,56 @@ function renderStreamStorageNodes(storageNodes, storageDays) {
             </table>
         </div>
     `;
+
+    checkStorageNodeEndpoints(nodeEndpoints, streamId);
+}
+
+const STORAGE_ENDPOINT_TIMEOUT_MS = 5000;
+
+/**
+ * Probe a storage node endpoint via the storage plugin route
+ * GET {url}/streams/{id}/storage/partitions/0 - returns 200 if the node is up and stores the stream
+ * (the base URL itself has no route and answers 404)
+ * @returns {Promise<boolean>} true if the endpoint answered 200
+ */
+async function probeStorageEndpoint(url, streamId) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), STORAGE_ENDPOINT_TIMEOUT_MS);
+    try {
+        const probeUrl = `${url.replace(/\/+$/, '')}/streams/${encodeURIComponent(streamId)}/storage/partitions/0`;
+        const response = await fetch(probeUrl, { cache: 'no-store', signal: controller.signal });
+        return response.status === 200;
+    } catch (e) {
+        return false;
+    } finally {
+        clearTimeout(timeout);
+    }
+}
+
+/**
+ * Check all storage node endpoints in parallel and update each node's status dot:
+ * green if any endpoint answers 200, red otherwise
+ * @param {Array<Array<string>>} nodeEndpoints - HTTP endpoints per table row
+ * @param {string} streamId - Stream ID
+ */
+function checkStorageNodeEndpoints(nodeEndpoints, streamId) {
+    nodeEndpoints.forEach(async (endpoints, index) => {
+        if (endpoints.length === 0) return;
+
+        const results = await Promise.all(endpoints.map(url => probeStorageEndpoint(url, streamId)));
+
+        // Ignore results if the user navigated to another stream meanwhile
+        if (detailState.currentStreamId !== streamId) return;
+        const dot = document.querySelector(`#stream-storage-content [data-storage-node-status="${index}"]`);
+        if (!dot) return;
+
+        const isUp = results.some(Boolean);
+        dot.classList.remove('bg-yellow-500', 'animate-pulse');
+        dot.classList.add(isUp ? 'bg-green-500' : 'bg-red-500');
+        dot.title = isUp
+            ? 'Online - endpoint responded 200'
+            : 'Offline - no endpoint responded 200';
+    });
 }
 
 /**
