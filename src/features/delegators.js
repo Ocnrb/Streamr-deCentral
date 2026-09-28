@@ -14,7 +14,7 @@ import {
 } from '../core/constants.js';
 import { formatBigNumber, shortAddress, parseOperatorMetadata, formatUsdForTooltip, avatarImgHtml } from '../core/utils.js';
 import { loadOperatorAvatarImage } from '../core/streamAvatar.js';
-import { showToast, customTooltip, updateDelegatorProfileButton, handleDelegatorProfileButtonClick, renderProfileShortcut } from '../ui/ui.js';
+import { showToast, customTooltip, setTooltipContent, positionTooltip, updateDelegatorProfileButton, handleDelegatorProfileButtonClick, renderProfileShortcut } from '../ui/ui.js';
 
 // ============================================
 // State Management
@@ -1552,17 +1552,13 @@ export const DelegatorsLogic = {
                 
                 const content = formatUsdForTooltip(target.dataset.tooltipValue, state.dataPriceUSD);
                 if (content) {
-                    customTooltip.textContent = content;
+                    setTooltipContent(content);
                     customTooltip.classList.remove('hidden');
+                    positionTooltip(e);
                 }
             });
             
-            detailView.addEventListener('mousemove', (e) => {
-                if (!customTooltip.classList.contains('hidden')) {
-                    customTooltip.style.left = `${e.pageX + 15}px`;
-                    customTooltip.style.top = `${e.pageY + 15}px`;
-                }
-            });
+            detailView.addEventListener('mousemove', (e) => positionTooltip(e));
             
             detailView.addEventListener('mouseout', (e) => {
                 if (e.target.closest('[data-tooltip-value]')) {

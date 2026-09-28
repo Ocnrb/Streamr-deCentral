@@ -23,6 +23,41 @@ export const delegatorDetailView = document.getElementById('delegator-detail-vie
 export const streamsListView = document.getElementById('streams-list-view'); 
 export const streamDetailView = document.getElementById('stream-detail-view'); 
 export const customTooltip = document.getElementById('custom-tooltip');
+
+/**
+ * Sets the custom tooltip's content. Values never break across lines: the spaces inside numbers
+ * ("4 936 930") and before their unit ("930 DATA") become non-breaking, so when the text doesn't fit
+ * the whole value moves to the next line.
+ * @param {string} content - text, or HTML when it contains <br>
+ */
+export function setTooltipContent(content) {
+    if (!customTooltip) return;
+    const keepTogether = (text) => String(text)
+        .replace(/(\d) (?=\d)/g, '$1\u00A0')
+        .replace(/(\d) (?=(DATA|POL|USD|%)\b)/g, '$1\u00A0');
+    if (String(content).includes('<br>')) customTooltip.innerHTML = keepTogether(content);
+    else customTooltip.textContent = keepTogether(content);
+}
+
+/**
+ * Positions the custom tooltip next to the pointer, inside the viewport: it opens to the left / above
+ * the pointer when there is no room to the right / below.
+ */
+export function positionTooltip(e) {
+    if (!customTooltip || customTooltip.classList.contains('hidden')) return;
+    const gap = 15;
+    const margin = 8;
+    const width = customTooltip.offsetWidth;
+    const height = customTooltip.offsetHeight;
+    const viewportRight = window.scrollX + document.documentElement.clientWidth;
+    const viewportBottom = window.scrollY + document.documentElement.clientHeight;
+    let left = e.pageX + gap;
+    let top = e.pageY + gap;
+    if (left + width + margin > viewportRight) left = Math.max(window.scrollX + margin, e.pageX - gap - width);
+    if (top + height + margin > viewportBottom) top = Math.max(window.scrollY + margin, e.pageY - gap - height);
+    customTooltip.style.left = `${left}px`;
+    customTooltip.style.top = `${top}px`;
+}
 export const loaderOverlay = document.getElementById('loader-overlay');
 export const dataPriceValueEl = document.getElementById('data-price-value');
 export const transactionModal = document.getElementById('transactionModal');

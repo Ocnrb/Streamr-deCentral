@@ -1332,20 +1332,14 @@ export const OperatorLogic = {
             }
             
             if (content) {
-                if (content.includes('<br>')) {
-                    UI.customTooltip.innerHTML = content;
-                } else {
-                    UI.customTooltip.textContent = content;
-                }
+                UI.setTooltipContent(content);
                 UI.customTooltip.classList.remove('hidden');
+                UI.positionTooltip(e);
             }
         });
         
         UI.mainContainer.addEventListener('mousemove', (e) => {
-            if (!UI.customTooltip.classList.contains('hidden')) {
-                UI.customTooltip.style.left = `${e.pageX + 15}px`;
-                UI.customTooltip.style.top = `${e.pageY + 15}px`;
-            }
+            UI.positionTooltip(e);
         });
         
         UI.mainContainer.addEventListener('mouseout', (e) => {
