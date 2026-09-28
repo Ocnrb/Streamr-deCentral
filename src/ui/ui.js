@@ -675,6 +675,21 @@ export function renderSponsorshipsHistory(historyGroups, showLoadAllButton = tru
             </div>`;
         };
 
+        // First line of an action merged with its transfer: "(i) Action on <sponsorship>"
+        const actionHeaderHtml = (event) => {
+            const icon = '<svg class="w-5 h-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path></svg>';
+            const action = event.txHash && /^0x[0-9a-fA-F]{64}$/.test(event.txHash)
+                ? `<a href="https://polygonscan.com/tx/${event.txHash}" target="_blank" rel="noopener noreferrer" class="hover:text-white transition-colors">Action</a>`
+                : 'Action';
+            return `
+            <div class="flex items-start gap-3 py-2">
+                <div class="flex-shrink-0 pt-1">${icon}</div>
+                <div class="flex-1 min-w-0">
+                    <p class="text-sm text-gray-300 truncate">${action} on ${sponsorshipLinkHtml(event.relatedObject)}</p>
+                </div>
+            </div>`;
+        };
+
         const scanBadgeHtml = (event) => {
             let directionClass;
             const method = event.methodId;
@@ -756,8 +771,9 @@ export function renderSponsorshipsHistory(historyGroups, showLoadAllButton = tru
         // Clusters with an action first, in their original order
         clusters.sort((a, b) => (b.graph.length > 0) - (a.graph.length > 0));
 
-        // An action and its transfer are the same movement (same amount): one row with the transfer's
-        // badge. "Earnings collected" (no stake change) becomes "Collect Earnings on <sponsorship>".
+        // An action and its transfer are the same movement (same amount): two lines in the action block,
+        // "(i) Action on <sponsorship>" and the transfer with the action text and signed amount
+        // ("[OUT] Staked on X +N"; "[IN] Collect Earnings on X" when the stake didn't change).
         const matchingMethods = {
             stake: ['Stake'],
             reduce: ['Reduce Stake'],
@@ -766,24 +782,23 @@ export function renderSponsorshipsHistory(historyGroups, showLoadAllButton = tru
         };
         const clustersHtml = clusters.map((cluster, index) => {
             const merged = new Set();
-            const earningsOn = new Map(); // scan event -> sponsorship
-            const graphRows = [];   // actions without a matching transfer (info icon, left border)
-            const mergedRows = [];  // actions merged with their transfer (transfer's badge)
+            const graphRows = [];   // left-bordered action block
             for (const event of cluster.graph) {
                 const methods = matchingMethods[event.stakeChange];
                 const match = methods && cluster.scan.find(t => !merged.has(t) && methods.includes(t.methodId) && t.token === 'DATA'
                     && (event.stakeChange === 'earnings' || Math.round(Math.abs(t.amount)) === Math.round(Math.abs(event.stakeDelta))));
                 if (!match) {
                     graphRows.push(graphRowHtml(event));
-                } else if (event.stakeChange === 'earnings') {
-                    earningsOn.set(match, event.relatedObject);
-                } else {
-                    merged.add(match);
-                    mergedRows.push(graphRowHtml(event, scanBadgeHtml(match)));
+                    continue;
                 }
+                merged.add(match);
+                graphRows.push(actionHeaderHtml(event));
+                graphRows.push(event.stakeChange === 'earnings'
+                    ? scanRowHtml(match, event.relatedObject)
+                    : graphRowHtml(event, scanBadgeHtml(match)));
             }
             const graphHtml = graphRows.join('');
-            const scanHtml = mergedRows.join('') + cluster.scan.filter(t => !merged.has(t)).map(t => scanRowHtml(t, earningsOn.get(t) || null)).join('');
+            const scanHtml = cluster.scan.filter(t => !merged.has(t)).map(t => scanRowHtml(t)).join('');
             return `
                 <div class="${index > 0 ? 'mt-1' : ''}">
                     ${graphHtml ? `<div class="pl-4 border-l-2 border-gray-700">${graphHtml}</div>` : ''}
