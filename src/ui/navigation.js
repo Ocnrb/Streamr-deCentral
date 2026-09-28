@@ -45,6 +45,17 @@ class NavigationController {
             'subgraph': 'Subgraph',
             'governance': 'Governance'
         };
+
+        // Per-page descriptions for search engines (the link previews use the static tags in index.html)
+        this.pageDescriptions = {
+            'operators': 'All Streamr Network operators: stake, APY, delegators, nodes and earnings. Delegate DATA or become an operator.',
+            'visual': 'Live map of the Streamr Network: operators, sponsorships and nodes, and how the stake flows between them.',
+            'race': 'Leaderboard of Streamr operators by stake and earnings over time.',
+            'delegators': 'Streamr Network delegators: delegations to operators, value and returns.',
+            'streams': 'Streamr streams and sponsorships: payouts, APY, staked operators and funding.',
+            'subgraph': 'Explore the Streamr Network subgraph: operators, sponsorships, streams, flags and more.',
+            'governance': 'Streamr Network governance: flags, votes, kicks and slashing.'
+        };
         
         this.currentPage = 'operators';
 
@@ -387,6 +398,18 @@ class NavigationController {
         
         // Update document title
         document.title = `${title} | Streamr deCentral`;
+        this.updateSeoTags(pageId);
+    }
+
+    /**
+     * Description and canonical URL of the current page (search engines run the app's JavaScript)
+     */
+    updateSeoTags(pageId) {
+        const description = this.pageDescriptions[pageId];
+        const descriptionTag = document.querySelector('meta[name="description"]');
+        if (description && descriptionTag) descriptionTag.setAttribute('content', description);
+        const canonical = document.querySelector('link[rel="canonical"]');
+        if (canonical) canonical.setAttribute('href', `https://streamr-decentral.vercel.app${window.location.pathname}`);
     }
     
     /**

@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://streamr-decentral.vercel.app/sitemap.xml
