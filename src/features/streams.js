@@ -2054,13 +2054,13 @@ async function fetchWithTimeout(url, options = {}) {
 }
 
 /**
- * Probe a storage node endpoint (the registered URL as-is)
+ * Probe a single URL
  * @returns {Promise<'ok'|'reachable'|'down'>}
- *   'ok'        - endpoint answered 200
- *   'reachable' - endpoint answered but the status is hidden (no CORS headers)
+ *   'ok'        - answered 200
+ *   'reachable' - answered but the status is hidden (no CORS headers)
  *   'down'      - no answer, timeout or non-200 status
  */
-async function probeStorageEndpoint(url) {
+async function probeUrl(url) {
     try {
         const response = await fetchWithTimeout(url);
         return response.status === 200 ? 'ok' : 'down';
@@ -2076,6 +2076,30 @@ async function probeStorageEndpoint(url) {
 }
 
 /**
+ * Probe a storage node endpoint. The node root has no route on Streamr nodes (404),
+ * so several paths are tried in parallel and any 200 counts:
+ * - the registered URL as-is
+ * - /capabilities (pombo storage nodes)
+ * - /streams/{id}/storage/partitions/0 (Streamr storage plugin: 200 if the node stores the stream)
+ * @returns {Promise<{status: 'ok'|'reachable'|'down', url: string|null}>}
+ */
+async function probeStorageEndpoint(url, streamId) {
+    const base = url.replace(/\/+$/, '');
+    const urls = [
+        url,
+        `${base}/capabilities`,
+        `${base}/streams/${encodeURIComponent(streamId)}/storage/partitions/0`
+    ];
+    const results = await Promise.all(urls.map(probeUrl));
+
+    const okIndex = results.indexOf('ok');
+    if (okIndex !== -1) return { status: 'ok', url: urls[okIndex] };
+    const reachableIndex = results.indexOf('reachable');
+    if (reachableIndex !== -1) return { status: 'reachable', url: urls[reachableIndex] };
+    return { status: 'down', url: null };
+}
+
+/**
  * Check all storage node endpoints in parallel and update each node's status dot:
  * green if any endpoint answers 200 (or answers without CORS headers), red otherwise
  * @param {Array<Array<string>>} nodeEndpoints - HTTP endpoints per table row
@@ -2085,21 +2109,22 @@ function checkStorageNodeEndpoints(nodeEndpoints, streamId) {
     nodeEndpoints.forEach(async (endpoints, index) => {
         if (endpoints.length === 0) return;
 
-        const results = await Promise.all(endpoints.map(url => probeStorageEndpoint(url)));
+        const results = await Promise.all(endpoints.map(url => probeStorageEndpoint(url, streamId)));
 
         // Ignore results if the user navigated to another stream meanwhile
         if (detailState.currentStreamId !== streamId) return;
         const dot = document.querySelector(`#stream-storage-content [data-storage-node-status="${index}"]`);
         if (!dot) return;
 
-        const isOk = results.includes('ok');
-        const isUp = isOk || results.includes('reachable');
+        const ok = results.find(r => r.status === 'ok');
+        const reachable = results.find(r => r.status === 'reachable');
+        const isUp = Boolean(ok || reachable);
         dot.classList.remove('bg-yellow-500', 'animate-pulse');
         dot.classList.add(isUp ? 'bg-green-500' : 'bg-red-500');
-        dot.title = isOk
-            ? 'Online - endpoint responded 200'
-            : isUp
-                ? 'Online - endpoint reachable (status hidden by CORS)'
+        dot.title = ok
+            ? `Online - ${ok.url} responded 200`
+            : reachable
+                ? `Online - ${reachable.url} reachable (status hidden by CORS)`
                 : 'Offline - no endpoint responded 200';
     });
 }
