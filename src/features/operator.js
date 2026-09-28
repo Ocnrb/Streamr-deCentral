@@ -672,6 +672,11 @@ async function handleEditOperatorSettingsClick() {
         return;
     }
     if (!state.currentOperatorData) return;
+    const address = (await state.signer.getAddress().catch(() => '')).toLowerCase();
+    if (!address || address !== state.currentOperatorData.owner?.toLowerCase()) {
+        UI.showToast({ type: 'warning', title: 'Owner Only', message: 'Only the operator owner can edit its settings.' });
+        return;
+    }
     // Same modal as "Create Operator", in edit mode; refresh the page once the changes are indexed
     OperatorForm.openEdit(state.currentOperatorData, () => OperatorLogic.refreshData(true));
 }

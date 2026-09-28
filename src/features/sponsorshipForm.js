@@ -499,6 +499,11 @@ async function handleSubmit() {
             setSubmitState(step.noTx ? 'Waiting for indexing...' : 'Confirm in wallet...', true);
             await runStep(step, flow);
             step.status = 'done';
+            // Modal closed while this step ran: stop here (refresh the page if the transaction went through)
+            if (flow.detached) {
+                if (!step.noTx) state.onDone?.(flow);
+                return;
+            }
             renderProgress();
         }
         flow.finished = true;
@@ -515,6 +520,7 @@ async function handleSubmit() {
         });
     } catch (e) {
         logger.error('Sponsorship flow failed:', e);
+        if (flow.detached) return;
         const failed = flow.steps.find(s => s.status === 'active');
         if (failed) failed.status = 'error';
         renderProgress();
@@ -547,7 +553,9 @@ function resetForm() {
     $('sponsorship-form-amount-label').textContent = isCreate ? 'Initial funding' : 'Amount';
     $('sponsorship-form-create').classList.toggle('hidden', !isCreate);
     $('sponsorship-form-target-fund').classList.toggle('hidden', isCreate);
-    $('sponsorship-form-stream').textContent = state.streamId;
+    // Line breaks only after "/" (the stream id is shown on its own line)
+    $('sponsorship-form-stream').innerHTML = Utils.escapeHtml(state.streamId).split('/').join('/<wbr>');
+    $('sponsorship-form-stream').title = state.streamId;
     $('sponsorship-form-amount').value = '';
     $('sponsorship-form-rate').value = '';
     $('sponsorship-form-min-stake').value = '0';
@@ -602,9 +610,18 @@ async function openModal() {
     updateEstimate();
 }
 
-function closeModal() {
-    if (state.submitting) return;
+/**
+ * @param {Object} [options]
+ * @param {boolean} [options.force] - close without asking even if a step is running (route change)
+ */
+function closeModal({ force = false } = {}) {
     const flow = state.flow;
+    if (state.submitting) {
+        // Never trap the user: a wallet prompt or the indexing wait can take long (or never end)
+        if (!force && !window.confirm('A step is still in progress. Close anyway? A transaction you already confirmed in your wallet still goes through.')) return;
+        if (flow) flow.detached = true;
+        state.submitting = false;
+    }
     if (flow && !flow.finished && flow.steps[0].status === 'done') state.onDone?.(flow);
     state.flow = null;
     $('sponsorshipFormModal')?.classList.add('hidden');
@@ -616,6 +633,10 @@ function setupListeners() {
     $('sponsorship-form-close')?.addEventListener('click', closeModal);
     $('sponsorship-form-cancel')?.addEventListener('click', closeModal);
     $('sponsorship-form-submit')?.addEventListener('click', handleSubmit);
+    // Leaving the page (links, back button) closes the modal
+    window.addEventListener('app:routechange', () => {
+        if (!$('sponsorshipFormModal')?.classList.contains('hidden')) closeModal({ force: true });
+    });
     $('sponsorship-form-body')?.addEventListener('input', () => {
         if (!state.flow) showError('');
         debouncedEstimate();

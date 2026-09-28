@@ -1114,8 +1114,8 @@ export function renderOperatorDetails(data, globalState) {
     
     const myAddress = globalState.myRealAddress?.toLowerCase();
     const isOwner = myAddress && op.owner && myAddress === op.owner.toLowerCase();
-    const isController = myAddress && op.controllers?.some(c => c.toLowerCase() === myAddress);
-    const editSettingsButtonHtml = (isOwner || isController) ? `
+    // Operator settings are for the owner only (not controllers / agent wallets)
+    const editSettingsButtonHtml = isOwner ? `
         <div class="mb-4">
             <button id="edit-operator-settings-btn" class="bg-gray-700 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-lg transition-colors flex items-center text-sm">
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">

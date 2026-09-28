@@ -471,6 +471,13 @@ let router = null;
 
 // --- Initialization ---
 
+// The mouse wheel over a focused number input changes its value in most browsers: blur it so the
+// wheel scrolls the page / modal instead
+document.addEventListener('wheel', (e) => {
+    const target = e.target;
+    if (target instanceof HTMLInputElement && target.type === 'number' && document.activeElement === target) target.blur();
+}, { passive: true });
+
 async function initializeApp() {
     // Operator avatars hosted on a stream (IPFS CID > avatar stream > placeholder)
     installAvatarHydrator();

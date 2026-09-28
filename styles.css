@@ -2152,6 +2152,9 @@
     --tw-tracking: var(--tracking-widest);
     letter-spacing: var(--tracking-widest);
   }
+  .\[overflow-wrap\:anywhere\] {
+    overflow-wrap: anywhere;
+  }
   .break-words {
     overflow-wrap: break-word;
   }
@@ -4655,6 +4658,9 @@
 }
 #node-map-container .leaflet-control-attribution a {
   color: #9ca3af;
+}
+html:has(body [id$="Modal"].fixed.inset-0:not(.hidden)) {
+  overflow: hidden;
 }
 @property --tw-translate-x {
   syntax: "*";
