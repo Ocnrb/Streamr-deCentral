@@ -698,7 +698,7 @@ export function renderSponsorshipsHistory(historyGroups, showLoadAllButton = tru
                 const stakeAfter = Math.max(0, Math.round(event.amount));
                 const stakeBefore = Math.max(0, Math.round(event.amount - event.stakeDelta));
                 const extra = `Stake before: ${formatBigNumber(stakeBefore.toString())} DATA|Stake after: ${formatBigNumber(stakeAfter.toString())} DATA`;
-                amountHtml = `<p class="font-mono text-sm text-white" data-tooltip-value="${abs}" data-tooltip-extra="${escapeHtml(extra)}">${sign}${formatBigNumber(abs.toString())} ${escapeHtml(event.token)}</p>`;
+                amountHtml = `<p class="font-mono text-sm text-white" data-tooltip-value="${abs}" data-tooltip-extra="${escapeHtml(extra)}">${sign} ${formatBigNumber(abs.toString())} ${escapeHtml(event.token)}</p>`;
             } else {
                 amountHtml = `<p class="font-mono text-sm text-white" ${event.token.toUpperCase() === 'DATA' ? `data-tooltip-value="${Math.round(event.amount)}"` : ''}>${formatBigNumber(Math.round(event.amount).toString())} ${escapeHtml(event.token)}</p>`;
             }
@@ -774,6 +774,9 @@ export function renderSponsorshipsHistory(historyGroups, showLoadAllButton = tru
                 : `<a href="https://polygonscan.com/address/${escapeHtml(sp?.id || '')}" target="_blank" rel="noopener noreferrer" class="text-gray-300 hover:text-white transition-colors" title="${text}">${text}</a>`;
         };
 
+        // Earnings come in (+), the protocol tax goes out (−), from the operator's side
+        const scanSign = (event) => event.methodId === 'Collect Earnings' ? '+ ' : (event.methodId === 'Protocol Tax' ? '− ' : '');
+
         // sponsorship: shown after the method ("Collect Earnings on X") when merged with its action
         const scanRowHtml = (event, sponsorship = null) => {
             const txUrl = `https://polygonscan.com/tx/${event.txHash}`;
@@ -790,7 +793,7 @@ export function renderSponsorshipsHistory(historyGroups, showLoadAllButton = tru
                         : `<div class="truncate">${methodLink}</div>`}
                 </div>
                 <div class="text-right flex-shrink-0">
-                    <p class="font-mono text-sm text-white" ${event.token.toUpperCase() === 'DATA' ? `data-tooltip-value="${Math.round(event.amount)}"` : ''}>${formatBigNumber(Math.round(event.amount).toString())} ${escapeHtml(event.token)}</p>
+                    <p class="font-mono text-sm text-white" ${event.token.toUpperCase() === 'DATA' ? `data-tooltip-value="${Math.round(event.amount)}"` : ''}>${scanSign(event)}${formatBigNumber(Math.round(event.amount).toString())} ${escapeHtml(event.token)}</p>
                 </div>
             </div>`;
         };
