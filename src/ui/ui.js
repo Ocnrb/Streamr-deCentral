@@ -633,7 +633,8 @@ export function renderSponsorshipsHistory(historyGroups, showLoadAllButton = tru
     let html = historyGroups.map(group => {
         const date = new Date(group.timestamp * 1000).toLocaleString();
 
-        const graphRowHtml = (event) => {
+        // badge: the merged transfer's badge (see clusters below) instead of the info icon
+        const graphRowHtml = (event, badge = null) => {
             const sp = event.relatedObject;
             if (!sp) return '';
             const streamId = sp.stream?.id || '';
@@ -663,8 +664,8 @@ export function renderSponsorshipsHistory(historyGroups, showLoadAllButton = tru
             const icon = '<svg class="w-5 h-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path></svg>';
 
             return `
-            <div class="flex items-start gap-3 py-2">
-                <div class="flex-shrink-0 pt-1">${icon}</div>
+            <div class="flex ${badge ? 'items-center' : 'items-start'} gap-3 py-2">
+                <div class="flex-shrink-0 ${badge ? '' : 'pt-1'}">${badge || icon}</div>
                 <div class="flex-1 min-w-0">
                     <p class="text-sm text-gray-300 truncate">${text}</p>
                 </div>
@@ -674,8 +675,7 @@ export function renderSponsorshipsHistory(historyGroups, showLoadAllButton = tru
             </div>`;
         };
 
-        const scanRowHtml = (event) => {
-            
+        const scanBadgeHtml = (event) => {
             let directionClass;
             const method = event.methodId;
             const stakeMethods = ["Stake", "Unstake", "Force Unstake", "Reduce Stake"];
@@ -707,17 +707,31 @@ export function renderSponsorshipsHistory(historyGroups, showLoadAllButton = tru
                 }
             }
             
+            return `<span class="tx-badge ${directionClass}">${event.relatedObject}</span>`;
+        };
+
+        const sponsorshipLinkHtml = (sp) => {
+            const streamId = sp?.stream?.id || '';
+            const text = escapeHtml(streamId || sp?.id || '');
+            return streamId
+                ? `<a href="#" class="sponsorship-link text-gray-300 hover:text-white transition-colors" data-stream-id="${escapeHtml(streamId)}" data-sponsorship-id="${escapeHtml(sp.id)}" title="${text}">${text}</a>`
+                : `<a href="https://polygonscan.com/address/${escapeHtml(sp?.id || '')}" target="_blank" rel="noopener noreferrer" class="text-gray-300 hover:text-white transition-colors" title="${text}">${text}</a>`;
+        };
+
+        // sponsorship: shown after the method ("Collect Earnings on X") when merged with its action
+        const scanRowHtml = (event, sponsorship = null) => {
             const txUrl = `https://polygonscan.com/tx/${event.txHash}`;
+            const methodLink = `<a href="${txUrl}" target="_blank" rel="noopener noreferrer" class="text-sm font-medium text-gray-300 hover:text-white transition-colors">${escapeHtml(event.methodId)}</a>`;
 
             return `
             <div class="flex items-center gap-3 py-2">
                 <div class="flex-shrink-0">
-                    <span class="tx-badge ${directionClass}">${event.relatedObject}</span>
+                    ${scanBadgeHtml(event)}
                 </div>
                 <div class="flex-1 min-w-0">
-                    <a href="${txUrl}" target="_blank" rel="noopener noreferrer" class="text-sm font-medium text-gray-300 hover:text-white truncate transition-colors block">
-                        ${escapeHtml(event.methodId)}
-                    </a>
+                    ${sponsorship
+                        ? `<p class="text-sm text-gray-300 truncate">${methodLink} on ${sponsorshipLinkHtml(sponsorship)}</p>`
+                        : `<div class="truncate">${methodLink}</div>`}
                 </div>
                 <div class="text-right flex-shrink-0">
                     <p class="font-mono text-sm text-white" ${event.token.toUpperCase() === 'DATA' ? `data-tooltip-value="${Math.round(event.amount)}"` : ''}>${formatBigNumber(Math.round(event.amount).toString())} ${escapeHtml(event.token)}</p>
@@ -742,9 +756,34 @@ export function renderSponsorshipsHistory(historyGroups, showLoadAllButton = tru
         // Clusters with an action first, in their original order
         clusters.sort((a, b) => (b.graph.length > 0) - (a.graph.length > 0));
 
+        // An action and its transfer are the same movement (same amount): one row with the transfer's
+        // badge. "Earnings collected" (no stake change) becomes "Collect Earnings on <sponsorship>".
+        const matchingMethods = {
+            stake: ['Stake'],
+            reduce: ['Reduce Stake'],
+            unstake: ['Unstake', 'Force Unstake', 'Reduce Stake'],
+            earnings: ['Collect Earnings']
+        };
         const clustersHtml = clusters.map((cluster, index) => {
-            const graphHtml = cluster.graph.map(graphRowHtml).join('');
-            const scanHtml = cluster.scan.map(scanRowHtml).join('');
+            const merged = new Set();
+            const earningsOn = new Map(); // scan event -> sponsorship
+            const graphRows = [];   // actions without a matching transfer (info icon, left border)
+            const mergedRows = [];  // actions merged with their transfer (transfer's badge)
+            for (const event of cluster.graph) {
+                const methods = matchingMethods[event.stakeChange];
+                const match = methods && cluster.scan.find(t => !merged.has(t) && methods.includes(t.methodId) && t.token === 'DATA'
+                    && (event.stakeChange === 'earnings' || Math.round(Math.abs(t.amount)) === Math.round(Math.abs(event.stakeDelta))));
+                if (!match) {
+                    graphRows.push(graphRowHtml(event));
+                } else if (event.stakeChange === 'earnings') {
+                    earningsOn.set(match, event.relatedObject);
+                } else {
+                    merged.add(match);
+                    mergedRows.push(graphRowHtml(event, scanBadgeHtml(match)));
+                }
+            }
+            const graphHtml = graphRows.join('');
+            const scanHtml = mergedRows.join('') + cluster.scan.filter(t => !merged.has(t)).map(t => scanRowHtml(t, earningsOn.get(t) || null)).join('');
             return `
                 <div class="${index > 0 ? 'mt-1' : ''}">
                     ${graphHtml ? `<div class="pl-4 border-l-2 border-gray-700">${graphHtml}</div>` : ''}
