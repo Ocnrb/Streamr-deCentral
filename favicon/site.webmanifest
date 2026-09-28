@@ -1,7 +1,7 @@
 {
   "name": "Streamr deCentral",
   "short_name": "Streamr deCentral",
-  "description": "Your command center for the Streamr Network: operators, staking, sponsorships and live data.",
+  "description": "Track operators, staking, sponsorships and live data across the Streamr Network.",
   "start_url": "/",
   "display": "standalone",
   "scope": "/",
