@@ -317,7 +317,8 @@ export const STREAM_REGISTRY_ABI = [
 ];
 
 export const STREAM_STORAGE_REGISTRY_ABI = [
-    'function addAndRemoveStorageNodes(string streamId, address[] addNodes, address[] removeNodes)'
+    'function addAndRemoveStorageNodes(string streamId, address[] addNodes, address[] removeNodes)',
+    'function isStorageNodeOf(string streamId, address nodeAddress) view returns (bool)'
 ];
 
 export const ENS_CACHE_ABI = [
