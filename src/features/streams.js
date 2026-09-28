@@ -7,6 +7,7 @@ import * as Utils from '../core/utils.js';
 import * as UI from '../ui/ui.js';
 import * as Services from '../core/services.js';
 import { getOperatorProfile } from '../core/profile.js';
+import { CreateStream } from './createStream.js';
 
 const { logger } = Utils;
 
@@ -1380,6 +1381,9 @@ export const StreamsLogic = {
         // Reset sort header UI
         updateSortHeaderUI();
         
+        // Create Stream button is only enabled with a connected wallet
+        CreateStream.updateButtonState();
+        
         // Reset UI to default tab
         switchTab('nonsponsored');
         
@@ -1427,6 +1431,8 @@ export const StreamsLogic = {
      * Setup event listeners
      */
     setupEventListeners() {
+        CreateStream.setup();
+        
         const loadMoreSponsoredBtn = document.getElementById('load-more-sponsorships-btn');
         const loadMoreAllStreamsBtn = document.getElementById('load-more-nonsponsored-btn');
         const sponsorshipsTab = document.getElementById('streams-tab-sponsorships');
