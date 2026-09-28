@@ -1653,6 +1653,56 @@ export function addStreamMessageToUI(message, activeNodes, unreachableNodes) {
 
 // --- Leaflet Map Functions ---
 
+// Basemap: OpenFreeMap "Dark" (Dark Matter style, OpenStreetMap data), open and keyless.
+// Vector tiles rendered by MapLibre GL inside Leaflet (markers and lines stay Leaflet layers).
+// MapLibre (~1.4 MB) is self-hosted in /libs and only loaded when a map is shown; the CSP build
+// runs its worker from a same-origin file, so no blob: workers are needed.
+const BASEMAP_STYLE_URL = 'https://tiles.openfreemap.org/styles/dark';
+let mapLibreLoading = null;
+
+function loadScript(src) {
+    return new Promise((resolve, reject) => {
+        const script = document.createElement('script');
+        script.src = src;
+        script.onload = resolve;
+        script.onerror = () => reject(new Error(`Failed to load ${src}`));
+        document.head.appendChild(script);
+    });
+}
+
+function loadMapLibre() {
+    if (window.maplibregl && L.maplibreGL) return Promise.resolve();
+    if (!mapLibreLoading) {
+        mapLibreLoading = (async () => {
+            if (!document.getElementById('maplibre-gl-css')) {
+                const link = document.createElement('link');
+                link.id = 'maplibre-gl-css';
+                link.rel = 'stylesheet';
+                link.href = '/assets/maplibre-gl.css';
+                document.head.appendChild(link);
+            }
+            await loadScript('/libs/maplibre-gl-csp.js');
+            window.maplibregl.setWorkerUrl('/libs/maplibre-gl-csp-worker.js');
+            await loadScript('/libs/leaflet-maplibre-gl.js');
+        })().catch(e => {
+            mapLibreLoading = null;
+            throw e;
+        });
+    }
+    return mapLibreLoading;
+}
+
+/**
+ * Adds the vector basemap once MapLibre is loaded. Without it (no WebGL, offline) the map
+ * still works: markers and lines on the dark background.
+ */
+function addBasemap(map) {
+    loadMapLibre().then(() => {
+        if (leafletMap !== map) return; // map replaced meanwhile
+        L.maplibreGL({ style: BASEMAP_STYLE_URL, interactive: false }).addTo(map);
+    }).catch(e => console.warn('Basemap unavailable:', e));
+}
+
 /**
  * Cleans up the existing Leaflet map instance and resets state.
  */
@@ -1683,16 +1733,13 @@ export function initLeafletMap(containerId) {
 
         leafletMap = L.map(containerId, {
             zoomControl: true, // Show zoom control
-            attributionControl: false // Hide "Leaflet" attribution
+            minZoom: 2,
+            maxZoom: 18
         }).setView([20, 0], 2); // Center map [lat, long], zoom
+        // Basemap attribution (required by OpenFreeMap / OpenStreetMap), without the "Leaflet" prefix
+        leafletMap.attributionControl.setPrefix(false);
 
-        // Add CartoDB dark_matter tile layer
-        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
-            subdomains: 'abcd',
-            maxZoom: 19,
-            minZoom: 2
-        }).addTo(leafletMap);
+        addBasemap(leafletMap);
 
         setTimeout(() => {
             if (leafletMap) {
