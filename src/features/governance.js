@@ -19,6 +19,10 @@ const MAX_PAGES = 10;           // hard cap: 5000 flags per range
 const LIST_PAGE = 25;           // rows rendered per "Show more"
 const REFRESH_MS = 60 * 1000;   // live data refresh while the view is open
 const DAY = 86400;
+// A vote only closes when every reviewer voted or when someone triggers the final count after
+// voteEndTimestamp (VoteKickPolicy._endVote). Flags still open this long after the voting period
+// were never closed on-chain: they have no final result and are not shown as active.
+const RESOLUTION_GRACE = 3600;
 
 const RANGES = {
     '30d': { label: '30D', seconds: 30 * DAY, bucket: 'day' },
@@ -33,9 +37,11 @@ const STATUS = {
     voting: { label: 'Voting', badge: 'bg-blue-500/10 text-blue-400 border-blue-500/30', active: true },
     kicked: { label: 'Kicked', badge: 'bg-red-500/10 text-red-400 border-red-500/30', active: false },
     failed: { label: 'Not kicked', badge: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30', active: false },
+    unresolved: { label: 'Unresolved', badge: 'bg-gray-500/10 text-gray-400 border-gray-500/30', active: false,
+        title: 'The voting period ended but the flag was never closed on-chain, so it has no final result' },
 };
 
-const COLORS = { kicked: '#f87171', failed: '#34d399', active: '#60a5fa' };
+const COLORS = { kicked: '#f87171', failed: '#34d399', active: '#60a5fa', unresolved: '#6b7280' };
 const PLACEHOLDER_AVATAR = 'https://placehold.co/64x64/1E1E1E/a3a3a3?text=OP';
 
 const FLAG_FIELDS = `
@@ -131,10 +137,22 @@ function avatar(operator, size = 'w-8 h-8') {
     return `<img src="${imageUrl}" alt="" loading="lazy" onerror="this.src='${PLACEHOLDER_AVATAR}'; this.onerror=null;" class="${size} rounded-full border border-[#333] object-cover flex-shrink-0">`;
 }
 
-function statusBadge(result) {
-    const status = STATUS[result] || { label: escapeHtml(result || 'Unknown'), badge: 'bg-gray-500/10 text-gray-400 border-gray-500/30' };
+/**
+ * Status to display: the subgraph result, except open flags whose voting period ended
+ * more than RESOLUTION_GRACE ago, which are "unresolved".
+ */
+function effectiveStatus(flag) {
+    if (flag.result === 'kicked' || flag.result === 'failed') return flag.result;
+    if (flag.voteEndTimestamp && now() > flag.voteEndTimestamp + RESOLUTION_GRACE) return 'unresolved';
+    return flag.result;
+}
+
+function statusBadge(flag) {
+    const key = effectiveStatus(flag);
+    const status = STATUS[key] || { label: escapeHtml(key || 'Unknown'), badge: 'bg-gray-500/10 text-gray-400 border-gray-500/30' };
     const dot = status.active ? '<span class="w-1.5 h-1.5 rounded-full bg-current animate-pulse"></span>' : '';
-    return `<span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full border text-[11px] font-semibold whitespace-nowrap ${status.badge}">${dot}${status.label}</span>`;
+    const title = status.title ? ` title="${status.title}"` : '';
+    return `<span${title} class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full border text-[11px] font-semibold whitespace-nowrap ${status.badge}">${dot}${status.label}</span>`;
 }
 
 /**
@@ -186,7 +204,7 @@ async function fetchNetwork() {
 
 async function fetchActiveFlags() {
     const data = await Services.runQuery(`{
-        flags(first: 100, orderBy: voteEndTimestamp, orderDirection: asc, where: { result_in: ["waiting", "voting"] }) { ${FLAG_FIELDS} }
+        flags(first: 100, orderBy: voteEndTimestamp, orderDirection: asc, where: { result_in: ["waiting", "voting"], voteEndTimestamp_gt: ${now() - RESOLUTION_GRACE} }) { ${FLAG_FIELDS} }
     }`);
     return data?.flags || [];
 }
@@ -311,6 +329,7 @@ function kpiTile(label, value, sub = '', accent = '') {
 
 function renderKpis() {
     const kicked = state.flags.filter(f => f.result === 'kicked').length;
+    const unresolved = state.flags.filter(f => effectiveStatus(f) === 'unresolved').length;
     const failed = state.flags.filter(f => f.result === 'failed').length;
     const resolved = state.flags.filter(f => f.result === 'kicked' || f.result === 'failed');
     const seats = resolved.reduce((sum, f) => sum + (f.reviewerCount || 0), 0);
@@ -319,7 +338,7 @@ function renderKpis() {
     const liveDot = state.activeFlags.length ? '<span class="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse"></span>' : '';
 
     el('gov-kpis').innerHTML = [
-        kpiTile('Flags', state.flags.length, RANGES[state.range].seconds ? `Last ${RANGES[state.range].label}` : 'All time'),
+        kpiTile('Flags', state.flags.length, `${RANGES[state.range].seconds ? `Last ${RANGES[state.range].label}` : 'All time'}${unresolved ? ` · ${unresolved} unresolved` : ''}`),
         kpiTile('Active now', state.activeFlags.length, state.activeFlags.length ? `${formatData(atRisk.toString())} at risk` : 'No open flags', liveDot),
         kpiTile('Kicked', kicked, 'Flag upheld'),
         kpiTile('Not kicked', failed, 'Flag rejected'),
@@ -341,7 +360,7 @@ function renderLive() {
         return `
             <button type="button" data-flag-id="${flag.id}" class="gov-flag-open text-left p-4 rounded-xl bg-[#121212] border border-[#333] hover:border-[#555] transition-colors min-w-[260px] sm:min-w-0">
                 <div class="flex items-center justify-between gap-2">
-                    ${statusBadge(flag.result)}
+                    ${statusBadge(flag)}
                     <span class="text-[11px] text-gray-500">${voted}/${flag.reviewerCount} voted</span>
                 </div>
                 <div class="flex items-center gap-2.5 mt-3">
@@ -382,6 +401,9 @@ function renderChart() {
         state.chart = null;
     }
     empty.classList.toggle('hidden', state.flags.length > 0);
+    const hasUnresolved = state.flags.some(f => effectiveStatus(f) === 'unresolved');
+    el('gov-legend-unresolved').classList.toggle('hidden', !hasUnresolved);
+    el('gov-legend-unresolved').classList.toggle('flex', hasUnresolved);
     canvas.classList.toggle('hidden', state.flags.length === 0);
     if (!state.flags.length || typeof Chart === 'undefined') return;
 
@@ -390,14 +412,14 @@ function renderChart() {
     const first = range.seconds ? now() - range.seconds : Math.min(...state.flags.map(f => f.flaggingTimestamp));
     const buckets = new Map();
     for (let ms = bucketStart(first, bucket); ms <= Date.now(); ms = nextBucket(ms, bucket)) {
-        buckets.set(ms, { kicked: 0, failed: 0, active: 0 });
+        buckets.set(ms, { kicked: 0, failed: 0, active: 0, unresolved: 0 });
     }
     state.flags.forEach(flag => {
         const key = bucketStart(flag.flaggingTimestamp, bucket);
         const entry = buckets.get(key);
         if (!entry) return;
-        if (flag.result === 'kicked') entry.kicked++;
-        else if (flag.result === 'failed') entry.failed++;
+        const status = effectiveStatus(flag);
+        if (status === 'kicked' || status === 'failed' || status === 'unresolved') entry[status]++;
         else entry.active++;
     });
 
@@ -410,7 +432,7 @@ function renderChart() {
 
     state.chart = new Chart(canvas.getContext('2d'), {
         type: 'bar',
-        data: { labels, datasets: [dataset('kicked', 'Kicked'), dataset('failed', 'Not kicked'), dataset('active', 'Active')] },
+        data: { labels, datasets: [dataset('kicked', 'Kicked'), dataset('failed', 'Not kicked'), dataset('active', 'Active'), dataset('unresolved', 'Unresolved')] },
         options: {
             responsive: true,
             maintainAspectRatio: false,
@@ -465,9 +487,9 @@ function filteredFlags() {
     const search = state.search.toLowerCase();
     return state.flags.filter(flag => {
         const status = state.statusFilter;
-        if (status === 'active' && !STATUS[flag.result]?.active) return false;
-        if (status === 'kicked' && flag.result !== 'kicked') return false;
-        if (status === 'failed' && flag.result !== 'failed') return false;
+        const flagStatus = effectiveStatus(flag);
+        if (status === 'active' && !STATUS[flagStatus]?.active) return false;
+        if (['kicked', 'failed', 'unresolved'].includes(status) && flagStatus !== status) return false;
         if (!search) return true;
         const haystack = [
             flag.target?.id, flag.flagger?.id, flag.sponsorship?.id, flag.sponsorship?.stream?.id,
@@ -502,7 +524,7 @@ function renderList() {
         const stream = flag.sponsorship?.stream?.id || flag.sponsorship?.id || '';
         return `
             <div role="button" tabindex="0" data-flag-id="${flag.id}" class="gov-flag-open grid grid-cols-[minmax(0,1fr)_auto] md:grid-cols-[6.5rem_minmax(0,2fr)_minmax(0,1.5fr)_minmax(0,1.2fr)_5.5rem] items-center gap-x-4 gap-y-2.5 px-4 sm:px-6 py-3.5 hover:bg-white/[0.02] cursor-pointer transition-colors">
-                <div class="col-start-1 row-start-1 md:col-auto md:row-auto">${statusBadge(flag.result)}</div>
+                <div class="col-start-1 row-start-1 md:col-auto md:row-auto">${statusBadge(flag)}</div>
                 <div class="col-span-2 md:col-span-1 flex items-center gap-2.5 min-w-0">
                     ${avatar(flag.target)}
                     <div class="min-w-0">
@@ -628,10 +650,16 @@ function renderDrawer(flag) {
         <div class="flex items-center gap-3">
             ${avatar(flag.target, 'w-12 h-12')}
             <div class="min-w-0">
-                <div class="flex items-center gap-2">${statusBadge(flag.result)}<span class="text-xs text-gray-500">Flag #${flag.lastFlagIndex ?? ''}</span></div>
+                <div class="flex items-center gap-2">${statusBadge(flag)}<span class="text-xs text-gray-500">Flag #${flag.lastFlagIndex ?? ''}</span></div>
                 <p class="text-lg font-semibold text-white truncate mt-1">${escapeHtml(target.name)}</p>
             </div>
         </div>
+
+        ${effectiveStatus(flag) === 'unresolved' ? `
+        <div class="mt-5 p-3 rounded-lg bg-[#121212] border border-[#333] text-xs text-gray-400 leading-relaxed">
+            Voting ended ${timeAgo(flag.voteEndTimestamp)}, but the flag was never closed on-chain (the final vote count is only
+            triggered when all reviewers vote or by a call after the voting period). It has no final result.
+        </div>` : ''}
 
         <dl class="grid grid-cols-2 gap-3 mt-5">
             <div class="p-3 rounded-lg bg-[#121212] border border-[#2a2a2a]"><dt class="text-[11px] text-gray-500 uppercase tracking-wider">Target</dt><dd class="text-sm mt-1 truncate">${createEntityLink(flag.target)}</dd></div>
@@ -752,9 +780,10 @@ export const GovernanceLogic = {
             state.range = button.dataset.range;
             document.querySelectorAll('#gov-range [data-range]').forEach(b => {
                 const active = b.dataset.range === state.range;
-                b.classList.toggle('bg-[#2C2C2C]', active);
+                b.classList.toggle('bg-blue-800', active);
                 b.classList.toggle('text-white', active);
-                b.classList.toggle('text-gray-400', !active);
+                b.classList.toggle('text-gray-300', !active);
+                b.classList.toggle('hover:bg-[#444444]', !active);
             });
             loadAll();
         });

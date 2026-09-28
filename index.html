@@ -2280,18 +2280,19 @@
 
             <!-- Toolbar -->
             <div class="flex flex-wrap items-center justify-between gap-3">
-                <p id="gov-range-note" class="text-sm text-gray-500"></p>
                 <div class="flex items-center gap-2">
-                    <div id="gov-range" class="inline-flex p-1 rounded-lg bg-[#1E1E1E] border border-[#333]">
-                        <button type="button" data-range="30d" class="px-3 py-1.5 rounded-md text-xs font-semibold text-gray-400 hover:text-white transition-colors">30D</button>
-                        <button type="button" data-range="90d" class="px-3 py-1.5 rounded-md text-xs font-semibold bg-[#2C2C2C] text-white transition-colors">90D</button>
-                        <button type="button" data-range="1y" class="px-3 py-1.5 rounded-md text-xs font-semibold text-gray-400 hover:text-white transition-colors">1Y</button>
-                        <button type="button" data-range="all" class="px-3 py-1.5 rounded-md text-xs font-semibold text-gray-400 hover:text-white transition-colors">All</button>
+                    <!-- Same timeframe selector style as the operator charts -->
+                    <div id="gov-range" class="flex items-center gap-1 bg-[#2C2C2C] p-1 rounded-lg">
+                        <button type="button" data-range="30d" class="px-3 py-1 text-xs font-bold rounded-md transition text-gray-300 hover:bg-[#444444]">30D</button>
+                        <button type="button" data-range="90d" class="px-3 py-1 text-xs font-bold rounded-md transition bg-blue-800 text-white">90D</button>
+                        <button type="button" data-range="1y" class="px-3 py-1 text-xs font-bold rounded-md transition text-gray-300 hover:bg-[#444444]">1Y</button>
+                        <button type="button" data-range="all" class="px-3 py-1 text-xs font-bold rounded-md transition text-gray-300 hover:bg-[#444444]">All</button>
                     </div>
                     <button id="gov-refresh" type="button" title="Refresh" aria-label="Refresh" class="p-2 rounded-lg bg-[#1E1E1E] border border-[#333] text-gray-400 hover:text-white transition-colors">
                         <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36L21 8"/><path d="M21 3v5h-5"/></svg>
                     </button>
                 </div>
+                <p id="gov-range-note" class="text-sm text-gray-500 text-right"></p>
             </div>
 
             <!-- KPIs -->
@@ -2316,6 +2317,7 @@
                             <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-sm bg-[#f87171]"></span>Kicked</span>
                             <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-sm bg-[#34d399]"></span>Not kicked</span>
                             <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-sm bg-[#60a5fa]"></span>Active</span>
+                            <span id="gov-legend-unresolved" class="hidden items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-sm bg-[#6b7280]"></span>Unresolved</span>
                         </div>
                     </div>
                     <div class="relative h-64">
@@ -2339,6 +2341,7 @@
                             <button type="button" data-status="active" class="px-3 py-1 rounded-md text-xs font-semibold text-gray-400 hover:text-white whitespace-nowrap transition-colors">Active</button>
                             <button type="button" data-status="kicked" class="px-3 py-1 rounded-md text-xs font-semibold text-gray-400 hover:text-white whitespace-nowrap transition-colors">Kicked</button>
                             <button type="button" data-status="failed" class="px-3 py-1 rounded-md text-xs font-semibold text-gray-400 hover:text-white whitespace-nowrap transition-colors">Not kicked</button>
+                            <button type="button" data-status="unresolved" class="px-3 py-1 rounded-md text-xs font-semibold text-gray-400 hover:text-white whitespace-nowrap transition-colors">Unresolved</button>
                         </div>
                     </div>
                     <div class="relative md:w-72">
