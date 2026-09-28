@@ -235,10 +235,14 @@ export function avatarMessage(prepared) {
  * @returns {Promise<{ timestamp: number, sequenceNumber: number, destroy: Function }>}
  */
 export async function publishAvatar(signer, streamId, content) {
+    const injected = window.ethereum;
+    if (!signer?.privateKey && !injected?.request) throw new Error('No wallet available to sign the message.');
+    // The SDK deep-clones its config, and MetaMask's window.ethereum is a Proxy that can't be cloned
+    // ("'get' on proxy: property 'prototype' is a read-only..."). Pass a plain EIP-1193 object instead:
+    // functions are kept by reference by the clone, and the SDK's BrowserProvider only needs request().
     const auth = signer?.privateKey
         ? { privateKey: signer.privateKey }
-        : { ethereum: window.ethereum };
-    if (!auth.privateKey && !auth.ethereum) throw new Error('No wallet available to sign the message.');
+        : { ethereum: { request: (args) => injected.request(args) } };
 
     // Kept alive until the storage node has the message (destroy() when done): tearing the
     // network node down right after publish() can drop the message before it propagates
