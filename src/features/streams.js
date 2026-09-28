@@ -1674,6 +1674,7 @@ function renderStreamDetail(stream, isSponsored, sponsorshipId) {
         // Switch to Sponsorship mode (DATA icon + Sponsorship header)
         if (iconNormal) iconNormal.classList.add('hidden');
         if (iconSponsorship) iconSponsorship.classList.remove('hidden');
+        CreateStream.setupEditButton(null);
         if (headerNormal) headerNormal.classList.add('hidden');
         if (headerSponsorship) headerSponsorship.classList.remove('hidden');
         
@@ -1741,6 +1742,8 @@ function renderStreamDetail(stream, isSponsored, sponsorshipId) {
         renderStreamSponsorshipsList(stream.sponsorships);
         // Render storage nodes
         renderStreamStorageNodes(stream.storageNodes, stream.id, metadata.storageDays);
+        // Edit button (only if the connected wallet has EDIT permission)
+        CreateStream.setupEditButton(stream, () => StreamsLogic.loadStreamDetail(stream.id, false, null));
     }
     
     // Also render permissions in the sponsored panel if sponsored

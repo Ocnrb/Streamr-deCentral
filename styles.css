@@ -1249,6 +1249,12 @@
       border-color: color-mix(in oklab, var(--color-yellow-500) 20%, transparent);
     }
   }
+  .border-yellow-500\/30 {
+    border-color: color-mix(in srgb, oklch(79.5% 0.184 86.047) 30%, transparent);
+    @supports (color: color-mix(in lab, red, red)) {
+      border-color: color-mix(in oklab, var(--color-yellow-500) 30%, transparent);
+    }
+  }
   .border-t-transparent {
     border-top-color: transparent;
   }
