@@ -774,8 +774,10 @@ export function renderSponsorshipsHistory(historyGroups, showLoadAllButton = tru
                 : `<a href="https://polygonscan.com/address/${escapeHtml(sp?.id || '')}" target="_blank" rel="noopener noreferrer" class="text-gray-300 hover:text-white transition-colors" title="${text}">${text}</a>`;
         };
 
-        // Earnings come in (+), the protocol tax goes out (−), from the operator's side
-        const scanSign = (event) => event.methodId === 'Collect Earnings' ? '+ ' : (event.methodId === 'Protocol Tax' ? '− ' : '');
+        // From the operator's side: earnings and delegations come in (+), the protocol tax and
+        // undelegations go out (−)
+        const SCAN_SIGNS = { 'Collect Earnings': '+ ', 'Delegate': '+ ', 'Protocol Tax': '− ', 'Undelegate': '− ' };
+        const scanSign = (event) => SCAN_SIGNS[event.methodId] || '';
 
         // sponsorship: shown after the method ("Collect Earnings on X") when merged with its action
         const scanRowHtml = (event, sponsorship = null) => {
