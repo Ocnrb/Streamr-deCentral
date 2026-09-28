@@ -2135,16 +2135,8 @@
                                 </div>
 
                                 <!-- Pagination & Sorting (list queries only) -->
-                                <div id="sg-list-options" class="grid grid-cols-2 gap-3">
-                                    <div>
-                                        <label for="sg-limit" class="block text-xs font-medium text-gray-500 mb-1.5">Limit (max 1000)</label>
-                                        <input type="number" id="sg-limit" value="10" min="1" max="1000" class="w-full p-2.5 bg-[#121212] border border-[#333333] rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all">
-                                    </div>
-                                    <div>
-                                        <label for="sg-skip" class="block text-xs font-medium text-gray-500 mb-1.5">Offset (skip)</label>
-                                        <input type="number" id="sg-skip" value="0" min="0" class="w-full p-2.5 bg-[#121212] border border-[#333333] rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all">
-                                    </div>
-                                    <div>
+                                <div id="sg-list-options" class="grid grid-cols-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_5.5rem] xl:grid-cols-2 2xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_5.5rem] gap-3">
+                                    <div class="col-span-2 sm:col-span-1 xl:col-span-2 2xl:col-span-1">
                                         <label for="sg-order-by" class="block text-xs font-medium text-gray-500 mb-1.5">Order by</label>
                                         <select id="sg-order-by" class="w-full p-2.5 bg-[#121212] border border-[#333333] rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all"></select>
                                     </div>
@@ -2154,6 +2146,10 @@
                                             <option value="desc">Descending</option>
                                             <option value="asc">Ascending</option>
                                         </select>
+                                    </div>
+                                    <div>
+                                        <label for="sg-limit" class="block text-xs font-medium text-gray-500 mb-1.5" title="Results per page (max 1000)">Limit</label>
+                                        <input type="number" id="sg-limit" value="10" min="1" max="1000" title="Results per page (max 1000)" class="w-full p-2.5 bg-[#121212] border border-[#333333] rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all">
                                     </div>
                                 </div>
                             </div>
