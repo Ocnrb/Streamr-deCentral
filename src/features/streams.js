@@ -9,6 +9,7 @@ import * as Services from '../core/services.js';
 import { getOperatorProfile } from '../core/profile.js';
 import { CreateStream } from './createStream.js';
 import { SponsorshipForm } from './sponsorshipForm.js';
+import { STREAMR_TREASURY_ADDRESS } from '../core/constants.js';
 
 const { logger } = Utils;
 
@@ -2817,6 +2818,9 @@ async function loadSponsorshipOnchainHistory(sponsorshipAddress) {
             return;
         }
         
+        // Label what each DATA transfer out of the sponsorship was (unstake / earnings / reduce stake)
+        await classifySponsorshipTransfers(sponsorshipAddress, transactions);
+
         // Names of operators that already left the sponsorship (not in the current stakes)
         const extraNames = await fetchOperatorNames(transactions.flatMap(tx => [tx.from, tx.to]))
             .catch(e => { logger.warn('Could not resolve operator names:', e); return new Map(); });
@@ -2846,6 +2850,95 @@ async function loadSponsorshipOnchainHistory(sponsorshipAddress) {
         setTimeout(() => {
             syncTileHeights();
         }, 300);
+    }
+}
+
+// Sponsorship events used to tell the DATA transfers to operators apart
+const SPONSORSHIP_EVENT_TOPICS = {
+    stakeUpdate: ethers.utils.id('StakeUpdate(address,uint256,uint256)'),
+    operatorLeft: ethers.utils.id('OperatorLeft(address,uint256)'),
+    operatorKicked: ethers.utils.id('OperatorKicked(address)')
+};
+
+/**
+ * From the sponsorship's side, Polygonscan only gives the DATA transfers (operators act through their
+ * Operator contract), so every transfer to an operator looked like an unstake. The sponsorship's own
+ * events tell them apart:
+ * - OperatorLeft(operator, returnedStakeWei): the transfer of that amount is the Unstake (Kicked when
+ *   OperatorKicked is in the same tx); another transfer to the operator in that tx is its earnings
+ *   (paid first, in the same transaction)
+ * - otherwise a StakeUpdate with a lower stake than before is a Reduce Stake, else Collect Earnings
+ * Without the events: several transfers to one operator in a tx = the largest is the Unstake.
+ * @param {string} sponsorshipAddress
+ * @param {Array} transactions - from Services.fetchPolygonscanHistory (updated in place: methodId)
+ */
+async function classifySponsorshipTransfers(sponsorshipAddress, transactions) {
+    const sponsorship = sponsorshipAddress.toLowerCase();
+    const isPayout = (tx) => tx.token === 'DATA' && tx.from?.toLowerCase() === sponsorship
+        && tx.to && tx.to.toLowerCase() !== STREAMR_TREASURY_ADDRESS.toLowerCase();
+    const payouts = transactions.filter(isPayout);
+    if (!payouts.length) return;
+
+    let logs = null;
+    try {
+        logs = await Services.fetchContractLogs(sponsorshipAddress);
+    } catch (e) {
+        logger.warn('Could not load sponsorship events:', e);
+    }
+
+    if (logs && logs.length) {
+        const topicAddress = (topic) => '0x' + topic.slice(26).toLowerCase();
+        const words = (data) => (data || '0x').slice(2).match(/.{64}/g)?.map(w => BigInt('0x' + w)) || [];
+        const byTx = new Map();      // txHash -> { left: Map(op -> returned), kicked: Set(op), stake: Map(op -> { staked, previous }) }
+        const lastStake = new Map(); // operator -> latest stakedWei seen (logs are oldest first)
+        const sorted = [...logs].sort((a, b) => (parseInt(a.blockNumber, 16) - parseInt(b.blockNumber, 16)) || (parseInt(a.logIndex, 16) - parseInt(b.logIndex, 16)));
+        for (const log of sorted) {
+            const topic0 = log.topics?.[0];
+            if (!topic0 || !log.topics[1]) continue;
+            const hash = log.transactionHash.toLowerCase();
+            if (!byTx.has(hash)) byTx.set(hash, { left: new Map(), kicked: new Set(), stake: new Map() });
+            const info = byTx.get(hash);
+            const operator = topicAddress(log.topics[1]);
+            if (topic0 === SPONSORSHIP_EVENT_TOPICS.operatorLeft) {
+                info.left.set(operator, words(log.data)[0]);
+            } else if (topic0 === SPONSORSHIP_EVENT_TOPICS.operatorKicked) {
+                info.kicked.add(operator);
+            } else if (topic0 === SPONSORSHIP_EVENT_TOPICS.stakeUpdate) {
+                const staked = words(log.data)[0];
+                if (!info.stake.has(operator)) info.stake.set(operator, { previous: lastStake.get(operator), staked });
+                else info.stake.get(operator).staked = staked;
+                lastStake.set(operator, staked);
+            }
+        }
+
+        for (const tx of payouts) {
+            const info = byTx.get(tx.txHash?.toLowerCase());
+            if (!info) continue;
+            const operator = tx.to.toLowerCase();
+            const value = BigInt(tx.rawValue || '0');
+            if (info.left.has(operator)) {
+                tx.methodId = value === info.left.get(operator)
+                    ? (info.kicked.has(operator) ? 'Kicked' : 'Unstake')
+                    : 'Collect Earnings';
+            } else if (info.stake.has(operator)) {
+                const { previous, staked } = info.stake.get(operator);
+                tx.methodId = previous !== undefined && staked < previous ? 'Reduce Stake' : 'Collect Earnings';
+            }
+        }
+        return;
+    }
+
+    // No events: in a tx with several transfers to one operator, the largest is the returned stake
+    const groups = new Map();
+    for (const tx of payouts) {
+        const key = `${tx.txHash}-${tx.to.toLowerCase()}`;
+        if (!groups.has(key)) groups.set(key, []);
+        groups.get(key).push(tx);
+    }
+    for (const group of groups.values()) {
+        if (group.length < 2) continue;
+        const largest = group.reduce((max, tx) => (BigInt(tx.rawValue || '0') > BigInt(max.rawValue || '0') ? tx : max));
+        for (const tx of group) tx.methodId = tx === largest ? 'Unstake' : 'Collect Earnings';
     }
 }
 

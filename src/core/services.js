@@ -1200,6 +1200,27 @@ export async function fetchMoreDelegators(operatorId, skip) {
 
 // --- API (Polygonscan) ---
 
+/**
+ * Event logs emitted by a contract (oldest first), through the Polygonscan logs API
+ * @param {string} address - contract address
+ * @param {number} [maxPages=5] - pages of 1000 logs
+ * @returns {Promise<Array<{topics: string[], data: string, transactionHash: string, blockNumber: string, logIndex: string}>>}
+ */
+export async function fetchContractLogs(address, maxPages = 5) {
+    const apiKey = getEtherscanApiKey();
+    if (!apiKey) return [];
+    const { apiUrl, chainId } = POLYGONSCAN_NETWORK;
+    const logs = [];
+    for (let page = 1; page <= maxPages; page++) {
+        const url = `${apiUrl}?chainid=${chainId}&module=logs&action=getLogs&address=${address}&fromBlock=0&toBlock=latest&page=${page}&offset=1000&apikey=${apiKey}`;
+        const data = await fetchWithPolygonscanRetry(url, 2) // few retries: the history waits for it;
+        const result = Array.isArray(data?.result) ? data.result : [];
+        logs.push(...result);
+        if (result.length < 1000) break;
+    }
+    return logs;
+}
+
 export async function fetchPolygonscanHistory(walletAddress, offset = 500, sponsorshipAddresses = []) {
     const apiKey = getEtherscanApiKey();
     
