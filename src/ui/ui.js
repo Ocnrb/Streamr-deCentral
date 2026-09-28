@@ -786,7 +786,7 @@ export function renderSponsorshipsHistory(historyGroups, showLoadAllButton = tru
             for (const event of cluster.graph) {
                 const methods = matchingMethods[event.stakeChange];
                 const match = methods && cluster.scan.find(t => !merged.has(t) && methods.includes(t.methodId) && t.token === 'DATA'
-                    && (event.stakeChange === 'earnings' || Math.round(Math.abs(t.amount)) === Math.round(Math.abs(event.stakeDelta))));
+                    && (event.stakeChange === 'earnings' || Math.abs(Math.abs(t.amount) - Math.abs(event.stakeDelta)) < 1));
                 if (!match) {
                     graphRows.push(graphRowHtml(event));
                     continue;

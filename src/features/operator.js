@@ -104,7 +104,8 @@ function computeStakeChanges(graphEvents, polygonscanTxs) {
         if (!scanByTx.has(hash)) scanByTx.set(hash, []);
         scanByTx.get(hash).push(tx);
     }
-    const toData = (wei) => parseFloat(Utils.convertWeiToData(wei.toString()));
+    // With decimals (convertWeiToData truncates): the amounts are compared with the transfers' amounts
+    const toData = (wei) => parseFloat(ethers.utils.formatEther(wei.toString()));
     const fromScan = (e, sponsorshipId) => {
         const hash = typeof e.id === 'string' ? e.id.split('-').pop().toLowerCase() : '';
         const txs = scanByTx.get(hash) || [];
@@ -145,7 +146,7 @@ function computeStakeChanges(graphEvents, polygonscanTxs) {
             }
             const delta = amount - (previous ?? 0n);
             const kind = delta > 0n ? 'stake' : (delta < 0n ? 'reduce' : 'earnings');
-            changes.set(e.id, { delta: parseFloat(Utils.convertWeiToData(delta.toString())), kind });
+            changes.set(e.id, { delta: toData(delta), kind });
         });
     }
     return changes;
