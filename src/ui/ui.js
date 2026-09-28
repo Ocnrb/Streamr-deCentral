@@ -691,7 +691,8 @@ export function renderSponsorshipsHistory(historyGroups, showLoadAllButton = tru
             if (event.stakeChange === 'earnings') {
                 amountHtml = `<p class="font-mono text-sm text-gray-500" data-tooltip-content="Stake unchanged: ${formatBigNumber(Math.round(event.amount).toString())} DATA">—</p>`;
             } else if (event.stakeChange) {
-                const sign = event.stakeDelta > 0 ? '+' : '−';
+                // From the operator's side: staking moves DATA out of the operator (−), reducing / unstaking back in (+)
+                const sign = event.stakeDelta > 0 ? '−' : '+';
                 const abs = Math.round(Math.abs(event.stakeDelta));
                 amountHtml = `<p class="font-mono text-sm text-white" data-tooltip-value="${abs}" data-tooltip-extra="Stake after: ${formatBigNumber(Math.round(event.amount).toString())} DATA">${sign}${formatBigNumber(abs.toString())} ${escapeHtml(event.token)}</p>`;
             } else {
