@@ -2857,7 +2857,9 @@ async function loadSponsorshipOnchainHistory(sponsorshipAddress) {
 const SPONSORSHIP_EVENT_TOPICS = {
     stakeUpdate: ethers.utils.id('StakeUpdate(address,uint256,uint256)'),
     operatorLeft: ethers.utils.id('OperatorLeft(address,uint256)'),
-    operatorKicked: ethers.utils.id('OperatorKicked(address)')
+    operatorKicked: ethers.utils.id('OperatorKicked(address)'),
+    flagged: ethers.utils.id('Flagged(address,address,uint256,uint256,string)'),
+    flagUpdate: ethers.utils.id('FlagUpdate(address,uint8,uint256,uint256,address,int256)')
 };
 
 /**
@@ -2867,8 +2869,11 @@ const SPONSORSHIP_EVENT_TOPICS = {
  * - OperatorLeft(operator, returnedStakeWei): the transfer of that amount is the Unstake (Kicked when
  *   OperatorKicked is in the same tx); another transfer to the operator in that tx is its earnings
  *   (paid first, in the same transaction)
+ * - a tx that resolves a flag (FlagUpdate) also pays the reviewers and the flagger: those transfers are
+ *   Vote On Flag / Flag Reward (the shared classification could call them Collect Earnings)
  * - otherwise a StakeUpdate with a lower stake than before is a Reduce Stake, else Collect Earnings
- * Without the events: several transfers to one operator in a tx = the largest is the Unstake.
+ * Without the events: several transfers to one operator in a tx = the largest is the Unstake; a tx
+ * paying several operators = flag resolution (single transfers = Vote On Flag, the other = Kicked).
  * @param {string} sponsorshipAddress
  * @param {Array} transactions - from Services.fetchPolygonscanHistory (updated in place: methodId)
  */
@@ -2889,20 +2894,26 @@ async function classifySponsorshipTransfers(sponsorshipAddress, transactions) {
     if (logs && logs.length) {
         const topicAddress = (topic) => '0x' + topic.slice(26).toLowerCase();
         const words = (data) => (data || '0x').slice(2).match(/.{64}/g)?.map(w => BigInt('0x' + w)) || [];
-        const byTx = new Map();      // txHash -> { left: Map(op -> returned), kicked: Set(op), stake: Map(op -> { staked, previous }) }
+        const byTx = new Map();      // txHash -> { left, kicked, stake: Map(op -> { staked, previous }), flagTargets: Set(target) }
         const lastStake = new Map(); // operator -> latest stakedWei seen (logs are oldest first)
+        const flaggerOf = new Map(); // target -> flagger of its latest flag
         const sorted = [...logs].sort((a, b) => (parseInt(a.blockNumber, 16) - parseInt(b.blockNumber, 16)) || (parseInt(a.logIndex, 16) - parseInt(b.logIndex, 16)));
         for (const log of sorted) {
             const topic0 = log.topics?.[0];
             if (!topic0 || !log.topics[1]) continue;
             const hash = log.transactionHash.toLowerCase();
-            if (!byTx.has(hash)) byTx.set(hash, { left: new Map(), kicked: new Set(), stake: new Map() });
+            if (!byTx.has(hash)) byTx.set(hash, { left: new Map(), kicked: new Set(), stake: new Map(), flagTargets: new Set(), flaggers: new Set() });
             const info = byTx.get(hash);
             const operator = topicAddress(log.topics[1]);
             if (topic0 === SPONSORSHIP_EVENT_TOPICS.operatorLeft) {
                 info.left.set(operator, words(log.data)[0]);
             } else if (topic0 === SPONSORSHIP_EVENT_TOPICS.operatorKicked) {
                 info.kicked.add(operator);
+            } else if (topic0 === SPONSORSHIP_EVENT_TOPICS.flagged && log.topics[2]) {
+                flaggerOf.set(operator, topicAddress(log.topics[2]));
+            } else if (topic0 === SPONSORSHIP_EVENT_TOPICS.flagUpdate) {
+                info.flagTargets.add(operator);
+                if (flaggerOf.has(operator)) info.flaggers.add(flaggerOf.get(operator));
             } else if (topic0 === SPONSORSHIP_EVENT_TOPICS.stakeUpdate) {
                 const staked = words(log.data)[0];
                 if (!info.stake.has(operator)) info.stake.set(operator, { previous: lastStake.get(operator), staked });
@@ -2920,6 +2931,9 @@ async function classifySponsorshipTransfers(sponsorshipAddress, transactions) {
                 tx.methodId = value === info.left.get(operator)
                     ? (info.kicked.has(operator) ? 'Kicked' : 'Unstake')
                     : 'Collect Earnings';
+            } else if (info.flagTargets.size > 0 && !info.flagTargets.has(operator)) {
+                // Flag resolution: rewards to the flagger and to the reviewers
+                tx.methodId = info.flaggers.has(operator) ? 'Flag Reward' : 'Vote On Flag';
             } else if (info.stake.has(operator)) {
                 const { previous, staked } = info.stake.get(operator);
                 tx.methodId = previous !== undefined && staked < previous ? 'Reduce Stake' : 'Collect Earnings';
@@ -2928,17 +2942,27 @@ async function classifySponsorshipTransfers(sponsorshipAddress, transactions) {
         return;
     }
 
-    // No events: in a tx with several transfers to one operator, the largest is the returned stake
-    const groups = new Map();
+    // No events: in a tx with several transfers to one operator, the largest is the returned stake.
+    // A tx paying several operators is a flag resolution: single transfers are the vote rewards and
+    // the operator with several transfers is the kicked one.
+    const byHash = new Map();
     for (const tx of payouts) {
-        const key = `${tx.txHash}-${tx.to.toLowerCase()}`;
-        if (!groups.has(key)) groups.set(key, []);
-        groups.get(key).push(tx);
+        if (!byHash.has(tx.txHash)) byHash.set(tx.txHash, new Map());
+        const recipients = byHash.get(tx.txHash);
+        const to = tx.to.toLowerCase();
+        if (!recipients.has(to)) recipients.set(to, []);
+        recipients.get(to).push(tx);
     }
-    for (const group of groups.values()) {
-        if (group.length < 2) continue;
-        const largest = group.reduce((max, tx) => (BigInt(tx.rawValue || '0') > BigInt(max.rawValue || '0') ? tx : max));
-        for (const tx of group) tx.methodId = tx === largest ? 'Unstake' : 'Collect Earnings';
+    for (const recipients of byHash.values()) {
+        const flagResolution = recipients.size > 1;
+        for (const group of recipients.values()) {
+            if (group.length < 2) {
+                if (flagResolution) group[0].methodId = 'Vote On Flag';
+                continue;
+            }
+            const largest = group.reduce((max, tx) => (BigInt(tx.rawValue || '0') > BigInt(max.rawValue || '0') ? tx : max));
+            for (const tx of group) tx.methodId = tx === largest ? (flagResolution ? 'Kicked' : 'Unstake') : 'Collect Earnings';
+        }
     }
 }
 
