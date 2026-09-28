@@ -1671,7 +1671,10 @@ function processPolygonscanPage(normalTxs, tokenTxs, walletAddress, sponsorshipS
             direction: direction,
             methodId: methodId,
             amount: parseFloat(tx.value) / 1e18,
-            rawValue: tx.value
+            rawValue: tx.value,
+            // Same fields as fetchPolygonscanHistory (the history matches transfers by counterparty)
+            from: tx.from,
+            to: tx.to
         };
     });
 
@@ -1713,7 +1716,9 @@ function processPolygonscanPage(normalTxs, tokenTxs, walletAddress, sponsorshipS
                 direction: direction,
                 methodId: finalMethodId,
                 amount: amount,
-                rawValue: tx.value
+                rawValue: tx.value,
+                from: tx.from,
+                to: tx.to
             });
         }
     }
