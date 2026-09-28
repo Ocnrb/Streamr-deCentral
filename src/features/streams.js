@@ -2031,7 +2031,7 @@ function renderStreamStorageNodes(storageNodes, streamId, storageDays) {
             <table class="w-full text-sm min-w-[500px]">
                 <thead class="text-xs text-gray-500 uppercase bg-[#252525]">
                     <tr>
-                        <th class="px-4 py-3 text-left">Node</th>
+                        <th class="px-4 py-3 text-left">Provider</th>
                         <th class="px-4 py-3 text-left">Endpoints</th>
                         <th class="px-4 py-3 text-right">TTL</th>
                         <th class="px-4 py-3 text-right">Last Updated</th>
