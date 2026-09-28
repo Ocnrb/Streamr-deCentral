@@ -12,7 +12,7 @@
  */
 
 import { runQuery } from './services.js';
-import { AVATAR_STREAM_MARKER as MARKER, OPERATOR_AVATAR_PLACEHOLDER, isValidProfileStreamId } from './utils.js';
+import { AVATAR_STREAM_MARKER as MARKER, OPERATOR_AVATAR_PLACEHOLDER, isValidProfileStreamId, ipfsCidFromAvatarUrl, markDeadIpfsCid } from './utils.js';
 import { STREAMR_SDK_CONTRACTS_CONFIG } from './constants.js';
 
 export { isValidProfileStreamId };
@@ -134,32 +134,13 @@ function parseMarker(src) {
 }
 
 /**
- * IPFS thumbnail (wsrv.nl) -> the same file straight from the IPFS gateway (same #avatar-stream marker)
- * @returns {string|null} the direct URL, or null when src is not a thumbnail
- */
-export function directIpfsUrl(src) {
-    if (typeof src !== 'string' || !src.startsWith('https://wsrv.nl/')) return null;
-    const index = src.indexOf(MARKER);
-    const base = index === -1 ? src : src.slice(0, index);
-    try {
-        const direct = new URL(base).searchParams.get('url');
-        if (!direct || !direct.startsWith('https://ipfs.io/ipfs/')) return null;
-        return direct + (index === -1 ? '' : src.slice(index));
-    } catch (e) {
-        return null;
-    }
-}
-
-/**
- * Error handler of the operator avatar <img> (avatarImgHtml): the IPFS thumbnail failed -> try the
- * gateway directly; that failed too -> placeholder (then the hydrator uses the avatar stream, if any).
+ * Error handler of the operator avatar <img> (avatarImgHtml): the IPFS image failed -> remember the
+ * CID (not requested again for a while) and show the placeholder; the hydrator then uses the avatar
+ * stream, if any.
  */
 function avatarFallback(img) {
-    const direct = directIpfsUrl(img.getAttribute('src'));
-    if (direct) {
-        img.src = direct;
-        return;
-    }
+    const cid = ipfsCidFromAvatarUrl(img.getAttribute('src'));
+    if (cid) markDeadIpfsCid(cid);
     img.onerror = null;
     img.src = OPERATOR_AVATAR_PLACEHOLDER;
 }
@@ -222,8 +203,7 @@ export function installAvatarHydrator() {
     // IPFS image failed without an onerror handler that switches to the placeholder
     document.addEventListener('error', (event) => {
         const img = event.target;
-        // A failed thumbnail is retried from the IPFS gateway first (avatarFallback)
-        if (img?.tagName === 'IMG' && img.dataset.avatarStream && !directIpfsUrl(img.getAttribute('src'))) applyStreamAvatar(img);
+        if (img?.tagName === 'IMG' && img.dataset.avatarStream) applyStreamAvatar(img);
     }, true);
     window.__avatarFallback = avatarFallback;
     window.__streamAvatarHydrator = observer;
@@ -244,7 +224,7 @@ function loadImage(src) {
 
 /**
  * Operator avatar for canvas drawings (Network Map, charts), same priority as the <img> avatars:
- * IPFS thumbnail > IPFS gateway > avatar stream > nothing (the caller draws its own fallback).
+ * IPFS (official) > avatar stream > nothing (the caller draws its own fallback).
  * @param {string|null} imageUrl - from parseOperatorMetadata (may carry the avatar stream marker)
  * @returns {Promise<HTMLImageElement|null>} a loaded image, or null
  */
@@ -256,13 +236,8 @@ export async function loadOperatorAvatarImage(imageUrl) {
         try {
             return await loadImage(base);
         } catch (e) {
-            // Thumbnail failed: the same file from the IPFS gateway
-            const direct = directIpfsUrl(base);
-            if (direct) {
-                try {
-                    return await loadImage(direct);
-                } catch (e2) { /* fall through to the avatar stream */ }
-            }
+            const cid = ipfsCidFromAvatarUrl(base);
+            if (cid) markDeadIpfsCid(cid);
             if (!marker) return null;
         }
     }

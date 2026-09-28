@@ -198,6 +198,46 @@ export const OPERATOR_AVATAR_PLACEHOLDER = 'https://placehold.co/64x64/1E1E1E/a3
 export const AVATAR_STREAM_MARKER = '#avatar-stream=';
 const PROFILE_STREAM_ID_REGEX = /^(0x[0-9a-fA-F]{40}|[a-z0-9.-]+\.eth)\/[A-Za-z0-9_.\-\/]+$/;
 
+// IPFS avatars that failed to load are remembered (7 days): the files of most Streamr operator avatars
+// are no longer available on IPFS, so they aren't requested again on every render
+const DEAD_CIDS_STORAGE_KEY = 'deadIpfsAvatarCids';
+const DEAD_CID_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+let deadCids = null;
+
+function loadDeadCids() {
+    if (deadCids) return deadCids;
+    deadCids = new Map();
+    try {
+        const stored = JSON.parse(localStorage.getItem(DEAD_CIDS_STORAGE_KEY) || '{}');
+        const now = Date.now();
+        for (const [cid, at] of Object.entries(stored)) {
+            if (typeof at === 'number' && now - at < DEAD_CID_TTL_MS) deadCids.set(cid, at);
+        }
+    } catch (e) { /* storage unavailable */ }
+    return deadCids;
+}
+
+export function isDeadIpfsCid(cid) {
+    return loadDeadCids().has(cid);
+}
+
+export function markDeadIpfsCid(cid) {
+    if (!isValidIpfsCid(cid)) return;
+    const cids = loadDeadCids();
+    cids.set(cid, Date.now());
+    try {
+        localStorage.setItem(DEAD_CIDS_STORAGE_KEY, JSON.stringify(Object.fromEntries(cids)));
+    } catch (e) { /* storage unavailable */ }
+}
+
+/**
+ * CID of an IPFS avatar URL (thumbnail or gateway), or null
+ */
+export function ipfsCidFromAvatarUrl(url) {
+    const match = typeof url === 'string' && url.match(/ipfs(?:%2F|\/)((?:Qm[1-9A-HJ-NP-Za-km-z]{44})|(?:b[a-z2-7]{58,}))/);
+    return match ? match[1] : null;
+}
+
 /**
  * IPFS avatar as a small square thumbnail through the wsrv.nl image proxy (as the Network Map does):
  * the gateway serves the original file, often large, which is slow in lists
@@ -256,7 +296,7 @@ export function parseOperatorMetadata(metadataJsonString) {
             // A stream avatar is signalled with a URL fragment that the avatar hydrator (streamAvatar.js)
             // resolves: right away when there is no CID, or when the IPFS image fails to load.
             let imageUrl = null;
-            if (metadata.imageIpfsCid && isValidIpfsCid(metadata.imageIpfsCid)) {
+            if (metadata.imageIpfsCid && isValidIpfsCid(metadata.imageIpfsCid) && !isDeadIpfsCid(metadata.imageIpfsCid)) {
                 imageUrl = ipfsAvatarUrl(metadata.imageIpfsCid);
             }
             if (isValidProfileStreamId(metadata.imageStreamId)) {

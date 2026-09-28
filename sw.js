@@ -1,4 +1,4 @@
-const CACHE_NAME = 'streamr-central-cache-v5';
+const CACHE_NAME = 'streamr-central-cache-v6';
 
 // The install event is now simpler. We don't pre-cache a fixed list of URLs.
 // This makes the installation much less likely to fail.
@@ -37,6 +37,11 @@ self.addEventListener('fetch', event => {
       return;
   }
 
+  // Only the app's own files: other origins (IPFS, image proxies, RPCs, APIs) are left to the browser
+  if (new URL(event.request.url).origin !== self.location.origin) {
+      return;
+  }
+
   event.respondWith(
     caches.open(CACHE_NAME).then(cache => {
       // 1. Try to fetch the resource from the network.
@@ -50,9 +55,8 @@ self.addEventListener('fetch', event => {
         })
         .catch(err => {
           // 2. If the network request fails (e.g., offline), try to serve from the cache.
-          return cache.match(event.request).then(response => {
-            return response; // Will be undefined if not in cache.
-          });
+          // Not cached either: a proper network error (respondWith needs a Response)
+          return cache.match(event.request).then(response => response || Response.error());
         });
     })
   );
