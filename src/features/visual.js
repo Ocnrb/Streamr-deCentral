@@ -1,4 +1,5 @@
-import { formatBigNumber } from '../core/utils.js';
+import { formatBigNumber, parseOperatorMetadata } from '../core/utils.js';
+import { loadOperatorAvatarImage } from '../core/streamAvatar.js';
 import { getGraphUrl } from '../core/constants.js';
 
 const COLOR_SPONSORSHIP = '#f97316'; 
@@ -1302,7 +1303,7 @@ export const VisualLogic = {
             const imgCache = this.imageCache.get(node.id);
             if(imgCache && imgCache.loaded) {
                 avatarElem.classList.remove('hidden');
-                avatarElem.style.backgroundImage = `url(${imgCache.img.src})`;
+                avatarElem.style.backgroundImage = `url("${imgCache.img.src}")`;
             }
 
         } else if (node.type === 'live-node') {
@@ -1638,7 +1639,8 @@ export const VisualLogic = {
                 const stakeAmount = parseFloat(stake.amountWei) / 1e18;
 
                 let name = `Op ${opId.slice(0,5)}`;
-                let imageUrl = null;
+                // Same avatar priority as the rest of the app: IPFS > avatar stream (> circle fallback)
+                const { imageUrl } = parseOperatorMetadata(op.metadataJsonString);
                 let redundancyFactor = 1;
 
                 // Use cached metadata to avoid repeated JSON parsing
@@ -1654,9 +1656,6 @@ export const VisualLogic = {
                 
                 if (meta) {
                     if(meta.name) name = meta.name;
-                    if(meta.imageIpfsCid) {
-                        imageUrl = `https://wsrv.nl/?url=https://ipfs.io/ipfs/${meta.imageIpfsCid}&w=120&h=120&output=webp`;
-                    }
                     if(meta.redundancyFactor) {
                         const rf = parseInt(meta.redundancyFactor);
                         if (!isNaN(rf) && rf >= 1) redundancyFactor = rf;
@@ -1670,14 +1669,12 @@ export const VisualLogic = {
                 }
 
                 if(imageUrl && !this.imageCache.has(opId)) {
-                    const img = new Image();
-                    img.crossOrigin = "Anonymous";
-                    img.src = imageUrl;
-                    this.imageCache.set(opId, { loaded: false, img: img });
-                    img.onload = () => {
+                    this.imageCache.set(opId, { loaded: false, img: null });
+                    loadOperatorAvatarImage(imageUrl).then(img => {
+                        if (!img || !this.imageCache.has(opId)) return;
                         this.imageCache.set(opId, { loaded: true, img: img });
                         this.requestRender();
-                    };
+                    });
                 }
                 
                 const operatorNodeExists = nodesMap.has(opId);

@@ -1,4 +1,4 @@
-﻿import { formatBigNumber } from '../core/utils.js';
+﻿import { formatBigNumber, parseOperatorMetadata, avatarImgHtml } from '../core/utils.js';
 import { getGraphUrl } from '../core/constants.js';
 
 // START DATE: November 25, 2023
@@ -327,6 +327,7 @@ export const RaceLogic = {
                     const meta = parseMetadata(op.metadataJsonString, op.id);
                     this.state.operatorMetaMap[op.id] = {
                         name: meta.name,
+                        imageUrl: parseOperatorMetadata(op.metadataJsonString).imageUrl,
                         color: BAR_COLORS[parseInt(op.id.slice(-2), 16) % BAR_COLORS.length]
                     };
                 });
@@ -409,23 +410,31 @@ export const RaceLogic = {
                 return;
             }
             
+            // Settled once: a worker answer arriving after the timeout fallback must not replace the
+            // timeline (and reset the date label) behind the frame being shown
+            let settled = false;
+            const settle = () => {
+                if (settled) return false;
+                settled = true;
+                clearTimeout(timeoutId);
+                return true;
+            };
+
             const timeoutId = setTimeout(() => {
+                if (!settle()) return;
                 console.warn('Race processor timeout, falling back to sync');
                 this.processTimelineSync(buckets, operatorIds);
                 resolve();
             }, 30000); // 30 second timeout
             
             worker.onmessage = (e) => {
-                clearTimeout(timeoutId);
+                if (!settle()) return;
                 
                 if (e.data.success) {
                     this.state.timelineData = e.data.timelineData;
                     
                     if (this.els.slider) {
                         this.els.slider.max = Math.max(0, this.state.timelineData.length - 1);
-                    }
-                    if (this.state.timelineData.length > 0 && this.els.lblCurrentDate) {
-                        this.els.lblCurrentDate.textContent = this.state.timelineData[0].formattedDate;
                     }
                     
                     console.log(`[Worker] Processed ${e.data.frameCount} frames in ${e.data.processingTime}ms`);
@@ -438,7 +447,7 @@ export const RaceLogic = {
             };
             
             worker.onerror = (error) => {
-                clearTimeout(timeoutId);
+                if (!settle()) return;
                 console.warn('Race Worker error, falling back to sync:', error);
                 this.processTimelineSync(buckets, operatorIds);
                 resolve();
@@ -527,10 +536,8 @@ export const RaceLogic = {
             };
         });
 
+        // The date label follows the frame shown (renderFrame)
         if (this.els.slider) this.els.slider.max = Math.max(0, this.state.timelineData.length - 1);
-        if(this.state.timelineData.length > 0 && this.els.lblCurrentDate) {
-            this.els.lblCurrentDate.textContent = this.state.timelineData[0].formattedDate;
-        }
         
         const processingTime = (performance.now() - startTime).toFixed(2);
         console.log(`[Sync] Processed ${this.state.timelineData.length} frames in ${processingTime}ms`);
@@ -568,8 +575,9 @@ export const RaceLogic = {
                 el.style.top = '700px'; 
                 el.innerHTML = `
                     <div class="w-6 text-[12px] text-gray-500 font-bold text-right shrink-0 rank-num"></div>
-                    <div class="w-48 flex items-center justify-end shrink-0">
-                        <span class="text-[12px] font-medium text-gray-300 truncate max-w-full text-right operator-name"></span>
+                    <div class="w-48 flex items-center justify-end gap-2 shrink-0 min-w-0">
+                        <span class="text-[12px] font-medium text-gray-300 truncate text-right operator-name"></span>
+                        ${avatarImgHtml(this.state.operatorMetaMap[item.id]?.imageUrl, { className: 'w-4 h-4' })}
                     </div>
                     <div class="flex-1 flex items-center gap-2 h-full bar-track">
                         <div class="bar-fill shadow-sm bg-opacity-90 relative"></div>

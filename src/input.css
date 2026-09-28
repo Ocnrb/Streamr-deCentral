@@ -710,3 +710,8 @@
 #node-map-container .leaflet-control-attribution a {
     color: #9ca3af;
 }
+
+/* Full-screen modals (#...Modal, fixed inset-0) lock the page scroll behind them */
+html:has(body [id$="Modal"].fixed.inset-0:not(.hidden)) {
+    overflow: hidden;
+}

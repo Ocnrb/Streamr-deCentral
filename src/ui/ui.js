@@ -1,4 +1,4 @@
-import { escapeHtml, formatBigNumber, convertWeiToData, createAddressLink, createEntityLink, createDelegatorLink, createSponsorshipLink, parseOperatorMetadata, calculateWeightedApy } from '../core/utils.js';
+import { escapeHtml, formatBigNumber, convertWeiToData, createAddressLink, createEntityLink, createDelegatorLink, createSponsorshipLink, parseOperatorMetadata, calculateWeightedApy, avatarImgHtml, OPERATOR_AVATAR_PLACEHOLDER } from '../core/utils.js';
 import { getMaticBalance } from '../core/services.js';
 import { regionToLocationMap } from './locationData.js';
 import { MAX_STREAM_MESSAGES } from '../core/constants.js';
@@ -23,6 +23,41 @@ export const delegatorDetailView = document.getElementById('delegator-detail-vie
 export const streamsListView = document.getElementById('streams-list-view'); 
 export const streamDetailView = document.getElementById('stream-detail-view'); 
 export const customTooltip = document.getElementById('custom-tooltip');
+
+/**
+ * Sets the custom tooltip's content. Values never break across lines: the spaces inside numbers
+ * ("4 936 930") and before their unit ("930 DATA") become non-breaking, so when the text doesn't fit
+ * the whole value moves to the next line.
+ * @param {string} content - text, or HTML when it contains <br>
+ */
+export function setTooltipContent(content) {
+    if (!customTooltip) return;
+    const keepTogether = (text) => String(text)
+        .replace(/(\d) (?=\d)/g, '$1\u00A0')
+        .replace(/(\d) (?=(DATA|POL|USD|%)\b)/g, '$1\u00A0');
+    if (String(content).includes('<br>')) customTooltip.innerHTML = keepTogether(content);
+    else customTooltip.textContent = keepTogether(content);
+}
+
+/**
+ * Positions the custom tooltip next to the pointer, inside the viewport: it opens to the left / above
+ * the pointer when there is no room to the right / below.
+ */
+export function positionTooltip(e) {
+    if (!customTooltip || customTooltip.classList.contains('hidden')) return;
+    const gap = 15;
+    const margin = 8;
+    const width = customTooltip.offsetWidth;
+    const height = customTooltip.offsetHeight;
+    const viewportRight = window.scrollX + document.documentElement.clientWidth;
+    const viewportBottom = window.scrollY + document.documentElement.clientHeight;
+    let left = e.pageX + gap;
+    let top = e.pageY + gap;
+    if (left + width + margin > viewportRight) left = Math.max(window.scrollX + margin, e.pageX - gap - width);
+    if (top + height + margin > viewportBottom) top = Math.max(window.scrollY + margin, e.pageY - gap - height);
+    customTooltip.style.left = `${left}px`;
+    customTooltip.style.top = `${top}px`;
+}
 export const loaderOverlay = document.getElementById('loader-overlay');
 export const dataPriceValueEl = document.getElementById('data-price-value');
 export const transactionModal = document.getElementById('transactionModal');
@@ -517,7 +552,6 @@ function createOperatorCardHtml(op) {
     if (imageUrl && !imageUrl.startsWith('http://') && !imageUrl.startsWith('https://')) {
         imageUrl = null;
     }
-    const placeholderUrl = 'https://placehold.co/64x64/1E1E1E/a3a3a3?text=OP';
     const weightedApy = calculateWeightedApy(op.stakes);
     const totalStakedData = convertWeiToData(op.valueWithoutEarnings);
     const safeOperatorName = escapeHtml(name || op.id);
@@ -528,7 +562,7 @@ function createOperatorCardHtml(op) {
 
     return `
      <div class="operator-card bg-[#1E1E1E] p-5 rounded-xl border border-[#333333] card flex flex-col items-center text-center" data-operator-id="${op.id}">
-         <img src="${imageUrl || placeholderUrl}" loading="lazy" onerror="this.src='${placeholderUrl}'; this.onerror=null;" alt="Operator Avatar" class="avatar-container w-16 h-16 rounded-full border-2 border-[#333333] object-cover mb-4" ${description ? `data-tooltip-content="${escapeHtml(description)}"` : ''}>
+         ${avatarImgHtml(imageUrl, { alt: 'Operator Avatar', className: 'avatar-container w-16 h-16 border-2 border-[#333333] mb-4', attrs: description ? `data-tooltip-content="${escapeHtml(description)}"` : '' })}
          <div class="w-full">
              <h3 class="operator-name font-bold text-lg text-white truncate" title="${safeOperatorName}">${safeOperatorName}</h3>
              ${name ? `<div class="font-mono text-xs text-gray-500 truncate mt-1">${createAddressLink(op.id)}</div>` : ''}
@@ -634,7 +668,8 @@ export function renderSponsorshipsHistory(historyGroups, showLoadAllButton = tru
     let html = historyGroups.map(group => {
         const date = new Date(group.timestamp * 1000).toLocaleString();
 
-        const graphEventsHtml = group.events.filter(e => e.type === 'graph').map(event => {
+        // badge: the merged transfer's badge (see clusters below) instead of the info icon
+        const graphRowHtml = (event, badge = null) => {
             const sp = event.relatedObject;
             if (!sp) return '';
             const streamId = sp.stream?.id || '';
@@ -644,23 +679,59 @@ export function renderSponsorshipsHistory(historyGroups, showLoadAllButton = tru
             const link = streamId 
                 ? `<a href="#" class="sponsorship-link text-gray-300 hover:text-white transition-colors" data-stream-id="${escapeHtml(streamId)}" data-sponsorship-id="${escapeHtml(sponsorshipId)}" title="${sponsorshipDisplayText}">${sponsorshipDisplayText}</a>`
                 : `<a href="https://polygonscan.com/address/${sponsorshipId}" target="_blank" rel="noopener noreferrer" class="text-gray-300 hover:text-white transition-colors" title="${sponsorshipDisplayText}">${sponsorshipDisplayText}</a>`;
-            const text = `Action on ${link}`;
+            // Stake change (computeStakeChanges); rows with an unknown change keep the resulting stake
+            const actions = { stake: 'Staked', reduce: 'Stake reduced', earnings: 'Earnings collected', unstake: 'Unstaked' };
+            const action = actions[event.stakeChange] || 'Action';
+            const actionHtml = event.txHash && /^0x[0-9a-fA-F]{64}$/.test(event.txHash)
+                ? `<a href="https://polygonscan.com/tx/${event.txHash}" target="_blank" rel="noopener noreferrer" class="hover:text-white transition-colors">${action}</a>`
+                : action;
+            // Merged rows (badge) sit under "Action on <sponsorship>": no need to repeat it
+            const text = badge ? actionHtml : `${actionHtml} ${event.stakeChange === 'unstake' ? 'from' : 'on'} ${link}`;
+            let amountHtml;
+            if (event.stakeChange === 'earnings') {
+                amountHtml = `<p class="font-mono text-sm text-gray-500" data-tooltip-content="Stake unchanged: ${formatBigNumber(Math.round(event.amount).toString())} DATA">—</p>`;
+            } else if (event.stakeChange) {
+                // From the operator's side: staking moves DATA out of the operator (−), reducing / unstaking back in (+)
+                const sign = event.stakeDelta > 0 ? '−' : '+';
+                const abs = Math.round(Math.abs(event.stakeDelta));
+                // Tooltip: value (USD), then the stake in the sponsorship before and after (one per line)
+                const stakeAfter = Math.max(0, Math.round(event.amount));
+                const stakeBefore = Math.max(0, Math.round(event.amount - event.stakeDelta));
+                const extra = `Stake before: ${formatBigNumber(stakeBefore.toString())} DATA|Stake after: ${formatBigNumber(stakeAfter.toString())} DATA`;
+                amountHtml = `<p class="font-mono text-sm text-white" data-tooltip-value="${abs}" data-tooltip-extra="${escapeHtml(extra)}">${sign}${formatBigNumber(abs.toString())} ${escapeHtml(event.token)}</p>`;
+            } else {
+                amountHtml = `<p class="font-mono text-sm text-white" ${event.token.toUpperCase() === 'DATA' ? `data-tooltip-value="${Math.round(event.amount)}"` : ''}>${formatBigNumber(Math.round(event.amount).toString())} ${escapeHtml(event.token)}</p>`;
+            }
             const icon = '<svg class="w-5 h-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path></svg>';
 
             return `
-            <div class="flex items-start gap-3 py-2">
-                <div class="flex-shrink-0 pt-1">${icon}</div>
+            <div class="flex ${badge ? 'items-center' : 'items-start'} gap-3 py-2">
+                <div class="flex-shrink-0 ${badge ? '' : 'pt-1'}">${badge || icon}</div>
                 <div class="flex-1 min-w-0">
                     <p class="text-sm text-gray-300 truncate">${text}</p>
                 </div>
                 <div class="text-right flex-shrink-0">
-                    <p class="font-mono text-sm text-white" ${event.token.toUpperCase() === 'DATA' ? `data-tooltip-value="${Math.round(event.amount)}"` : ''}>${formatBigNumber(Math.round(event.amount).toString())} ${escapeHtml(event.token)}</p>
+                    ${amountHtml}
                 </div>
             </div>`;
-        }).join('');
+        };
 
-        const scanEventsHtml = group.events.filter(e => e.type === 'scan').map(event => {
-            
+        // First line of an action merged with its transfer: "(i) Action on <sponsorship>"
+        const actionHeaderHtml = (event) => {
+            const icon = '<svg class="w-5 h-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path></svg>';
+            const action = event.txHash && /^0x[0-9a-fA-F]{64}$/.test(event.txHash)
+                ? `<a href="https://polygonscan.com/tx/${event.txHash}" target="_blank" rel="noopener noreferrer" class="hover:text-white transition-colors">Action</a>`
+                : 'Action';
+            return `
+            <div class="flex items-start gap-3 py-2">
+                <div class="flex-shrink-0 pt-1">${icon}</div>
+                <div class="flex-1 min-w-0">
+                    <p class="text-sm text-gray-300 truncate">${action} on ${sponsorshipLinkHtml(event.relatedObject)}</p>
+                </div>
+            </div>`;
+        };
+
+        const scanBadgeHtml = (event) => {
             let directionClass;
             const method = event.methodId;
             const stakeMethods = ["Stake", "Unstake", "Force Unstake", "Reduce Stake"];
@@ -692,44 +763,99 @@ export function renderSponsorshipsHistory(historyGroups, showLoadAllButton = tru
                 }
             }
             
+            return `<span class="tx-badge ${directionClass}">${event.relatedObject}</span>`;
+        };
+
+        const sponsorshipLinkHtml = (sp) => {
+            const streamId = sp?.stream?.id || '';
+            const text = escapeHtml(streamId || sp?.id || '');
+            return streamId
+                ? `<a href="#" class="sponsorship-link text-gray-300 hover:text-white transition-colors" data-stream-id="${escapeHtml(streamId)}" data-sponsorship-id="${escapeHtml(sp.id)}" title="${text}">${text}</a>`
+                : `<a href="https://polygonscan.com/address/${escapeHtml(sp?.id || '')}" target="_blank" rel="noopener noreferrer" class="text-gray-300 hover:text-white transition-colors" title="${text}">${text}</a>`;
+        };
+
+        // sponsorship: shown after the method ("Collect Earnings on X") when merged with its action
+        const scanRowHtml = (event, sponsorship = null) => {
             const txUrl = `https://polygonscan.com/tx/${event.txHash}`;
+            const methodLink = `<a href="${txUrl}" target="_blank" rel="noopener noreferrer" class="text-sm font-medium text-gray-300 hover:text-white transition-colors">${escapeHtml(event.methodId)}</a>`;
 
             return `
             <div class="flex items-center gap-3 py-2">
                 <div class="flex-shrink-0">
-                    <span class="tx-badge ${directionClass}">${event.relatedObject}</span>
+                    ${scanBadgeHtml(event)}
                 </div>
                 <div class="flex-1 min-w-0">
-                    <a href="${txUrl}" target="_blank" rel="noopener noreferrer" class="text-sm font-medium text-gray-300 hover:text-white truncate transition-colors block">
-                        ${escapeHtml(event.methodId)}
-                    </a>
+                    ${sponsorship
+                        ? `<p class="text-sm text-gray-300 truncate">${methodLink} on ${sponsorshipLinkHtml(sponsorship)}</p>`
+                        : `<div class="truncate">${methodLink}</div>`}
                 </div>
                 <div class="text-right flex-shrink-0">
                     <p class="font-mono text-sm text-white" ${event.token.toUpperCase() === 'DATA' ? `data-tooltip-value="${Math.round(event.amount)}"` : ''}>${formatBigNumber(Math.round(event.amount).toString())} ${escapeHtml(event.token)}</p>
                 </div>
             </div>`;
-        }).join('');
+        };
 
-        const hasGraphEvents = graphEventsHtml.length > 0;
-        const hasScanEvents = scanEventsHtml.length > 0;
+        // One block per transaction: the sponsorship action (The Graph, or the full exit built from
+        // Polygonscan) followed by its token transfers; transactions without an action keep their rows
+        const clusters = [];
+        const byHash = new Map();
+        for (const event of group.events) {
+            const key = event.txHash ? event.txHash.toLowerCase() : `no-hash-${clusters.length}`;
+            let cluster = byHash.get(key);
+            if (!cluster) {
+                cluster = { graph: [], scan: [] };
+                byHash.set(key, cluster);
+                clusters.push(cluster);
+            }
+            (event.type === 'graph' ? cluster.graph : cluster.scan).push(event);
+        }
+        // Clusters with an action first, in their original order
+        clusters.sort((a, b) => (b.graph.length > 0) - (a.graph.length > 0));
+
+        // An action and its transfer are the same movement (same amount): two lines in the action block,
+        // "(i) Action on <sponsorship>" and the transfer with the action text and signed amount
+        // ("[OUT] Staked on X +N"; "[IN] Collect Earnings on X" when the stake didn't change).
+        const matchingMethods = {
+            stake: ['Stake'],
+            reduce: ['Reduce Stake'],
+            unstake: ['Unstake', 'Force Unstake', 'Reduce Stake'],
+            earnings: ['Collect Earnings']
+        };
+        const clustersHtml = clusters.map((cluster, index) => {
+            const merged = new Set();
+            // Each action is its own block: a short, slightly thicker bar on the left, rows close
+            // together, and some space between blocks
+            const actionBlocks = [];
+            for (const event of cluster.graph) {
+                const methods = matchingMethods[event.stakeChange];
+                const match = methods && cluster.scan.find(t => !merged.has(t) && methods.includes(t.methodId) && t.token === 'DATA'
+                    && (event.stakeChange === 'earnings' || Math.abs(Math.abs(t.amount) - Math.abs(event.stakeDelta)) < 1));
+                if (!match) {
+                    actionBlocks.push(graphRowHtml(event));
+                    continue;
+                }
+                merged.add(match);
+                actionBlocks.push(actionHeaderHtml(event) + (event.stakeChange === 'earnings'
+                    ? scanRowHtml(match)
+                    : graphRowHtml(event, scanBadgeHtml(match))));
+            }
+            // The other transfers of the same transaction (Protocol Tax, earnings...) belong to its action
+            const otherTransfers = cluster.scan.filter(t => !merged.has(t)).map(t => scanRowHtml(t)).join('');
+            if (actionBlocks.length > 0 && otherTransfers) actionBlocks[actionBlocks.length - 1] += otherTransfers;
+            const graphHtml = actionBlocks.map(block => `
+                <div class="relative pl-4 [&>div]:py-1.5 before:content-[''] before:absolute before:left-0 before:top-2 before:bottom-2 before:w-[3px] before:rounded-full before:bg-[#444]">${block}</div>`).join('');
+            const scanHtml = actionBlocks.length > 0 ? '' : otherTransfers;
+            return `
+                <div class="${index > 0 ? 'mt-2' : ''}">
+                    ${graphHtml ? `<div class="space-y-2">${graphHtml}</div>` : ''}
+                    ${scanHtml ? `<div class="pl-4">${scanHtml}</div>` : ''}
+                </div>`;
+        }).join('');
 
         return `
         <li class="py-3 border-b border-[#333333]">
             <p class="text-xs text-gray-400 font-mono mb-2">${date}</p>
-            <div>
-                ${hasGraphEvents ? `
-                    <div>
-                        <h4 class="text-sm font-semibold text-white mb-1">Sponsorship Actions</h4>
-                        <div class="pl-4 border-l-2 border-gray-700">${graphEventsHtml}</div>
-                    </div>
-                ` : ''}
-                
-                ${hasScanEvents ? `
-                    <div class="${hasGraphEvents ? 'mt-2' : ''}">
-                         <div class="pl-4">${scanEventsHtml}</div>
-                    </div>
-                ` : ''}
-            </div>
+            <div>${clustersHtml}</div>
         </li>`;
     }).join('');
     
@@ -1094,7 +1220,6 @@ export function renderOperatorDetails(data, globalState) {
         imageUrl = null;
     }
     const safeOperatorName = escapeHtml(name || op.id);
-    const placeholderUrl = 'https://placehold.co/80x80/1E1E1E/a3a3a3?text=OP';
 
     let redundancyFactor = '1 (Default)';
     try {
@@ -1114,8 +1239,8 @@ export function renderOperatorDetails(data, globalState) {
     
     const myAddress = globalState.myRealAddress?.toLowerCase();
     const isOwner = myAddress && op.owner && myAddress === op.owner.toLowerCase();
-    const isController = myAddress && op.controllers?.some(c => c.toLowerCase() === myAddress);
-    const editSettingsButtonHtml = (isOwner || isController) ? `
+    // Operator settings are for the owner only (not controllers / agent wallets)
+    const editSettingsButtonHtml = isOwner ? `
         <div class="mb-4">
             <button id="edit-operator-settings-btn" class="bg-gray-700 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-lg transition-colors flex items-center text-sm">
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -1130,7 +1255,7 @@ export function renderOperatorDetails(data, globalState) {
     const headerStatsHtml = `
         <div class="detail-section px-4 sm:px-6 pt-4 sm:pt-6 pb-2">
             <div class="flex items-start gap-4 sm:gap-6">
-                <img src="${imageUrl || placeholderUrl}" loading="lazy" onerror="this.src='${placeholderUrl}';" alt="Operator Avatar" class="w-14 h-14 sm:w-20 sm:h-20 rounded-full border-2 border-[#333333] flex-shrink-0 object-cover" ${description ? `data-tooltip-content="${escapeHtml(description)}"` : ''}>
+                ${avatarImgHtml(imageUrl, { alt: 'Operator Avatar', className: 'w-14 h-14 sm:w-20 sm:h-20 border-2 border-[#333333]', attrs: description ? `data-tooltip-content="${escapeHtml(description)}"` : '' })}
                 <div class="flex-1 min-w-0">
                     <h2 class="text-lg sm:text-2xl lg:text-3xl font-bold text-white break-words" ${description ? `data-tooltip-content="${escapeHtml(description)}"` : ''}>${safeOperatorName}</h2>
                     ${name ? `<div class="font-mono text-xs sm:text-sm text-gray-400 mt-1 break-all">${createAddressLink(op.id)}</div>` : ''}
@@ -2278,7 +2403,7 @@ export function setAutostakerLoading(loading, tab = 'all') {
 
 // --- Profile Shortcut Functions ---
 
-const placeholderAvatarUrl = 'https://placehold.co/64x64/1E1E1E/a3a3a3?text=OP';
+const placeholderAvatarUrl = OPERATOR_AVATAR_PLACEHOLDER;
 
 /**
  * Render the profile shortcut in sidebar and mobile nav

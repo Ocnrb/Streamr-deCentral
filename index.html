@@ -518,6 +518,119 @@
         </div>
     </div>
 
+    <!-- Sponsorship Modal: New Sponsorship (Stream Details) / Add Funds (Sponsorship Details) -->
+    <div id="sponsorshipFormModal" class="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-3 sm:p-4 z-50 hidden">
+        <div class="bg-[#1E1E1E] rounded-xl max-w-xl w-full text-gray-300 border border-[#333333] shadow-2xl max-h-[92vh] flex flex-col">
+            <div class="flex items-center justify-between px-5 sm:px-6 py-4 border-b border-[#333] flex-shrink-0">
+                <h2 id="sponsorship-form-title" class="text-xl font-bold text-white">New Sponsorship</h2>
+                <button id="sponsorship-form-close" class="p-1.5 text-gray-500 hover:text-white hover:bg-[#333] rounded-lg transition-colors" title="Close">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                </button>
+            </div>
+
+            <div id="sponsorship-form-body" class="px-5 sm:px-6 py-5 space-y-5 overflow-y-auto">
+                <!-- Target: stream (create) or sponsorship (fund) -->
+                <div class="p-3 bg-[#121212] border border-[#333] rounded-lg text-sm space-y-1">
+                    <div>
+                        <span class="block text-xs text-gray-500">Stream</span>
+                        <span id="sponsorship-form-stream" class="block font-mono text-gray-200 [overflow-wrap:anywhere]">--</span>
+                    </div>
+                    <div id="sponsorship-form-target-fund" class="hidden space-y-1">
+                        <div class="flex justify-between gap-3"><span class="text-gray-500">Sponsorship</span><span id="sponsorship-form-sponsorship" class="font-mono text-gray-200">--</span></div>
+                        <div class="flex justify-between gap-3"><span class="text-gray-500">Remaining</span><span id="sponsorship-form-remaining" class="text-gray-200">--</span></div>
+                        <div class="flex justify-between gap-3"><span class="text-gray-500">Payout</span><span id="sponsorship-form-payout" class="text-gray-200">--</span></div>
+                        <div class="flex justify-between gap-3"><span class="text-gray-500">Expires</span><span id="sponsorship-form-expires" class="text-gray-200">--</span></div>
+                    </div>
+                </div>
+
+                <!-- Amount (both modes) -->
+                <div>
+                    <div class="flex justify-between items-baseline mb-1">
+                        <label for="sponsorship-form-amount" id="sponsorship-form-amount-label" class="block text-xs text-gray-400">Initial funding</label>
+                        <span class="text-xs text-gray-500">Balance: <button id="sponsorship-form-max" type="button" class="text-gray-300 hover:text-white underline-offset-2 hover:underline" title="Use the whole balance"><span id="sponsorship-form-data-balance">--</span> DATA</button></span>
+                    </div>
+                    <div class="flex items-center bg-[#121212] border border-[#333] rounded-lg focus-within:ring-2 focus-within:ring-blue-500/50">
+                        <input id="sponsorship-form-amount" type="number" min="0" step="any" placeholder="0" class="flex-1 min-w-0 p-2.5 bg-transparent text-white text-sm focus:outline-none disabled:opacity-50">
+                        <span class="pr-3 text-gray-500 text-sm">DATA</span>
+                    </div>
+                    <p id="sponsorship-form-amount-status" class="hidden mt-1 text-xs"></p>
+                </div>
+
+                <!-- Create mode -->
+                <section id="sponsorship-form-create" class="space-y-4">
+                    <div>
+                        <label for="sponsorship-form-rate" class="block text-xs text-gray-400 mb-1">Payout rate</label>
+                        <div class="flex items-center bg-[#121212] border border-[#333] rounded-lg focus-within:ring-2 focus-within:ring-blue-500/50">
+                            <input id="sponsorship-form-rate" type="number" min="0" step="any" placeholder="0" class="flex-1 min-w-0 p-2.5 bg-transparent text-white text-sm focus:outline-none disabled:opacity-50">
+                            <span class="pr-3 text-gray-500 text-sm whitespace-nowrap">DATA / day</span>
+                        </div>
+                        <p class="mt-1 text-xs text-gray-500">Paid to the staked operators, split by stake.</p>
+                    </div>
+                    <div class="grid sm:grid-cols-3 gap-3">
+                        <div>
+                            <label for="sponsorship-form-min-stake" class="block text-xs text-gray-400 mb-1">Min stake duration</label>
+                            <div class="flex items-center bg-[#121212] border border-[#333] rounded-lg focus-within:ring-2 focus-within:ring-blue-500/50">
+                                <input id="sponsorship-form-min-stake" type="number" min="0" step="1" value="0" class="flex-1 min-w-0 p-2.5 bg-transparent text-white text-sm focus:outline-none disabled:opacity-50">
+                                <span class="pr-3 text-gray-500 text-sm">days</span>
+                            </div>
+                        </div>
+                        <div>
+                            <label for="sponsorship-form-min-ops" class="block text-xs text-gray-400 mb-1">Min operators</label>
+                            <input id="sponsorship-form-min-ops" type="number" min="1" step="1" value="1" class="w-full p-2.5 bg-[#121212] border border-[#333] rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 disabled:opacity-50">
+                        </div>
+                        <div>
+                            <label for="sponsorship-form-max-ops" class="block text-xs text-gray-400 mb-1">Max operators <span class="text-gray-600">(optional)</span></label>
+                            <input id="sponsorship-form-max-ops" type="number" min="1" step="1" placeholder="No limit" class="w-full p-2.5 bg-[#121212] border border-[#333] rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 disabled:opacity-50">
+                        </div>
+                    </div>
+                    <p class="text-xs text-gray-500">Operators who leave before the minimum stake duration are penalized. Payouts start once the minimum number of operators has joined.</p>
+                </section>
+
+                <!-- Effect of the amount -->
+                <p id="sponsorship-form-effect" class="hidden p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg text-sm text-blue-200"></p>
+
+                <p class="flex gap-2 p-3 bg-yellow-500/10 border border-yellow-500/30 rounded-lg text-xs text-yellow-300">
+                    <svg class="w-4 h-4 flex-shrink-0 mt-px" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v3.75m0 3.75h.008M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/></svg>
+                    <span>Sponsoring is final: the DATA can't be withdrawn. It is paid out to the staked operators over time.</span>
+                </p>
+
+                <!-- Cost estimate -->
+                <section class="p-4 bg-[#121212] border border-[#333] rounded-lg space-y-2">
+                    <div class="flex justify-between items-baseline">
+                        <span class="text-sm text-gray-400">Network fee</span>
+                        <span id="sponsorship-form-cost" class="text-lg font-semibold text-white">--</span>
+                    </div>
+                    <div class="flex justify-between items-baseline text-xs">
+                        <span class="text-gray-500">Your POL balance</span>
+                        <span id="sponsorship-form-balance" class="text-gray-400">--</span>
+                    </div>
+                    <p id="sponsorship-form-cost-note" class="text-xs text-gray-500"></p>
+                </section>
+
+                <section id="sponsorship-form-progress" class="hidden p-4 bg-[#121212] border border-[#333] rounded-lg">
+                    <h3 class="text-sm font-semibold text-gray-200 mb-3">Progress</h3>
+                    <ol id="sponsorship-form-progress-list" class="space-y-2 text-sm"></ol>
+                </section>
+
+                <section id="sponsorship-form-success" class="hidden p-4 bg-green-500/10 border border-green-500/30 rounded-lg space-y-2">
+                    <p id="sponsorship-form-success-title" class="text-sm font-semibold text-green-400"></p>
+                    <p id="sponsorship-form-success-text" class="text-xs text-gray-300"></p>
+                    <a id="sponsorship-form-success-link" href="#" class="hidden inline-flex items-center gap-1.5 text-sm font-semibold text-blue-400 hover:text-blue-300">
+                        Open sponsorship
+                        <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+                    </a>
+                </section>
+
+                <p id="sponsorship-form-error" class="hidden p-3 bg-red-500/10 border border-red-500/30 rounded-lg text-sm text-red-400 break-words"></p>
+            </div>
+
+            <div class="flex gap-3 px-5 sm:px-6 py-4 border-t border-[#333] flex-shrink-0">
+                <button id="sponsorship-form-cancel" type="button" class="w-full bg-[#444444] hover:bg-[#555555] text-white font-bold py-3 px-4 rounded-lg transition-colors">Cancel</button>
+                <button id="sponsorship-form-submit" type="button" class="w-full bg-blue-800 hover:bg-blue-900 text-white font-bold py-3 px-4 rounded-lg transition-colors flex justify-center items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-blue-800">Create Sponsorship</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Create Stream Modal -->
     <div id="createStreamModal" class="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-3 sm:p-4 z-50 hidden">
         <div class="bg-[#1E1E1E] rounded-xl max-w-2xl w-full text-gray-300 border border-[#333333] shadow-2xl max-h-[92vh] flex flex-col">
@@ -2034,12 +2147,19 @@
                     <!-- ROW 2: Funding History + Permissions -->
                     <!-- Funding History -->
                     <div id="funding-history-tile" class="bg-[#1E1E1E] border border-[#333] rounded-xl p-4 md:p-6 overflow-hidden">
-                        <h3 class="text-sm md:text-base font-bold text-gray-200 flex items-center gap-2 mb-4">
+                        <div class="flex items-center justify-between gap-3 mb-4">
+                        <h3 class="text-sm md:text-base font-bold text-gray-200 flex items-center gap-2">
                             <svg class="w-4 h-4 md:w-5 md:h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
                             </svg>
                             Funding 
                         </h3>
+                        <button id="sponsorship-add-funds-btn" type="button" disabled title="Connect a wallet to add funds"
+                        class="h-8 px-3 flex items-center gap-1.5 bg-blue-800 hover:bg-blue-900 text-white text-xs font-semibold rounded-lg transition-colors flex-shrink-0 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-blue-800">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" d="M12 5v14M5 12h14"/></svg>
+                        Add Funds
+                    </button>
+                        </div>
                         <div id="stream-funding-history" class="max-h-64 overflow-y-auto">
                             <!-- Funding history will be injected here -->
                         </div>
@@ -2129,13 +2249,20 @@
             
             <!-- Sponsorships Panel for Non-Sponsored Streams (shows linked sponsorships) -->
             <div id="stream-sponsorships-list-panel" class="hidden bg-[#1E1E1E] border border-[#333] rounded-xl p-4 md:p-6 overflow-hidden">
-                <h3 class="text-sm md:text-base font-bold text-gray-200 flex items-center gap-2 mb-4">
+                <div class="flex items-center justify-between gap-3 mb-4">
+                <h3 class="text-sm md:text-base font-bold text-gray-200 flex items-center gap-2">
                     <svg class="w-4 h-4 md:w-5 md:h-5" viewBox="0 0 56 56" fill="none" xmlns="http://www.w3.org/2000/svg">
                         <circle cx="28" cy="28" r="28" fill="#F7600A"/>
                         <path fill-rule="evenodd" clip-rule="evenodd" d="M32.9091 10.2118V9.08164C32.9091 8.69418 32.5861 8.38241 32.199 8.4008C24.6009 8.76169 18.5119 14.8843 18.2056 22.4955C18.2219 22.9725 18.608 23.0974 18.8351 23.0974H19.983C20.3463 23.0974 20.6441 22.8122 20.6629 22.4495C20.989 16.1879 26.0134 11.1697 32.278 10.8522C32.7558 10.7908 32.9091 10.5297 32.9091 10.2118ZM22.5761 23.0974H23.6747C24.0313 23.0974 24.3221 22.8195 24.348 22.4638C24.6586 18.2097 28.0701 14.8164 32.3324 14.5336C32.523 14.521 32.9091 14.3783 32.9091 13.8844V12.7659C32.9091 12.3707 32.5739 12.0603 32.1795 12.0861C26.6654 12.4459 22.256 16.8547 21.8961 22.3679C21.8704 22.7623 22.1808 23.0974 22.5761 23.0974ZM37.1763 32.9026C37.4035 32.9026 37.7895 33.0275 37.8058 33.5045C37.4995 41.1158 31.4105 47.2383 23.8124 47.5993C23.4253 47.6176 23.1023 47.3059 23.1023 46.9183V45.7883C23.1023 45.4704 23.2556 45.2093 23.7333 45.1479C29.9981 44.8304 35.0224 39.8121 35.3485 33.5505C35.3673 33.1878 35.6651 32.9026 36.0284 32.9026H37.1763ZM33.4353 32.9026C33.8306 32.9026 34.141 33.2377 34.1153 33.6321C33.7554 39.1454 29.346 43.5542 23.8319 43.914C23.4375 43.9398 23.1023 43.6293 23.1023 43.2341V42.1155C23.1023 41.6217 23.4884 41.4791 23.679 41.4664C27.9413 41.1837 31.3529 37.7903 31.6633 33.5362C31.6893 33.1805 31.9801 32.9026 32.3367 32.9026H33.4353ZM29.7445 32.9026C30.1445 32.9026 30.463 33.246 30.4231 33.6441C30.0758 37.1151 27.3154 39.8751 23.8438 40.2224C23.4458 40.2623 23.1023 39.9438 23.1023 39.5438V38.4201C23.1023 37.9604 23.5015 37.795 23.6961 37.7715C25.9261 37.5025 27.6953 35.7373 27.9703 33.5095C28.0129 33.1647 28.2999 32.9026 28.6474 32.9026H29.7445ZM10.212 23.0945C10.53 23.0945 10.7911 23.2477 10.8525 23.7254C11.1701 29.9892 16.189 35.0129 22.4516 35.3389C22.8143 35.3577 23.0996 35.6555 23.0996 36.0187V37.1666C23.0996 37.3936 22.9746 37.7796 22.4976 37.7959C14.8853 37.4896 8.76181 31.4015 8.4008 23.8045C8.3824 23.4174 8.69423 23.0945 9.0818 23.0945H10.212ZM13.8853 23.0945C14.3792 23.0945 14.5219 23.4805 14.5346 23.6711C14.8173 27.9328 18.2111 31.3439 22.4659 31.6543C22.8216 31.6803 23.0996 31.971 23.0996 32.3276V33.426C23.0996 33.8212 22.7644 34.1316 22.3699 34.1059C16.8559 33.746 12.4464 29.3373 12.0866 23.824C12.0608 23.4296 12.3713 23.0945 12.7666 23.0945H13.8853ZM33.5024 18.1729C41.1148 18.4792 47.2382 24.5673 47.5993 32.1644C47.6176 32.5514 47.3058 32.8744 46.9183 32.8744H45.788C45.4701 32.8744 45.2089 32.7211 45.1475 32.2434C44.8299 25.9795 39.811 20.956 33.5485 20.6299C33.1857 20.6111 32.9005 20.3133 32.9005 19.9501V18.8023C32.9005 18.5752 33.0253 18.1892 33.5024 18.1729ZM33.6301 21.8629C39.1442 22.2227 43.5536 26.6315 43.9135 32.1448C43.9392 32.5392 43.6288 32.8744 43.2335 32.8744H42.1148C41.6208 32.8744 41.4782 32.4883 41.4655 32.2977C41.1828 28.036 37.7889 24.6249 33.5342 24.3145C33.1784 24.2886 32.9005 23.9978 32.9005 23.6412V22.5428C32.9005 22.1476 33.2357 21.8372 33.6301 21.8629ZM33.642 25.5545C37.1136 25.9019 39.874 28.6619 40.2213 32.1329C40.2612 32.5309 39.9427 32.8744 39.5427 32.8744H38.4188C37.959 32.8744 37.7936 32.4752 37.7701 32.2806C37.501 30.0509 35.7356 28.282 33.5075 28.0071C33.1626 27.9645 32.9005 27.6775 32.9005 27.33V26.2331C32.9005 25.8331 33.244 25.5147 33.642 25.5545ZM17.5812 23.0945C18.0411 23.0945 18.2064 23.4936 18.2299 23.6882C18.4991 25.9179 20.2644 27.6868 22.4926 27.9618C22.8374 28.0043 23.0996 28.2913 23.0996 28.6388V29.7357C23.0996 30.1357 22.7561 30.4541 22.358 30.4144C18.8865 30.0669 16.1261 27.3069 15.7786 23.8359C15.7388 23.4379 16.0573 23.0945 16.4574 23.0945H17.5812ZM32.9091 16.4562V17.5798C32.9091 18.0396 32.51 18.205 32.3152 18.2285C30.0853 18.4976 28.3161 20.2627 28.0411 22.4905C27.9985 22.8353 27.7115 23.0974 27.364 23.0974H26.2669C25.8669 23.0974 25.5484 22.7539 25.5882 22.3559C25.9357 18.885 28.6961 16.125 32.1675 15.7776C32.5656 15.7378 32.9091 16.0562 32.9091 16.4562Z" fill="white"/>
                     </svg>
                     Sponsorships
                 </h3>
+                    <button id="stream-new-sponsorship-btn" type="button" disabled title="Connect a wallet to create a sponsorship"
+                        class="h-8 px-3 flex items-center gap-1.5 bg-blue-800 hover:bg-blue-900 text-white text-xs font-semibold rounded-lg transition-colors flex-shrink-0 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-blue-800">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" d="M12 5v14M5 12h14"/></svg>
+                        New Sponsorship
+                    </button>
+                </div>
                 <div id="stream-sponsorships-list-empty" class="hidden py-8 text-center">
                     <p class="text-gray-500 text-sm">No sponsorships found for this stream.</p>
                 </div>
@@ -2311,7 +2438,7 @@
                     <!-- CHART AREA -->
                     <div id="chart-area" class="hidden w-full px-4 sm:px-6 md:px-8 py-4 sm:py-6 relative overflow-x-hidden">
                         
-                        <div class="fixed bottom-4 right-4 sm:bottom-8 sm:right-8 md:bottom-12 md:right-12 text-right pointer-events-none z-0 select-none opacity-60">
+                        <div class="absolute bottom-3 right-4 sm:bottom-4 sm:right-6 md:right-8 text-right pointer-events-none z-0 select-none opacity-60">
                             <div id="bg-year-display" class="text-4xl sm:text-5xl md:text-6xl font-black text-[#333] tracking-tighter transition-colors leading-none">----</div>
                             <div id="bg-day-display" class="text-2xl sm:text-3xl md:text-4xl font-bold text-[#444] tracking-tight mt-1">-- --</div>
                         </div>
@@ -2938,7 +3065,7 @@
         </div>
     </div>
 
-    <div id="custom-tooltip" class="hidden absolute z-30 px-3 py-2 text-sm font-medium text-white bg-black rounded-lg shadow-sm border border-[#333333] max-w-xs break-words">
+    <div id="custom-tooltip" class="hidden absolute z-30 px-3 py-2 text-sm font-medium text-white bg-black rounded-lg shadow-sm border border-[#333333] w-max max-w-xs break-words pointer-events-none">
     </div>
 
     <script src="/libs/streamr-sdk.web.js"></script>

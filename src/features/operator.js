@@ -81,8 +81,101 @@ const debouncedSearch = Utils.debounce((query) => {
 const INITIAL_GRAPH_LIMIT = 1000;
 const INITIAL_ETHERSCAN_OFFSET = 500;
 
+/**
+ * Stake change of each StakingEvent. The subgraph stores the operator's stake in the sponsorship
+ * after the transaction (not the amount moved), also for earnings withdrawals (stake unchanged), and
+ * no event when the stake goes to 0 (full unstake): compare with the previous event of the same
+ * sponsorship, restarting from 0 after an Unstake seen on Polygonscan. The Polygonscan transfer of the
+ * same transaction, when there is one (Stake to the sponsorship / Reduce Stake from it), is the exact
+ * amount moved and takes priority; it also covers events whose previous one is not loaded
+ * (operators with 1000+ events). Only Collect Earnings in the tx = earnings.
+ * @returns {Map<string, {delta: number|null, kind: 'stake'|'reduce'|'earnings'|null}>} by event id
+ */
+function computeStakeChanges(graphEvents, polygonscanTxs) {
+    const changes = new Map();
+    const unstakes = (polygonscanTxs || [])
+        .filter(tx => ['Unstake', 'Force Unstake'].includes(tx.methodId) && tx.from)
+        .map(tx => ({ sponsorship: tx.from.toLowerCase(), timestamp: Number(tx.timestamp) }));
+    // Polygonscan transfers by transaction (lowercase hash)
+    const scanByTx = new Map();
+    for (const tx of polygonscanTxs || []) {
+        const hash = tx.txHash?.toLowerCase();
+        if (!hash) continue;
+        if (!scanByTx.has(hash)) scanByTx.set(hash, []);
+        scanByTx.get(hash).push(tx);
+    }
+    // With decimals (convertWeiToData truncates): the amounts are compared with the transfers' amounts
+    const toData = (wei) => parseFloat(ethers.utils.formatEther(wei.toString()));
+    const fromScan = (e, sponsorshipId) => {
+        const hash = typeof e.id === 'string' ? e.id.split('-').pop().toLowerCase() : '';
+        const txs = scanByTx.get(hash) || [];
+        const staked = txs.find(t => t.methodId === 'Stake' && t.to?.toLowerCase() === sponsorshipId && t.token === 'DATA');
+        if (staked) return { delta: toData(BigInt(staked.rawValue || '0')), kind: 'stake' };
+        const reduced = txs.find(t => t.methodId === 'Reduce Stake' && t.from?.toLowerCase() === sponsorshipId && t.token === 'DATA');
+        if (reduced) return { delta: -toData(BigInt(reduced.rawValue || '0')), kind: 'reduce' };
+        if (txs.some(t => t.methodId === 'Collect Earnings')) return { delta: 0, kind: 'earnings' };
+        return null;
+    };
+    const bySponsorship = new Map();
+    for (const e of graphEvents || []) {
+        const id = e.sponsorship?.id?.toLowerCase();
+        if (!id) continue;
+        if (!bySponsorship.has(id)) bySponsorship.set(id, []);
+        bySponsorship.get(id).push(e);
+    }
+    for (const [sponsorshipId, events] of bySponsorship) {
+        events.sort((a, b) => Number(a.date) - Number(b.date));
+        events.forEach((e, i) => {
+            const scan = fromScan(e, sponsorshipId);
+            if (scan && scan.kind !== 'earnings') {
+                changes.set(e.id, scan);
+                return;
+            }
+            const amount = BigInt(e.amount || '0');
+            const prev = events[i - 1];
+            let previous = prev ? BigInt(prev.amount || '0') : null;
+            // Left the sponsorship in between (no event at 0): the stake started again from 0
+            if (prev && unstakes.some(u => u.sponsorship === sponsorshipId && u.timestamp > Number(prev.date) && u.timestamp < Number(e.date))) {
+                previous = 0n;
+            }
+            // Oldest loaded event while older ones exist: the same transaction on Polygonscan, else
+            // unknown change (keep the plain row)
+            if (previous === null && state.historyState.hasMoreGraph) {
+                changes.set(e.id, scan || { delta: null, kind: null });
+                return;
+            }
+            const delta = amount - (previous ?? 0n);
+            const kind = delta > 0n ? 'stake' : (delta < 0n ? 'reduce' : 'earnings');
+            changes.set(e.id, { delta: toData(delta), kind });
+        });
+    }
+    return changes;
+}
+
+/**
+ * Transfers with a sponsorship on the other side can't be delegations: the shared Polygonscan
+ * classification only knows the sponsorships of the first load, so after "Load All History" older
+ * ones showed as Delegate (IN) / Undelegate (OUT). Sponsorships known from The Graph fix them.
+ */
+function relabelSponsorshipTransfers(graphEvents, polygonscanTxs) {
+    const sponsorships = new Set([
+        ...(state.historyState.allSponsorshipAddresses || []),
+        ...(graphEvents || []).map(e => e.sponsorship?.id)
+    ].filter(Boolean).map(a => a.toLowerCase()));
+    for (const tx of polygonscanTxs || []) {
+        if (tx.token !== 'DATA') continue;
+        if (tx.direction === 'IN' && ['Delegate', 'Transfer'].includes(tx.methodId) && sponsorships.has(tx.from?.toLowerCase())) {
+            tx.methodId = 'Reduce Stake';
+        } else if (tx.direction === 'OUT' && ['Undelegate', 'Transfer'].includes(tx.methodId) && sponsorships.has(tx.to?.toLowerCase())) {
+            tx.methodId = 'Stake';
+        }
+    }
+}
+
 function processSponsorshipHistory(graphEvents, polygonscanTxs, limitToEtherscan = true) {
     const combinedEvents = new Map();
+    relabelSponsorshipTransfers(state.historyState.graphEvents?.length ? state.historyState.graphEvents : graphEvents, polygonscanTxs);
+    const stakeChanges = computeStakeChanges(graphEvents, polygonscanTxs);
     
     let cutoffDate = null;
     if (limitToEtherscan && polygonscanTxs && polygonscanTxs.length > 0) {
@@ -100,13 +193,17 @@ function processSponsorshipHistory(graphEvents, polygonscanTxs, limitToEtherscan
         if (!combinedEvents.has(timestamp)) {
             combinedEvents.set(timestamp, { timestamp, events: [] });
         }
+        const change = stakeChanges.get(e.id) || { delta: null, kind: null };
         combinedEvents.get(timestamp).events.push({
             timestamp: timestamp,
             type: 'graph',
             amount: parseFloat(Utils.convertWeiToData(e.amount)),
+            stakeDelta: change.delta,
+            stakeChange: change.kind,
             token: 'DATA',
             methodId: 'Staking Event',
-            txHash: null,
+            // StakingEvent id is "<sponsorship>-<txHash>"
+            txHash: typeof e.id === 'string' && e.id.includes('-') ? e.id.split('-').pop() : null,
             relatedObject: e.sponsorship
         });
     });
@@ -124,6 +221,44 @@ function processSponsorshipHistory(graphEvents, polygonscanTxs, limitToEtherscan
             methodId: tx.methodId,
             txHash: tx.txHash,
             relatedObject: tx.direction
+        });
+    });
+
+    // Full exits: the subgraph writes no StakingEvent when the stake goes to 0, so the stake returned by
+    // the sponsorship (Unstake / Force Unstake / Reduce Stake with no event in that tx) gets its row here,
+    // within the period covered by the loaded StakingEvents
+    const allGraphEvents = state.historyState.graphEvents?.length ? state.historyState.graphEvents : (graphEvents || []);
+    const graphTxHashes = new Set(allGraphEvents
+        .map(e => (typeof e.id === 'string' ? e.id.split('-').pop().toLowerCase() : null))
+        .filter(Boolean));
+    const coverageStart = state.historyState.hasMoreGraph && allGraphEvents.length
+        ? Math.min(...allGraphEvents.map(e => Number(e.date)))
+        : -Infinity;
+    const streamOf = new Map();
+    for (const e of allGraphEvents) {
+        if (e.sponsorship?.id && e.sponsorship.stream?.id) streamOf.set(e.sponsorship.id.toLowerCase(), e.sponsorship.stream.id);
+    }
+    for (const stake of state.currentOperatorData?.stakes || []) {
+        if (stake.sponsorship?.id && stake.sponsorship.stream?.id) streamOf.set(stake.sponsorship.id.toLowerCase(), stake.sponsorship.stream.id);
+    }
+    (polygonscanTxs || []).forEach(tx => {
+        const timestamp = Number(tx.timestamp);
+        const sponsorshipId = tx.from?.toLowerCase();
+        if (!['Unstake', 'Force Unstake', 'Reduce Stake'].includes(tx.methodId) || tx.direction !== 'IN' || tx.token !== 'DATA') return;
+        if (!sponsorshipId || !tx.txHash || graphTxHashes.has(tx.txHash.toLowerCase()) || timestamp < coverageStart) return;
+        if (!combinedEvents.has(timestamp)) combinedEvents.set(timestamp, { timestamp, events: [] });
+        const streamId = streamOf.get(sponsorshipId);
+        combinedEvents.get(timestamp).events.push({
+            timestamp,
+            type: 'graph',
+            synthetic: true,
+            amount: 0,
+            stakeDelta: -tx.amount,
+            stakeChange: 'unstake',
+            token: 'DATA',
+            methodId: 'Staking Event',
+            txHash: tx.txHash,
+            relatedObject: { id: sponsorshipId, stream: streamId ? { id: streamId } : null }
         });
     });
 
@@ -672,6 +807,11 @@ async function handleEditOperatorSettingsClick() {
         return;
     }
     if (!state.currentOperatorData) return;
+    const address = (await state.signer.getAddress().catch(() => '')).toLowerCase();
+    if (!address || address !== state.currentOperatorData.owner?.toLowerCase()) {
+        UI.showToast({ type: 'warning', title: 'Owner Only', message: 'Only the operator owner can edit its settings.' });
+        return;
+    }
     // Same modal as "Create Operator", in edit mode; refresh the page once the changes are indexed
     OperatorForm.openEdit(state.currentOperatorData, () => OperatorLogic.refreshData(true));
 }
@@ -1186,22 +1326,22 @@ export const OperatorLogic = {
             } else {
                 content = Utils.formatUsdForTooltip(target.dataset.tooltipValue, state.dataPriceUSD);
             }
+            // Optional extra lines, separated by "|" (e.g. "Stake before: ...|Stake after: ..." in the history)
+            if (content && target.dataset.tooltipExtra) {
+                const extraLines = target.dataset.tooltipExtra.split('|')
+                    .map(line => `<span class="text-gray-400">${Utils.escapeHtml(line)}</span>`).join('<br>');
+                content = `${Utils.escapeHtml(String(content))}<br>${extraLines}`;
+            }
             
             if (content) {
-                if (content.includes('<br>')) {
-                    UI.customTooltip.innerHTML = content;
-                } else {
-                    UI.customTooltip.textContent = content;
-                }
+                UI.setTooltipContent(content);
                 UI.customTooltip.classList.remove('hidden');
+                UI.positionTooltip(e);
             }
         });
         
         UI.mainContainer.addEventListener('mousemove', (e) => {
-            if (!UI.customTooltip.classList.contains('hidden')) {
-                UI.customTooltip.style.left = `${e.pageX + 15}px`;
-                UI.customTooltip.style.top = `${e.pageY + 15}px`;
-            }
+            UI.positionTooltip(e);
         });
         
         UI.mainContainer.addEventListener('mouseout', (e) => {

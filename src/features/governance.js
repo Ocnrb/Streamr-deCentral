@@ -7,7 +7,7 @@
 
 import * as Services from '../core/services.js';
 import * as UI from '../ui/ui.js';
-import { escapeHtml, convertWeiToData, formatBigNumber, parseOperatorMetadata, shortAddress } from '../core/utils.js';
+import { escapeHtml, convertWeiToData, formatBigNumber, parseOperatorMetadata, shortAddress, operatorAvatarHtml } from '../core/utils.js';
 import { navigationController } from '../ui/navigation.js';
 
 // ============================================
@@ -42,7 +42,6 @@ const STATUS = {
 };
 
 const COLORS = { kicked: '#f87171', failed: '#34d399', active: '#60a5fa', unresolved: '#6b7280' };
-const PLACEHOLDER_AVATAR = 'https://placehold.co/64x64/1E1E1E/a3a3a3?text=OP';
 
 const FLAG_FIELDS = `
     id lastFlagIndex result metadata
@@ -153,13 +152,12 @@ function formatPercent(value) {
 }
 
 function operatorInfo(operator) {
-    const { name, imageUrl } = parseOperatorMetadata(operator?.metadataJsonString);
-    return { name: name || shortAddress(operator?.id || ''), imageUrl: imageUrl || PLACEHOLDER_AVATAR };
+    const { name } = parseOperatorMetadata(operator?.metadataJsonString);
+    return { name: name || shortAddress(operator?.id || '') };
 }
 
 function avatar(operator, size = 'w-8 h-8') {
-    const { imageUrl } = operatorInfo(operator);
-    return `<img src="${imageUrl}" alt="" loading="lazy" onerror="this.src='${PLACEHOLDER_AVATAR}'; this.onerror=null;" class="${size} rounded-full border border-[#333] object-cover flex-shrink-0">`;
+    return operatorAvatarHtml(operator?.metadataJsonString, { className: `${size} border border-[#333]` });
 }
 
 /**

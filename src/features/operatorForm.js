@@ -665,7 +665,7 @@ function renderImagePreview() {
     // Same priority as the rest of the app: IPFS CID (official) > avatar stream > placeholder
     const av = $('operator-form-avatar-enabled')?.checked ? state.avatar : null;
     const streamAvatar = av?.prepared?.dataUrl || av?.currentAvatar;
-    const next = valid ? `https://ipfs.io/ipfs/${cid}` : (streamAvatar || Utils.OPERATOR_AVATAR_PLACEHOLDER);
+    const next = valid ? Utils.ipfsAvatarUrl(cid) : (streamAvatar || Utils.OPERATOR_AVATAR_PLACEHOLDER);
     if (img.getAttribute('src') !== next) img.src = next;
     setStatus('operator-form-image-status', cid && !valid ? 'Not a valid IPFS CID.' : '', 'error');
 }
@@ -1031,6 +1031,11 @@ async function handleSubmit() {
             setSubmitState(step.busy || 'Confirm in wallet...', true);
             await runStep(step, flow);
             step.status = 'done';
+            // Modal closed while this step ran: stop here, no further wallet prompts
+            if (flow.detached) {
+                if (flow.mode === 'edit' && !step.noTx) state.edit?.onSaved?.();
+                return;
+            }
             renderProgress();
         }
 
@@ -1052,6 +1057,7 @@ async function handleSubmit() {
         });
     } catch (e) {
         logger.error('Operator flow failed:', e);
+        if (flow.detached) return;
         const failed = flow.steps.find(s => s.status === 'active');
         if (failed) failed.status = 'error';
         renderProgress();
@@ -1182,9 +1188,18 @@ function openEdit(operator, onSaved) {
     openModal('edit');
 }
 
-function closeModal() {
-    if (state.submitting) return; // don't close while a transaction is in flight
+/**
+ * @param {Object} [options]
+ * @param {boolean} [options.force] - close without asking even if a step is running (route change)
+ */
+function closeModal({ force = false } = {}) {
     const flow = state.flow;
+    if (state.submitting) {
+        // Never trap the user: a wallet prompt or the indexing wait can take long (or never end)
+        if (!force && !window.confirm('A step is still in progress. Close anyway? A transaction you already confirmed in your wallet still goes through.')) return;
+        if (flow) flow.detached = true;
+        state.submitting = false;
+    }
     if (flow && !flow.finished && flow.steps.some(s => s.status === 'done' && !s.noTx)) {
         UI.showToast({
             type: 'warning',
@@ -1213,6 +1228,10 @@ function setupListeners() {
     $('operator-form-close')?.addEventListener('click', closeModal);
     $('operator-form-cancel')?.addEventListener('click', closeModal);
     $('operator-form-submit')?.addEventListener('click', handleSubmit);
+    // Leaving the page (links, back button) closes the modal
+    window.addEventListener('app:routechange', () => {
+        if (!$('operatorFormModal')?.classList.contains('hidden')) closeModal({ force: true });
+    });
     $('operator-form-avatar-enabled')?.addEventListener('change', () => {
         if (!state.flow) showError('');
         renderAvatarSection();

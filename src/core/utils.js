@@ -198,6 +198,35 @@ export const OPERATOR_AVATAR_PLACEHOLDER = 'https://placehold.co/64x64/1E1E1E/a3
 export const AVATAR_STREAM_MARKER = '#avatar-stream=';
 const PROFILE_STREAM_ID_REGEX = /^(0x[0-9a-fA-F]{40}|[a-z0-9.-]+\.eth)\/[A-Za-z0-9_.\-\/]+$/;
 
+/**
+ * IPFS avatar as a small square thumbnail through the wsrv.nl image proxy (as the Network Map does):
+ * the gateway serves the original file, often large, which is slow in lists
+ */
+export function ipfsAvatarUrl(cid, size = 160) {
+    return `https://wsrv.nl/?url=${encodeURIComponent(`https://ipfs.io/ipfs/${cid}`)}&w=${size}&h=${size}&fit=cover&output=webp`;
+}
+
+/**
+ * The one operator avatar <img> used across the app. Priority: IPFS CID (official) > avatar stream
+ * (resolved by the hydrator in streamAvatar.js) > placeholder.
+ * @param {string|null} imageUrl - from parseOperatorMetadata (may carry the avatar stream marker)
+ * @param {Object} [options]
+ * @param {string} [options.className] - size and extra classes (e.g. 'w-8 h-8 border border-[#333]')
+ * @param {string} [options.alt]
+ * @param {string} [options.attrs] - extra raw attributes (already escaped)
+ */
+export function avatarImgHtml(imageUrl, { className = 'w-8 h-8', alt = '', attrs = '' } = {}) {
+    const src = typeof imageUrl === 'string' && imageUrl.startsWith('https://') ? imageUrl : OPERATOR_AVATAR_PLACEHOLDER;
+    return `<img src="${escapeHtml(src)}" alt="${escapeHtml(alt)}" loading="lazy" onerror="this.onerror=null; this.src='${OPERATOR_AVATAR_PLACEHOLDER}';" class="rounded-full object-cover flex-shrink-0 bg-[#1E1E1E] ${className}" ${attrs}>`;
+}
+
+/**
+ * Operator avatar <img> from the operator's metadata JSON (see avatarImgHtml)
+ */
+export function operatorAvatarHtml(metadataJsonString, options) {
+    return avatarImgHtml(parseOperatorMetadata(metadataJsonString).imageUrl, options);
+}
+
 export function isValidProfileStreamId(streamId) {
     return typeof streamId === 'string' && streamId.length <= 255 && PROFILE_STREAM_ID_REGEX.test(streamId);
 }
@@ -228,7 +257,7 @@ export function parseOperatorMetadata(metadataJsonString) {
             // resolves: right away when there is no CID, or when the IPFS image fails to load.
             let imageUrl = null;
             if (metadata.imageIpfsCid && isValidIpfsCid(metadata.imageIpfsCid)) {
-                imageUrl = `https://ipfs.io/ipfs/${metadata.imageIpfsCid}`;
+                imageUrl = ipfsAvatarUrl(metadata.imageIpfsCid);
             }
             if (isValidProfileStreamId(metadata.imageStreamId)) {
                 const partition = Number.isInteger(metadata.imageStreamPartition) ? metadata.imageStreamPartition : 0;

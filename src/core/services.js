@@ -1200,7 +1200,28 @@ export async function fetchMoreDelegators(operatorId, skip) {
 
 // --- API (Polygonscan) ---
 
-export async function fetchPolygonscanHistory(walletAddress, offset = 500, sponsorshipAddresses = []) {
+/**
+ * Event logs emitted by a contract (oldest first), through the Polygonscan logs API
+ * @param {string} address - contract address
+ * @param {number} [maxPages=5] - pages of 1000 logs
+ * @returns {Promise<Array<{topics: string[], data: string, transactionHash: string, blockNumber: string, logIndex: string}>>}
+ */
+export async function fetchContractLogs(address, maxPages = 5) {
+    const apiKey = getEtherscanApiKey();
+    if (!apiKey) return [];
+    const { apiUrl, chainId } = POLYGONSCAN_NETWORK;
+    const logs = [];
+    for (let page = 1; page <= maxPages; page++) {
+        const url = `${apiUrl}?chainid=${chainId}&module=logs&action=getLogs&address=${address}&fromBlock=0&toBlock=latest&page=${page}&offset=1000&apikey=${apiKey}`;
+        const data = await fetchWithPolygonscanRetry(url, 2) // few retries: the history waits for it;
+        const result = Array.isArray(data?.result) ? data.result : [];
+        logs.push(...result);
+        if (result.length < 1000) break;
+    }
+    return logs;
+}
+
+export async function fetchPolygonscanHistory(walletAddress, offset = 500, sponsorshipAddresses = [], page = 1) {
     const apiKey = getEtherscanApiKey();
     
     // Create a Set of known sponsorship addresses (smart contracts) for quick lookup
@@ -1215,6 +1236,7 @@ export async function fetchPolygonscanHistory(walletAddress, offset = 500, spons
         module: 'account',
         action: 'txlist',
         address: walletAddress,
+        page,
         offset
     });
     
@@ -1222,6 +1244,7 @@ export async function fetchPolygonscanHistory(walletAddress, offset = 500, spons
         module: 'account',
         action: 'tokentx',
         address: walletAddress,
+        page,
         offset
     });
 
@@ -1555,7 +1578,10 @@ export async function fetchAllPolygonscanHistory(walletAddress, sponsorshipAddre
     const sponsorshipSet = new Set(sponsorshipAddresses.map(addr => addr.toLowerCase()));
     const nativeToken = POLYGONSCAN_NETWORK.nativeToken;
     
-    const existingHashes = new Set(existingTxs.map(tx => `${tx.txHash}-${tx.timestamp}`));
+    // One key per transfer: a transaction has several (e.g. earnings + tax + stake) and can be split
+    // across two pages, so hash + timestamp would drop the transfers of the second page
+    const transferKey = (tx) => `${tx.txHash}|${tx.token}|${tx.from}|${tx.to}|${tx.rawValue}|${tx.direction}`.toLowerCase();
+    const existingHashes = new Set(existingTxs.map(transferKey));
     let allProcessedTxs = [...existingTxs];
     let page = initialPage;
     let hasMore = true;
@@ -1600,8 +1626,8 @@ export async function fetchAllPolygonscanHistory(walletAddress, sponsorshipAddre
 
             const pageTxs = processPolygonscanPage(normalTxs, tokenTxs, walletAddress, sponsorshipSet, nativeToken);
             
-            const newTxs = pageTxs.filter(tx => !existingHashes.has(`${tx.txHash}-${tx.timestamp}`));
-            newTxs.forEach(tx => existingHashes.add(`${tx.txHash}-${tx.timestamp}`));
+            const newTxs = pageTxs.filter(tx => !existingHashes.has(transferKey(tx)));
+            newTxs.forEach(tx => existingHashes.add(transferKey(tx)));
             allProcessedTxs = [...allProcessedTxs, ...newTxs];
 
             hasMore = (normalTxs.length === OFFSET || tokenTxs.length === OFFSET) && page < MAX_PAGES;
@@ -1645,7 +1671,10 @@ function processPolygonscanPage(normalTxs, tokenTxs, walletAddress, sponsorshipS
             direction: direction,
             methodId: methodId,
             amount: parseFloat(tx.value) / 1e18,
-            rawValue: tx.value
+            rawValue: tx.value,
+            // Same fields as fetchPolygonscanHistory (the history matches transfers by counterparty)
+            from: tx.from,
+            to: tx.to
         };
     });
 
@@ -1687,7 +1716,9 @@ function processPolygonscanPage(normalTxs, tokenTxs, walletAddress, sponsorshipS
                 direction: direction,
                 methodId: finalMethodId,
                 amount: amount,
-                rawValue: tx.value
+                rawValue: tx.value,
+                from: tx.from,
+                to: tx.to
             });
         }
     }
