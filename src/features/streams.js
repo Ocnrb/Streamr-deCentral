@@ -8,6 +8,7 @@ import * as UI from '../ui/ui.js';
 import * as Services from '../core/services.js';
 import { getOperatorProfile } from '../core/profile.js';
 import { CreateStream } from './createStream.js';
+import { SponsorshipForm } from './sponsorshipForm.js';
 
 const { logger } = Utils;
 
@@ -492,6 +493,33 @@ function updateRemainingBalanceDisplay(remainingWei, dataPriceUSD) {
 /**
  * Fetch complete stream details including permissions
  */
+// Sponsorship fields used by Stream / Sponsorship Details
+const SPONSORSHIP_DETAIL_FIELDS = `
+id
+spotAPY
+totalStakedWei
+remainingWei
+cumulativeSponsoring
+totalPayoutWeiPerSec
+minimumStakingPeriodSeconds
+projectedInsolvency
+operatorCount
+isRunning
+stakes(first: 100, orderBy: amountWei, orderDirection: desc) {
+    operator {
+        id
+        metadataJsonString
+    }
+    amountWei
+}
+sponsoringEvents(first: 50, orderBy: date, orderDirection: desc) {
+    id
+    sponsor
+    amount
+    date
+}
+`;
+
 async function fetchStreamDetails(streamId) {
     // Escape quotes in stream ID for safe interpolation
     const sanitizedId = streamId.replace(/"/g, '\\"');
@@ -518,29 +546,7 @@ async function fetchStreamDetails(streamId) {
                     lastSeen
                 }
                 sponsorships(first: 10, orderBy: spotAPY, orderDirection: desc) {
-                    id
-                    spotAPY
-                    totalStakedWei
-                    remainingWei
-                    cumulativeSponsoring
-                    totalPayoutWeiPerSec
-                    minimumStakingPeriodSeconds
-                    projectedInsolvency
-                    operatorCount
-                    isRunning
-                    stakes(first: 100, orderBy: amountWei, orderDirection: desc) {
-                        operator {
-                            id
-                            metadataJsonString
-                        }
-                        amountWei
-                    }
-                    sponsoringEvents(first: 50, orderBy: date, orderDirection: desc) {
-                        id
-                        sponsor
-                        amount
-                        date
-                    }
+                    ${SPONSORSHIP_DETAIL_FIELDS}
                 }
             }
         }
@@ -548,6 +554,20 @@ async function fetchStreamDetails(streamId) {
     
     const data = await Services.runQuery(query);
     return data.stream;
+}
+
+/**
+ * Makes sure the requested sponsorship is in stream.sponsorships: the list only has the top 10 by APY,
+ * so a new sponsorship (0% APY) would otherwise be replaced by another one on its details page
+ */
+async function ensureSponsorshipLoaded(stream, sponsorshipId) {
+    if (!stream || !sponsorshipId) return;
+    stream.sponsorships = stream.sponsorships || [];
+    if (stream.sponsorships.some(s => s.id === sponsorshipId)) return;
+    const safeId = sponsorshipId.replace(/[^0-9a-fA-Fx]/g, '');
+    const data = await Services.runQuery(`{ sponsorship(id: "${safeId}") { stream { id } ${SPONSORSHIP_DETAIL_FIELDS} } }`);
+    const sponsorship = data?.sponsorship;
+    if (sponsorship && sponsorship.stream?.id === stream.id) stream.sponsorships.unshift(sponsorship);
 }
 
 /**
@@ -1542,6 +1562,9 @@ export const StreamsLogic = {
             if (!stream) {
                 throw new Error('Stream not found');
             }
+            if (isSponsored && sponsorshipId) {
+                await ensureSponsorshipLoaded(stream, sponsorshipId).catch(e => logger.warn('Could not load the sponsorship:', e));
+            }
             
             // Render stream details
             renderStreamDetail(stream, isSponsored, sponsorshipId);
@@ -1722,6 +1745,9 @@ function renderStreamDetail(stream, isSponsored, sponsorshipId) {
         
         // Setup operator stake button if user has operator profile
         setupOperatorStakeButton(targetSponsorship);
+        // "Add Funds" (any wallet can sponsor)
+        SponsorshipForm.setupFundButton(targetSponsorship, stream.id,
+            () => StreamsLogic.loadStreamDetail(stream.id, true, targetSponsorship.id));
     } else {
         if (sponsorshipPanel) sponsorshipPanel.classList.add('hidden');
         if (sponsoredBadge) sponsoredBadge.classList.add('hidden');
@@ -1740,6 +1766,8 @@ function renderStreamDetail(stream, isSponsored, sponsorshipId) {
         renderPermissionsTable(stream.permissions, true);
         // Render sponsorships list for stream details view
         renderStreamSponsorshipsList(stream.sponsorships);
+        // "New Sponsorship" (any wallet can sponsor any stream)
+        SponsorshipForm.setupCreateButton(stream, () => StreamsLogic.loadStreamDetail(stream.id, false, null));
         // Render storage nodes
         renderStreamStorageNodes(stream.storageNodes, stream.id, metadata.storageDays);
         // Edit button (only if the connected wallet has EDIT permission)

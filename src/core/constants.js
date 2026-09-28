@@ -344,10 +344,19 @@ export const OPERATOR_FACTORY_ABI = [
     'error PolicyNotTrusted()'
 ];
 
-
-
-
-
-
-
-
+// ============================================
+// Sponsorships (SponsorshipFactory on Polygon, addresses from @streamr/config)
+// ============================================
+export const SPONSORSHIP_FACTORY_ADDRESS = '0x820b2f9a15ed45F9802c59d0CC77C22C81755e45';
+export const SPONSORSHIP_POLICIES = {
+    stakeWeightedAllocation: '0x1Dd16E748308E9f259f3D6097d00e1793BfBdcDB',  // param: payout wei/second
+    defaultLeave: '0xa953D590098A3d56304a12A8e929D63748D90AAC',             // param: minimum staking period (s)
+    voteKick: '0xeF3F567D7328849c1130CBCBF8Cd9feB42eA5dB5',                 // param: 0
+    maxOperatorsJoin: '0x27448061420bAccAE8c84DDC3E7e2e8B2aE4977E'          // param: max operators (optional)
+};
+// DATA (ERC-677): sponsorships are created and funded with transferAndCall
+export const DATA_TOKEN_ERC677_ABI = [
+    'function transferAndCall(address to, uint256 value, bytes data) returns (bool)',
+    'function balanceOf(address owner) view returns (uint256)',
+    'event Transfer(address indexed from, address indexed to, uint256 value)'
+];
