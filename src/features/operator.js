@@ -85,7 +85,9 @@ const INITIAL_ETHERSCAN_OFFSET = 500;
  * Stake change of each StakingEvent. The subgraph stores the operator's stake in the sponsorship
  * after the transaction (not the amount moved), also for earnings withdrawals (stake unchanged), and
  * no event when the stake goes to 0 (full unstake): compare with the previous event of the same
- * sponsorship, restarting from 0 after an Unstake seen on Polygonscan.
+ * sponsorship, restarting from 0 after an Unstake seen on Polygonscan. When that previous event is not
+ * loaded (operators with 1000+ events), the Polygonscan transfer of the same transaction gives it
+ * (Stake to the sponsorship, Reduce Stake from it, or only Collect Earnings).
  * @returns {Map<string, {delta: number|null, kind: 'stake'|'reduce'|'earnings'|null}>} by event id
  */
 function computeStakeChanges(graphEvents, polygonscanTxs) {
@@ -93,6 +95,25 @@ function computeStakeChanges(graphEvents, polygonscanTxs) {
     const unstakes = (polygonscanTxs || [])
         .filter(tx => ['Unstake', 'Force Unstake'].includes(tx.methodId) && tx.from)
         .map(tx => ({ sponsorship: tx.from.toLowerCase(), timestamp: Number(tx.timestamp) }));
+    // Polygonscan transfers by transaction (lowercase hash)
+    const scanByTx = new Map();
+    for (const tx of polygonscanTxs || []) {
+        const hash = tx.txHash?.toLowerCase();
+        if (!hash) continue;
+        if (!scanByTx.has(hash)) scanByTx.set(hash, []);
+        scanByTx.get(hash).push(tx);
+    }
+    const toData = (wei) => parseFloat(Utils.convertWeiToData(wei.toString()));
+    const fromScan = (e, sponsorshipId) => {
+        const hash = typeof e.id === 'string' ? e.id.split('-').pop().toLowerCase() : '';
+        const txs = scanByTx.get(hash) || [];
+        const staked = txs.find(t => t.methodId === 'Stake' && t.to?.toLowerCase() === sponsorshipId && t.token === 'DATA');
+        if (staked) return { delta: toData(BigInt(staked.rawValue || '0')), kind: 'stake' };
+        const reduced = txs.find(t => t.methodId === 'Reduce Stake' && t.from?.toLowerCase() === sponsorshipId && t.token === 'DATA');
+        if (reduced) return { delta: -toData(BigInt(reduced.rawValue || '0')), kind: 'reduce' };
+        if (txs.some(t => t.methodId === 'Collect Earnings')) return { delta: 0, kind: 'earnings' };
+        return null;
+    };
     const bySponsorship = new Map();
     for (const e of graphEvents || []) {
         const id = e.sponsorship?.id?.toLowerCase();
@@ -110,9 +131,10 @@ function computeStakeChanges(graphEvents, polygonscanTxs) {
             if (prev && unstakes.some(u => u.sponsorship === sponsorshipId && u.timestamp > Number(prev.date) && u.timestamp < Number(e.date))) {
                 previous = 0n;
             }
-            // Oldest loaded event while older ones exist: unknown change (keep the plain row)
+            // Oldest loaded event while older ones exist: the same transaction on Polygonscan, else
+            // unknown change (keep the plain row)
             if (previous === null && state.historyState.hasMoreGraph) {
-                changes.set(e.id, { delta: null, kind: null });
+                changes.set(e.id, fromScan(e, sponsorshipId) || { delta: null, kind: null });
                 return;
             }
             const delta = amount - (previous ?? 0n);
