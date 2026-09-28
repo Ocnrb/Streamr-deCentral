@@ -546,8 +546,6 @@ function renderEntity() {
     state.lastResultCount = 0;
 
     el('sg-entity-select').value = state.entityName;
-    el('sg-entity-title').textContent = config.label;
-    el('sg-entity-category').textContent = config.category;
     el('sg-entity-description').textContent = config.description;
     updateNavigationActiveState();
     navigationController.updatePageTitle('subgraph', `Subgraph · ${config.label}`);
@@ -562,6 +560,7 @@ function renderEntity() {
 
     // Pagination and sorting only apply to list queries
     el('sg-list-options').classList.toggle('hidden', config.queryType !== 'list');
+    el('sg-pager').classList.toggle('hidden', config.queryType !== 'list');
 
     // Filters
     const container = el('sg-filters');
@@ -713,9 +712,9 @@ async function executeQuery() {
         el('sg-output').replaceChildren(pre);
         el('sg-copy').classList.remove('hidden');
         el('sg-copy').classList.add('flex');
-        if (Array.isArray(output)) {
-            el('sg-result-meta').textContent = `${output.length} result${output.length === 1 ? '' : 's'}`;
-        }
+        el('sg-result-meta').textContent = Array.isArray(output)
+            ? `${output.length} result${output.length === 1 ? '' : 's'}`
+            : '';
     } catch (error) {
         if (requestId !== state.requestId) return;
         console.error('Subgraph query error:', error);
@@ -850,7 +849,6 @@ export const SubgraphLogic = {
         el('sg-prev').addEventListener('click', () => changePage(-1));
         el('sg-next').addEventListener('click', () => changePage(1));
         el('sg-copy').addEventListener('click', copyResults);
-        el('sg-open-settings').addEventListener('click', () => navigationController.openSettings());
     },
 
     /**

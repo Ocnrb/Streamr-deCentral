@@ -2836,6 +2836,11 @@
       cursor: not-allowed;
     }
   }
+  .disabled\:opacity-30 {
+    &:disabled {
+      opacity: 30%;
+    }
+  }
   .disabled\:opacity-40 {
     &:disabled {
       opacity: 40%;
@@ -2851,6 +2856,24 @@
       &:hover {
         @media (hover: hover) {
           background-color: var(--color-blue-600);
+        }
+      }
+    }
+  }
+  .disabled\:hover\:bg-transparent {
+    &:disabled {
+      &:hover {
+        @media (hover: hover) {
+          background-color: transparent;
+        }
+      }
+    }
+  }
+  .disabled\:hover\:text-gray-400 {
+    &:disabled {
+      &:hover {
+        @media (hover: hover) {
+          color: var(--color-gray-400);
         }
       }
     }
@@ -3505,21 +3528,6 @@
       line-height: var(--tw-leading, var(--text-4xl--line-height));
     }
   }
-  .xl\:sticky {
-    @media (width >= 80rem) {
-      position: sticky;
-    }
-  }
-  .xl\:bottom-0 {
-    @media (width >= 80rem) {
-      bottom: calc(var(--spacing) * 0);
-    }
-  }
-  .xl\:z-10 {
-    @media (width >= 80rem) {
-      z-index: 10;
-    }
-  }
   .xl\:col-span-5 {
     @media (width >= 80rem) {
       grid-column: span 5 / span 5;
@@ -3595,45 +3603,9 @@
       overscroll-behavior: contain;
     }
   }
-  .xl\:border-t {
-    @media (width >= 80rem) {
-      border-top-style: var(--tw-border-style);
-      border-top-width: 1px;
-    }
-  }
-  .xl\:border-\[\#2a2a2a\] {
-    @media (width >= 80rem) {
-      border-color: #2a2a2a;
-    }
-  }
-  .xl\:bg-\[\#121212\] {
-    @media (width >= 80rem) {
-      background-color: #121212;
-    }
-  }
-  .xl\:pt-3 {
-    @media (width >= 80rem) {
-      padding-top: calc(var(--spacing) * 3);
-    }
-  }
   .xl\:pr-1 {
     @media (width >= 80rem) {
       padding-right: calc(var(--spacing) * 1);
-    }
-  }
-  .xl\:pb-1 {
-    @media (width >= 80rem) {
-      padding-bottom: calc(var(--spacing) * 1);
-    }
-  }
-  .\32 xl\:flex-none {
-    @media (width >= 96rem) {
-      flex: none;
-    }
-  }
-  .\32 xl\:flex-row {
-    @media (width >= 96rem) {
-      flex-direction: row;
     }
   }
 }
