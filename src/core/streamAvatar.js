@@ -12,7 +12,8 @@
  */
 
 import { runQuery } from './services.js';
-import { AVATAR_STREAM_MARKER as MARKER, OPERATOR_AVATAR_PLACEHOLDER, isValidProfileStreamId } from './utils.js';
+import { AVATAR_STREAM_MARKER as MARKER, OPERATOR_AVATAR_PLACEHOLDER, isValidProfileStreamId, ipfsCidFromAvatarUrl, markDeadIpfsCid } from './utils.js';
+import { STREAMR_SDK_CONTRACTS_CONFIG } from './constants.js';
 
 export { isValidProfileStreamId };
 
@@ -132,6 +133,18 @@ function parseMarker(src) {
     return { key: `${streamId}:${Number(partition) || 0}`, streamId, partition: Number(partition) || 0, base: src.slice(0, index) };
 }
 
+/**
+ * Error handler of the operator avatar <img> (avatarImgHtml): the IPFS image failed -> remember the
+ * CID (not requested again for a while) and show the placeholder; the hydrator then uses the avatar
+ * stream, if any.
+ */
+function avatarFallback(img) {
+    const cid = ipfsCidFromAvatarUrl(img.getAttribute('src'));
+    if (cid) markDeadIpfsCid(cid);
+    img.onerror = null;
+    img.src = OPERATOR_AVATAR_PLACEHOLDER;
+}
+
 function applyStreamAvatar(img) {
     const key = img.dataset.avatarStream;
     if (!key || img.dataset.avatarStreamLoading === key) return;
@@ -139,8 +152,9 @@ function applyStreamAvatar(img) {
     img.dataset.avatarStreamLoading = key;
     loadStreamAvatar(key.slice(0, sep), Number(key.slice(sep + 1))).then(dataUrl => {
         const src = img.getAttribute('src') || '';
-        // Still the same operator, and still showing the placeholder (or the failed IPFS image)
-        if (!dataUrl || img.dataset.avatarStream !== key || src.startsWith('data:')) return;
+        // Still the same operator, and still on the placeholder: IPFS (thumbnail or direct) wins when it loads
+        const base = src.includes(MARKER) ? src.slice(0, src.indexOf(MARKER)) : src;
+        if (!dataUrl || img.dataset.avatarStream !== key || !isPlaceholder(base)) return;
         img.src = dataUrl;
         // Some lists hide the image on error and show an initial instead
         if (img.style.display === 'none') {
@@ -191,6 +205,7 @@ export function installAvatarHydrator() {
         const img = event.target;
         if (img?.tagName === 'IMG' && img.dataset.avatarStream) applyStreamAvatar(img);
     }, true);
+    window.__avatarFallback = avatarFallback;
     window.__streamAvatarHydrator = observer;
     hydrateTree(document.body);
 }
@@ -221,6 +236,8 @@ export async function loadOperatorAvatarImage(imageUrl) {
         try {
             return await loadImage(base);
         } catch (e) {
+            const cid = ipfsCidFromAvatarUrl(base);
+            if (cid) markDeadIpfsCid(cid);
             if (!marker) return null;
         }
     }
@@ -278,7 +295,7 @@ export async function publishAvatar(signer, streamId, content) {
 
     // Kept alive until the storage node has the message (destroy() when done): tearing the
     // network node down right after publish() can drop the message before it propagates
-    const client = new StreamrClient({ auth, logLevel: 'error' });
+    const client = new StreamrClient({ auth, logLevel: 'error', contracts: STREAMR_SDK_CONTRACTS_CONFIG });
     const destroy = () => { client.destroy().catch(() => {}); };
     try {
         const message = await client.publish({ id: streamId, partition: AVATAR_PARTITION }, content);

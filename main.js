@@ -484,7 +484,7 @@ async function initializeApp() {
     await Services.cleanupClient();
     try {
         // Configure Streamr SDK with minimal logging (only errors)
-        const streamrClient = new StreamrClient({ logLevel: 'error' });
+        const streamrClient = new StreamrClient({ logLevel: 'error', contracts: Constants.STREAMR_SDK_CONTRACTS_CONFIG });
         Services.setStreamrClient(streamrClient);
 
         // Start historical price stream in background (non-blocking)
