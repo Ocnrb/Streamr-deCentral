@@ -2318,7 +2318,7 @@
 
             <!-- Activity + process -->
             <div class="grid grid-cols-1 xl:grid-cols-3 gap-6">
-                <section class="detail-section p-4 sm:p-6 xl:col-span-2">
+                <section class="detail-section p-4 sm:p-6 xl:col-span-2 flex flex-col">
                     <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
                         <h2 class="text-lg font-semibold text-white">Flag activity</h2>
                         <div class="flex items-center gap-4 text-xs text-gray-400">
@@ -2328,7 +2328,8 @@
                             <span id="gov-legend-unresolved" class="hidden items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-sm bg-[#6b7280]"></span>Unresolved</span>
                         </div>
                     </div>
-                    <div class="relative h-64">
+                    <!-- Fills the card, which matches the height of "How it works" on xl -->
+                    <div class="relative flex-1 min-h-64">
                         <canvas id="gov-chart"></canvas>
                         <p id="gov-chart-empty" class="hidden absolute inset-0 flex items-center justify-center text-sm text-gray-500">No flags in this range.</p>
                     </div>
