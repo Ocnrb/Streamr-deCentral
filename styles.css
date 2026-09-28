@@ -95,6 +95,7 @@
     --text-5xl--line-height: 1;
     --text-6xl: 3.75rem;
     --text-6xl--line-height: 1;
+    --font-weight-light: 300;
     --font-weight-normal: 400;
     --font-weight-medium: 500;
     --font-weight-semibold: 600;
@@ -952,6 +953,9 @@
   }
   .grid-cols-2 {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .grid-cols-\[1fr_auto_1fr\] {
+    grid-template-columns: 1fr auto 1fr;
   }
   .grid-cols-\[6\.5rem_minmax\(0\,2fr\)_minmax\(0\,1\.5fr\)_minmax\(0\,1\.2fr\)_5\.5rem\] {
     grid-template-columns: 6.5rem minmax(0,2fr) minmax(0,1.5fr) minmax(0,1.2fr) 5.5rem;
@@ -2075,6 +2079,10 @@
   .font-extrabold {
     --tw-font-weight: var(--font-weight-extrabold);
     font-weight: var(--font-weight-extrabold);
+  }
+  .font-light {
+    --tw-font-weight: var(--font-weight-light);
+    font-weight: var(--font-weight-light);
   }
   .font-medium {
     --tw-font-weight: var(--font-weight-medium);

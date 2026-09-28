@@ -513,6 +513,7 @@ function renderList() {
     if (!flags.length) {
         el('gov-flags-list').innerHTML = `<p class="p-6 text-sm text-gray-500 text-center">No flags match the current filters.</p>`;
         el('gov-show-more').classList.add('hidden');
+        el('gov-show-all').classList.add('hidden');
         return;
     }
 
@@ -544,6 +545,7 @@ function renderList() {
     const remaining = flags.length - visible.length;
     el('gov-show-more').classList.toggle('hidden', remaining <= 0);
     el('gov-show-more').textContent = `Show more (${remaining})`;
+    el('gov-show-all').classList.toggle('hidden', remaining <= 0);
 }
 
 function leaderboardRow(operator, primary, secondary) {
@@ -809,6 +811,10 @@ export const GovernanceLogic = {
         });
         el('gov-show-more').addEventListener('click', () => {
             state.listLimit += LIST_PAGE;
+            renderList();
+        });
+        el('gov-show-all').addEventListener('click', () => {
+            state.listLimit = Infinity;
             renderList();
         });
 
