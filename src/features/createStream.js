@@ -192,7 +192,9 @@ function buildMetadata(form) {
     } else if (typeof original.description === 'string' && original.description !== '') {
         delete metadata.description;
     }
-    if (state.storageNodes.length > 0 && (original.storageDays !== undefined || form.storageDays !== DEFAULT_STORAGE_DAYS)) {
+    // TTL is written when it changes, and always when storage nodes are being added (so the TTL shown is the one stored)
+    const addingStorage = buildStorageChanges().add.length > 0;
+    if (state.storageNodes.length > 0 && (original.storageDays !== undefined || form.storageDays !== DEFAULT_STORAGE_DAYS || addingStorage)) {
         metadata.storageDays = form.storageDays;
     }
     return JSON.stringify(metadata);
