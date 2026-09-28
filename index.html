@@ -469,10 +469,50 @@
                 </section>
 
                 <p id="create-stream-error" class="hidden p-3 bg-red-500/10 border border-red-500/30 rounded-lg text-sm text-red-400 break-words"></p>
+
+                <!-- Danger zone (edit mode, wallet with DELETE permission) -->
+                <section id="create-stream-danger-zone" class="hidden p-4 border border-red-500/30 rounded-lg flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div>
+                        <h3 class="text-sm font-semibold text-red-400">Delete this stream</h3>
+                        <p class="text-xs text-gray-500 mt-0.5">Removes the stream from the Stream Registry. This cannot be undone.</p>
+                    </div>
+                    <button id="create-stream-delete-open" type="button" class="px-4 py-2 border border-red-500/50 text-red-400 hover:bg-red-500/10 text-sm font-semibold rounded-lg transition-colors flex-shrink-0">Delete Stream</button>
+                </section>
+            </div>
+
+            <!-- Delete confirmation (replaces the form) -->
+            <div id="create-stream-delete-panel" class="hidden px-5 sm:px-6 py-5 space-y-4 overflow-y-auto">
+                <div class="p-4 bg-red-500/10 border border-red-500/40 rounded-lg space-y-2">
+                    <div class="flex items-center gap-2 text-red-400 font-semibold">
+                        <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>
+                        This action is irreversible
+                    </div>
+                    <ul class="text-sm text-gray-300 list-disc pl-5 space-y-1">
+                        <li>The stream, its metadata and all permissions are removed on-chain.</li>
+                        <li>Publishers and subscribers stop working immediately.</li>
+                        <li>Stored data can no longer be accessed through this stream.</li>
+                        <li>The same stream ID can be created again later, but as a new, empty stream.</li>
+                    </ul>
+                </div>
+                <div class="p-3 bg-[#121212] border border-[#333] rounded-lg">
+                    <p class="text-xs text-gray-500 mb-1">Stream to delete</p>
+                    <p id="create-stream-delete-id" class="font-mono text-sm text-white break-all">--</p>
+                </div>
+                <p id="create-stream-delete-sponsorships" class="hidden p-3 bg-yellow-500/10 border border-yellow-500/30 rounded-lg text-xs text-yellow-400"></p>
+                <div class="flex justify-between items-baseline text-sm">
+                    <span class="text-gray-400">Estimated cost</span>
+                    <span id="create-stream-delete-cost" class="font-mono text-white">--</span>
+                </div>
+                <button id="create-stream-delete-hold" type="button" class="relative w-full overflow-hidden select-none touch-none bg-red-500/15 border border-red-500/60 text-red-300 font-bold py-3 px-4 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed">
+                    <span id="create-stream-delete-fill" class="absolute inset-y-0 left-0 w-0 bg-red-600"></span>
+                    <span id="create-stream-delete-label" class="relative flex items-center justify-center gap-2">Hold 2s to delete</span>
+                </button>
+                <p id="create-stream-delete-error" class="hidden p-3 bg-red-500/10 border border-red-500/30 rounded-lg text-sm text-red-400 break-words"></p>
+                <button id="create-stream-delete-back" type="button" class="w-full bg-[#444444] hover:bg-[#555555] text-white font-bold py-3 px-4 rounded-lg transition-colors">Back</button>
             </div>
 
             <!-- Footer -->
-            <div class="flex gap-3 px-5 sm:px-6 py-4 border-t border-[#333] flex-shrink-0">
+            <div id="create-stream-footer" class="flex gap-3 px-5 sm:px-6 py-4 border-t border-[#333] flex-shrink-0">
                 <button id="create-stream-cancel" type="button" class="w-full bg-[#444444] hover:bg-[#555555] text-white font-bold py-3 px-4 rounded-lg transition-colors">Cancel</button>
                 <button id="create-stream-submit" type="button" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg transition-colors flex justify-center items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-blue-600">Create Stream</button>
             </div>
