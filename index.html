@@ -2340,6 +2340,25 @@
                 </section>
             </div>
 
+            <!-- Leaderboards -->
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <section class="detail-section p-4 sm:p-6">
+                    <h2 class="text-sm font-semibold text-white">Most flagged</h2>
+                    <p class="text-xs text-gray-500">Operators targeted by flags</p>
+                    <ul id="gov-top-targets" class="mt-3 divide-y divide-[#2a2a2a]"></ul>
+                </section>
+                <section class="detail-section p-4 sm:p-6">
+                    <h2 class="text-sm font-semibold text-white">Top flaggers</h2>
+                    <p class="text-xs text-gray-500">Flags raised and share upheld</p>
+                    <ul id="gov-top-flaggers" class="mt-3 divide-y divide-[#2a2a2a]"></ul>
+                </section>
+                <section class="detail-section p-4 sm:p-6">
+                    <h2 class="text-sm font-semibold text-white">Top reviewers</h2>
+                    <p class="text-xs text-gray-500">Votes cast, turnout and agreement with outcome</p>
+                    <ul id="gov-top-reviewers" class="mt-3 divide-y divide-[#2a2a2a]"></ul>
+                </section>
+            </div>
+
             <!-- Flags -->
             <section class="detail-section overflow-hidden">
                 <div class="flex flex-col md:flex-row md:items-center justify-between gap-3 p-4 sm:px-6 border-b border-[#333]">
@@ -2371,25 +2390,6 @@
                     </div>
                 </div>
             </section>
-
-            <!-- Leaderboards -->
-            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <section class="detail-section p-4 sm:p-6">
-                    <h2 class="text-sm font-semibold text-white">Most flagged</h2>
-                    <p class="text-xs text-gray-500">Operators targeted by flags</p>
-                    <ul id="gov-top-targets" class="mt-3 divide-y divide-[#2a2a2a]"></ul>
-                </section>
-                <section class="detail-section p-4 sm:p-6">
-                    <h2 class="text-sm font-semibold text-white">Top flaggers</h2>
-                    <p class="text-xs text-gray-500">Flags raised and share upheld</p>
-                    <ul id="gov-top-flaggers" class="mt-3 divide-y divide-[#2a2a2a]"></ul>
-                </section>
-                <section class="detail-section p-4 sm:p-6">
-                    <h2 class="text-sm font-semibold text-white">Top reviewers</h2>
-                    <p class="text-xs text-gray-500">Votes cast, turnout and agreement with outcome</p>
-                    <ul id="gov-top-reviewers" class="mt-3 divide-y divide-[#2a2a2a]"></ul>
-                </section>
-            </div>
 
             <!-- Flag detail drawer -->
             <div id="gov-drawer-overlay" class="hidden fixed inset-0 bg-black/50 z-[45]"></div>
