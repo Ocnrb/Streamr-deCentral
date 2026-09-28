@@ -7,7 +7,7 @@
 
 import * as Services from '../core/services.js';
 import * as UI from '../ui/ui.js';
-import { escapeHtml, convertWeiToData, formatBigNumber, parseOperatorMetadata, createEntityLink, createSponsorshipLink, shortAddress } from '../core/utils.js';
+import { escapeHtml, convertWeiToData, formatBigNumber, parseOperatorMetadata, shortAddress } from '../core/utils.js';
 import { navigationController } from '../ui/navigation.js';
 
 // ============================================
@@ -117,6 +117,31 @@ function formatDate(ts, withTime = true) {
 function shortStreamId(streamId) {
     const match = /^(0x[0-9a-fA-F]{40})(\/.*)$/.exec(streamId || '');
     return match ? `${shortAddress(match[1])}${match[2]}` : (streamId || '');
+}
+
+// Internal app links (handled by the router): operator, stream and sponsorship detail pages
+const LINK_CLASS = 'hover:text-white hover:underline underline-offset-2 transition-colors';
+
+function operatorHref(operator) {
+    return `/operator/${operator.id}`;
+}
+
+function operatorLink(operator, className = 'text-gray-300') {
+    if (!operator?.id) return '';
+    return `<a href="${operatorHref(operator)}" class="${className} ${LINK_CLASS}" title="${escapeHtml(operator.id)}">${escapeHtml(operatorInfo(operator).name)}</a>`;
+}
+
+function streamLink(sponsorship, className = 'text-gray-400') {
+    const streamId = sponsorship?.stream?.id;
+    if (!streamId) return '';
+    return `<a href="/stream/${encodeURIComponent(streamId)}" class="${className} ${LINK_CLASS}" title="${escapeHtml(streamId)}">${escapeHtml(shortStreamId(streamId))}</a>`;
+}
+
+function sponsorshipLink(sponsorship, className = 'text-gray-400', label = null) {
+    if (!sponsorship?.id) return '';
+    const streamId = sponsorship.stream?.id || sponsorship.id;
+    const href = `/stream/${encodeURIComponent(streamId)}?sponsored=true&sponsorshipId=${sponsorship.id}`;
+    return `<a href="${href}" class="${className} ${LINK_CLASS}" title="Sponsorship ${escapeHtml(sponsorship.id)}">${escapeHtml(label || shortAddress(sponsorship.id))}</a>`;
 }
 
 function formatData(wei) {
@@ -358,7 +383,7 @@ function renderLive() {
         const phase = phaseOf(flag);
         const voted = flag.votes?.length || 0;
         return `
-            <button type="button" data-flag-id="${flag.id}" class="gov-flag-open text-left p-4 rounded-xl bg-[#121212] border border-[#333] hover:border-[#555] transition-colors min-w-[260px] sm:min-w-0">
+            <div role="button" tabindex="0" data-flag-id="${flag.id}" class="gov-flag-open text-left p-4 rounded-xl bg-[#121212] border border-[#333] hover:border-[#555] cursor-pointer transition-colors min-w-[260px] sm:min-w-0">
                 <div class="flex items-center justify-between gap-2">
                     ${statusBadge(flag)}
                     <span class="text-[11px] text-gray-500">${voted}/${flag.reviewerCount} voted</span>
@@ -366,13 +391,13 @@ function renderLive() {
                 <div class="flex items-center gap-2.5 mt-3">
                     ${avatar(flag.target)}
                     <div class="min-w-0">
-                        <p class="text-sm font-semibold text-white truncate">${escapeHtml(target.name)}</p>
-                        <p class="text-xs text-gray-500 truncate">${escapeHtml(shortStreamId(flag.sponsorship?.stream?.id || flag.sponsorship?.id))}</p>
+                        <p class="text-sm font-semibold truncate">${operatorLink(flag.target, 'text-white')}</p>
+                        <p class="text-xs truncate">${streamLink(flag.sponsorship, 'text-gray-500')}</p>
                     </div>
                 </div>
                 <div class="mt-3">${voteBar(flag)}</div>
                 <p class="mt-2 text-xs text-gray-400">${phase.label}${phase.target ? ` <span class="text-white font-medium tabular-nums" data-countdown="${phase.target}">${formatDuration(phase.target - now())}</span>` : ''}</p>
-            </button>`;
+            </div>`;
     }).join('');
 }
 
@@ -518,22 +543,22 @@ function renderList() {
     }
 
     el('gov-flags-list').innerHTML = visible.map(flag => {
-        const target = operatorInfo(flag.target);
-        const flagger = operatorInfo(flag.flagger);
         const split = voteSplit(flag);
         const voted = flag.votes?.length || 0;
-        const stream = flag.sponsorship?.stream?.id || flag.sponsorship?.id || '';
         return `
             <div role="button" tabindex="0" data-flag-id="${flag.id}" class="gov-flag-open grid grid-cols-[minmax(0,1fr)_auto] md:grid-cols-[6.5rem_minmax(0,2fr)_minmax(0,1.5fr)_minmax(0,1.2fr)_5.5rem] items-center gap-x-4 gap-y-2.5 px-4 sm:px-6 py-3.5 hover:bg-white/[0.02] cursor-pointer transition-colors">
                 <div class="col-start-1 row-start-1 md:col-auto md:row-auto">${statusBadge(flag)}</div>
                 <div class="col-span-2 md:col-span-1 flex items-center gap-2.5 min-w-0">
                     ${avatar(flag.target)}
                     <div class="min-w-0">
-                        <p class="text-sm font-medium text-white truncate">${escapeHtml(target.name)}</p>
-                        <p class="text-xs text-gray-500 truncate">flagged by ${escapeHtml(flagger.name)}</p>
+                        <p class="text-sm font-medium truncate">${operatorLink(flag.target, 'text-white')}</p>
+                        <p class="text-xs text-gray-500 truncate">flagged by ${operatorLink(flag.flagger, 'text-gray-400')}</p>
                     </div>
                 </div>
-                <p class="hidden md:block text-xs text-gray-400 truncate" title="${escapeHtml(stream)}">${escapeHtml(shortStreamId(stream))}</p>
+                <div class="hidden md:block min-w-0">
+                    <p class="text-xs truncate">${streamLink(flag.sponsorship, 'text-gray-300')}</p>
+                    <p class="text-[11px] text-gray-500 truncate">${sponsorshipLink(flag.sponsorship, 'text-gray-500')}</p>
+                </div>
                 <div class="col-span-2 md:col-span-1 min-w-0">
                     ${voteBar(flag)}
                     <p class="text-[11px] text-gray-500 mt-1">${split ? `${formatPercent(split.kickShare)} kick · ` : ''}${voted}/${flag.reviewerCount} voted</p>
@@ -553,7 +578,7 @@ function leaderboardRow(operator, primary, secondary) {
     return `
         <li class="flex items-center gap-3 py-2">
             ${avatar(operator, 'w-7 h-7')}
-            <a href="#" class="operator-link flex-1 min-w-0 text-sm text-gray-300 hover:text-white truncate transition-colors" data-operator-id="${operator.id}" title="${escapeHtml(operator.id)}">${escapeHtml(info.name)}</a>
+            <a href="${operatorHref(operator)}" class="flex-1 min-w-0 text-sm text-gray-300 truncate ${LINK_CLASS}" title="${escapeHtml(operator.id)}">${escapeHtml(info.name)}</a>
             <div class="text-right flex-shrink-0">
                 <p class="text-sm font-semibold text-white tabular-nums">${primary}</p>
                 <p class="text-[11px] text-gray-500">${secondary}</p>
@@ -641,7 +666,7 @@ function renderDrawer(flag) {
     ].sort((a, b) => (b.vote ? 1 : 0) - (a.vote ? 1 : 0));
 
     const timeline = [
-        timelineStep('Flagged', flag.flaggingTimestamp, false, `by ${escapeHtml(operatorInfo(flag.flagger).name)}`),
+        timelineStep('Flagged', flag.flaggingTimestamp, false, `by ${operatorLink(flag.flagger, 'text-gray-400')}`),
         flag.voteStartTimestamp ? timelineStep('Voting starts', flag.voteStartTimestamp, flag.voteStartTimestamp > t) : '',
         flag.voteEndTimestamp ? timelineStep('Voting ends', flag.voteEndTimestamp, flag.voteEndTimestamp > t) : '',
         resolved && flag.flagResolutionTimestamp ? timelineStep(flag.result === 'kicked' ? 'Kicked' : 'Flag rejected', flag.flagResolutionTimestamp, false) : '',
@@ -653,7 +678,7 @@ function renderDrawer(flag) {
             ${avatar(flag.target, 'w-12 h-12')}
             <div class="min-w-0">
                 <div class="flex items-center gap-2">${statusBadge(flag)}<span class="text-xs text-gray-500">Flag #${flag.lastFlagIndex ?? ''}</span></div>
-                <p class="text-lg font-semibold text-white truncate mt-1">${escapeHtml(target.name)}</p>
+                <p class="text-lg font-semibold truncate mt-1">${operatorLink(flag.target, 'text-white')}</p>
             </div>
         </div>
 
@@ -664,11 +689,12 @@ function renderDrawer(flag) {
         </div>` : ''}
 
         <dl class="grid grid-cols-2 gap-3 mt-5">
-            <div class="p-3 rounded-lg bg-[#121212] border border-[#2a2a2a]"><dt class="text-[11px] text-gray-500 uppercase tracking-wider">Target</dt><dd class="text-sm mt-1 truncate">${createEntityLink(flag.target)}</dd></div>
-            <div class="p-3 rounded-lg bg-[#121212] border border-[#2a2a2a]"><dt class="text-[11px] text-gray-500 uppercase tracking-wider">Flagger</dt><dd class="text-sm mt-1 truncate">${createEntityLink(flag.flagger)}</dd></div>
+            <div class="p-3 rounded-lg bg-[#121212] border border-[#2a2a2a]"><dt class="text-[11px] text-gray-500 uppercase tracking-wider">Target</dt><dd class="text-sm mt-1 truncate">${operatorLink(flag.target)}</dd></div>
+            <div class="p-3 rounded-lg bg-[#121212] border border-[#2a2a2a]"><dt class="text-[11px] text-gray-500 uppercase tracking-wider">Flagger</dt><dd class="text-sm mt-1 truncate">${operatorLink(flag.flagger)}</dd></div>
             <div class="p-3 rounded-lg bg-[#121212] border border-[#2a2a2a]"><dt class="text-[11px] text-gray-500 uppercase tracking-wider">Stake at risk</dt><dd class="text-sm text-white mt-1">${formatData(flag.targetStakeAtRiskWei)}</dd></div>
             <div class="p-3 rounded-lg bg-[#121212] border border-[#2a2a2a]"><dt class="text-[11px] text-gray-500 uppercase tracking-wider">Votes</dt><dd class="text-sm text-white mt-1">${flag.votes?.length || 0} / ${flag.reviewerCount}</dd></div>
-            <div class="col-span-2 p-3 rounded-lg bg-[#121212] border border-[#2a2a2a]"><dt class="text-[11px] text-gray-500 uppercase tracking-wider">Sponsorship</dt><dd class="text-sm mt-1 truncate">${createSponsorshipLink(flag.sponsorship)}</dd></div>
+            <div class="col-span-2 p-3 rounded-lg bg-[#121212] border border-[#2a2a2a]"><dt class="text-[11px] text-gray-500 uppercase tracking-wider">Stream</dt><dd class="text-sm mt-1 truncate">${streamLink(flag.sponsorship, 'text-gray-300')}</dd></div>
+            <div class="col-span-2 p-3 rounded-lg bg-[#121212] border border-[#2a2a2a]"><dt class="text-[11px] text-gray-500 uppercase tracking-wider">Sponsorship</dt><dd class="text-sm mt-1 truncate">${sponsorshipLink(flag.sponsorship, 'text-gray-300', flag.sponsorship?.id)}</dd></div>
         </dl>
 
         <section class="mt-6">
@@ -691,7 +717,7 @@ function renderDrawer(flag) {
                 ${rows.map(({ operator, vote }) => `
                     <li class="flex items-center gap-3 py-2.5">
                         ${avatar(operator, 'w-7 h-7')}
-                        <div class="flex-1 min-w-0 text-sm truncate">${createEntityLink(operator)}</div>
+                        <div class="flex-1 min-w-0 text-sm truncate">${operatorLink(operator)}</div>
                         ${vote
                             ? `<div class="text-right"><p class="text-xs font-semibold ${vote.votedKick ? 'text-red-400' : 'text-emerald-400'}">${vote.votedKick ? 'Kick' : 'Keep'}</p><p class="text-[11px] text-gray-500">${formatData(vote.voterWeight)} · ${timeAgo(vote.timestamp)}</p></div>`
                             : '<span class="text-xs text-gray-500">No vote</span>'}
@@ -824,7 +850,8 @@ export const GovernanceLogic = {
             const row = e.target.closest('.gov-flag-open');
             if (row) window.router.navigate(`/governance/flag/${row.dataset.flagId}`);
         });
-        el('gov-flags-list').addEventListener('keydown', (e) => {
+        el('governance-view').addEventListener('keydown', (e) => {
+            if (e.target.closest('a')) return;
             const row = e.target.closest('.gov-flag-open');
             if (row && (e.key === 'Enter' || e.key === ' ')) {
                 e.preventDefault();
@@ -839,9 +866,9 @@ export const GovernanceLogic = {
         document.addEventListener('keydown', (e) => {
             if (e.key === 'Escape' && state.openFlagId) close();
         });
-        // Links inside the drawer navigate away: close it first
+        // Links inside the drawer navigate to other pages: close it first
         el('gov-drawer').addEventListener('click', (e) => {
-            if (e.target.closest('a.operator-link, a.sponsorship-link')) closeFlag();
+            if (e.target.closest('a[href^="/"]')) closeFlag();
         });
     },
 

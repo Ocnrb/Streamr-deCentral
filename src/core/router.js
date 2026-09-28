@@ -53,7 +53,8 @@ export class Router {
      */
     async navigate(path, pushState = true) {
         if (pushState) {
-            window.history.pushState({}, '', path);
+            // inApp marks entries created inside the app (used by the header back button)
+            window.history.pushState({ inApp: true }, '', path);
         }
         await this.handleRoute(path, false);
     }
@@ -75,6 +76,7 @@ export class Router {
         }
 
         this.currentRoute = path;
+        window.dispatchEvent(new CustomEvent('app:routechange', { detail: { path } }));
 
         // Try to match exact routes first
         for (const [pattern, handler] of this.routes) {

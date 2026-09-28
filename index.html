@@ -922,7 +922,11 @@
         <div class="flex items-center justify-between px-4 h-14">
             <!-- Page Title -->
             <div class="flex items-center gap-3">
-                <img src="/favicon/favicon.ico" alt="" class="w-8 h-8 flex-shrink-0">
+                <!-- Back Button (shown only on detail pages; replaces the logo) -->
+                <button id="mobile-back-btn" class="hidden p-1.5 -ml-1.5 rounded-lg text-gray-400 hover:text-white hover:bg-white/10 transition-all" title="Back" aria-label="Back">
+                    <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+                </button>
+                <img id="mobile-header-logo" src="/favicon/favicon.ico" alt="" class="w-8 h-8 flex-shrink-0">
                 <h1 id="mobile-page-title" class="text-lg font-bold text-white">Operators</h1>
                 <!-- Save Operator Profile Button (shown only on operator detail) -->
                 <button id="mobile-save-profile-btn" class="hidden p-1.5 rounded-lg text-gray-400 hover:text-yellow-400 hover:bg-white/10 transition-all" title="Save as your profile shortcut">
@@ -963,6 +967,10 @@
         <div class="flex items-center justify-between px-4 md:px-6 h-14 w-full">
             <!-- Left: Page Title -->
             <div class="flex items-center gap-3">
+                <!-- Back Button (shown only on detail pages) -->
+                <button id="desktop-back-btn" class="hidden p-1.5 -ml-1.5 rounded-lg text-gray-400 hover:text-white hover:bg-white/10 transition-all" title="Back" aria-label="Back">
+                    <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+                </button>
                 <h1 id="desktop-page-title" class="text-lg font-semibold text-white">Operators</h1>
                 <!-- Save Operator Profile Button (shown only on operator detail) -->
                 <button id="desktop-save-profile-btn" class="hidden p-1.5 rounded-lg text-gray-400 hover:text-yellow-400 hover:bg-white/10 transition-all" title="Save as your profile shortcut">

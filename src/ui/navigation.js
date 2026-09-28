@@ -47,16 +47,54 @@ class NavigationController {
         };
         
         this.currentPage = 'operators';
-        
+
+        // Detail pages with a header back button: fallback used when the page was opened directly
+        this.backRoutes = [
+            { match: /^\/operator\//, fallback: '/' },
+            { match: /^\/delegator\//, fallback: '/delegators' },
+            { match: /^\/stream\//, fallback: '/streams' },
+        ];
+        this.backFallback = null;
+
         this.init();
     }
     
     init() {
+        this.setupBackButton();
         this.setupEventListeners();
         this.setupTooltips();
         this.updateActiveState(this.getPageFromPath());
     }
     
+    /**
+     * Header back button: visible on detail pages. Goes to the previous in-app page,
+     * or to the parent list when the detail page was opened directly (deep link).
+     */
+    setupBackButton() {
+        ['desktop-back-btn', 'mobile-back-btn'].forEach(id => {
+            document.getElementById(id)?.addEventListener('click', () => this.goBack());
+        });
+        window.addEventListener('app:routechange', (e) => this.updateBackButton(e.detail.path));
+        this.updateBackButton(window.location.pathname);
+    }
+
+    updateBackButton(path) {
+        const route = this.backRoutes.find(r => r.match.test(path));
+        this.backFallback = route ? route.fallback : null;
+        const visible = !!route;
+        document.getElementById('desktop-back-btn')?.classList.toggle('hidden', !visible);
+        document.getElementById('mobile-back-btn')?.classList.toggle('hidden', !visible);
+        document.getElementById('mobile-header-logo')?.classList.toggle('hidden', visible);
+    }
+
+    goBack() {
+        if (window.history.state?.inApp) {
+            window.history.back();
+        } else if (window.router) {
+            window.router.navigate(this.backFallback || '/');
+        }
+    }
+
     /**
      * Get page name from URL path
      */
