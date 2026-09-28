@@ -2862,25 +2862,40 @@ async function loadSponsorshipOnchainHistory(sponsorshipAddress) {
     }
 }
 
+const ONCHAIN_HISTORY_MAX_PAGES = 20;  // same cap as the Operator Details "Load All History"
+
+const LOAD_ALL_BUTTON_HTML = `
+    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3"></path>
+    </svg>
+    Load All History`;
+
 /**
- * "Load more": next page of the sponsorship's on-chain history
+ * "Load All History": the remaining pages of the sponsorship's on-chain history
  */
-async function loadMoreOnchainHistory(button) {
+async function loadAllOnchainHistory(button) {
     if (onchainHistory.loading || !onchainHistory.hasMore) return;
     onchainHistory.loading = true;
     button.disabled = true;
-    button.innerHTML = `<span class="w-3.5 h-3.5 border-2 border-gray-400 rounded-full border-t-transparent animate-spin"></span> Loading...`;
+    button.innerHTML = `<span class="w-4 h-4 border-2 border-white rounded-full border-t-transparent animate-spin"></span> Loading...`;
     const container = document.getElementById('sponsorship-history-list');
     const scrollTop = container?.scrollTop || 0;
+    const address = onchainHistory.address;
     try {
-        if (!await fetchOnchainHistoryPage(onchainHistory.page + 1)) return;
-        renderSponsorshipOnchainHistory(onchainHistory.txs, 'sponsorships', onchainHistory.names, onchainHistory.hasMore);
+        while (onchainHistory.hasMore && onchainHistory.page < ONCHAIN_HISTORY_MAX_PAGES) {
+            if (!await fetchOnchainHistoryPage(onchainHistory.page + 1)) return;
+            if (onchainHistory.hasMore) await new Promise(resolve => setTimeout(resolve, 300)); // Polygonscan rate limit
+        }
+        onchainHistory.hasMore = false;
+        renderSponsorshipOnchainHistory(onchainHistory.txs, 'sponsorships', onchainHistory.names, false);
         if (container) container.scrollTop = scrollTop;
     } catch (error) {
-        logger.error('Failed to load more on-chain history:', error);
-        button.disabled = false;
-        button.textContent = 'Load more';
-        UI.showToast({ type: 'error', title: 'Error', message: 'Failed to load more history.' });
+        logger.error('Failed to load the full on-chain history:', error);
+        if (onchainHistory.address === address) {
+            // Show what was loaded so far; the button stays for another try
+            renderSponsorshipOnchainHistory(onchainHistory.txs, 'sponsorships', onchainHistory.names, onchainHistory.hasMore);
+        }
+        UI.showToast({ type: 'error', title: 'Error', message: 'Failed to load complete history' });
     } finally {
         onchainHistory.loading = false;
     }
@@ -3034,7 +3049,7 @@ async function fetchOperatorNames(addresses) {
  * @param {Array} transactions - Array of transaction objects from Polygonscan
  * @param {string} context - 'operators' or 'sponsorships' to determine badge colors
  * @param {Map<string, string>} [extraNames] - names of operators not in the current stakes
- * @param {boolean} [showLoadMore] - add a "Load more" button (more pages on Polygonscan)
+ * @param {boolean} [showLoadMore] - add the "Load All History" button (more pages on Polygonscan)
  */
 function renderSponsorshipOnchainHistory(transactions, context = 'sponsorships', extraNames = new Map(), showLoadMore = false) {
     const container = document.getElementById('sponsorship-history-list');
@@ -3137,17 +3152,18 @@ function renderSponsorshipOnchainHistory(transactions, context = 'sponsorships',
         `;
     }).join('');
     
-    // Same subtle style as the other "Load more" buttons; the handler is delegated (set once)
+    // Same button as the Operator Details "Load All History"; the handler is delegated (set once)
     const loadMore = showLoadMore ? `
-        <div class="py-3 text-center">
-            <button type="button" data-onchain-load-more class="bg-[#2C2C2C] hover:bg-[#3C3C3C] text-white font-medium py-2 px-5 rounded-lg text-xs transition-colors inline-flex items-center gap-2 disabled:opacity-60">Load more</button>
+        <div class="py-4 text-center">
+            <button type="button" data-onchain-load-more class="bg-[#2C2C2C] hover:bg-[#3C3C3C] text-white font-medium py-2.5 px-6 rounded-lg text-sm transition-colors inline-flex items-center gap-2 disabled:opacity-60">${LOAD_ALL_BUTTON_HTML}</button>
+            <p class="text-xs text-gray-500 mt-2">Showing recent activity. Click to load complete history.</p>
         </div>` : '';
     container.innerHTML = html + loadMore;
     if (!container.dataset.loadMoreBound) {
         container.dataset.loadMoreBound = '1';
         container.addEventListener('click', (e) => {
             const button = e.target.closest('[data-onchain-load-more]');
-            if (button) loadMoreOnchainHistory(button);
+            if (button) loadAllOnchainHistory(button);
         });
     }
 }
