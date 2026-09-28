@@ -2217,13 +2217,23 @@
                 </div>
             </div>
 
-            <!-- Entity Navigation (right panel, desktop) -->
-            <aside class="hidden lg:flex flex-col w-64 flex-shrink-0 self-start sticky top-14 -mt-2 h-[calc(100vh-3.5rem)] bg-[#1A1A1A] border-l border-[#2a2a2a]">
-                <div class="h-12 px-5 flex items-center border-b border-[#2a2a2a] flex-shrink-0">
-                    <span class="text-sm font-semibold text-white">Entities</span>
+            <!-- Entity Navigation (right panel, desktop) - collapsible to an icon rail -->
+            <aside id="sg-entity-panel" class="hidden lg:flex flex-col w-64 flex-shrink-0 self-start sticky top-14 -mt-2 h-[calc(100vh-3.5rem)] bg-[#1A1A1A] border-l border-[#2a2a2a] transition-[width] duration-300">
+                <div class="h-12 flex items-center border-b border-[#2a2a2a] flex-shrink-0 px-2">
+                    <button id="sg-panel-toggle" type="button" aria-expanded="true" title="Collapse panel"
+                            class="p-2 rounded-md text-gray-400 hover:text-white hover:bg-white/5 transition-colors flex-shrink-0">
+                        <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <rect width="18" height="18" x="3" y="3" rx="2"/>
+                            <path d="M15 3v18"/>
+                            <path data-panel-icon-collapse d="m8 9 3 3-3 3"/>
+                            <path data-panel-icon-expand class="hidden" d="m10 15-3-3 3-3"/>
+                        </svg>
+                    </button>
+                    <span data-panel-expanded class="ml-1 text-sm font-semibold text-white whitespace-nowrap">Entities</span>
                 </div>
-                <nav id="sg-entity-nav" class="flex-1 py-3 overflow-y-auto"></nav>
-                <div class="border-t border-[#2a2a2a] px-5 py-3 flex-shrink-0">
+                <nav id="sg-entity-nav" data-panel-expanded class="flex-1 py-3 overflow-y-auto"></nav>
+                <nav id="sg-entity-rail" data-panel-collapsed class="hidden flex-1 py-3 overflow-y-auto flex-col items-center gap-1"></nav>
+                <div data-panel-expanded class="border-t border-[#2a2a2a] px-5 py-3 flex-shrink-0">
                     <p class="text-xs text-gray-500">Uses your The Graph API key from <button id="sg-open-settings" class="text-gray-300 hover:text-white underline underline-offset-2 transition-colors">Settings</button>.</p>
                 </div>
             </aside>
