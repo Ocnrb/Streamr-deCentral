@@ -1197,7 +1197,7 @@ export function renderOperatorDetails(data, globalState) {
                  <div><p class="text-2xl sm:text-3xl font-semibold text-white" id="my-stake-value" data-tooltip-value="0">Loading...</p></div>
                  <div class="flex gap-2 sm:gap-4">
                      <button id="delegate-btn" class="flex-1 sm:flex-none bg-blue-800 hover:bg-blue-900 text-white font-bold py-2.5 px-4 sm:px-6 rounded-lg transition-colors text-sm sm:text-base">Delegate</button>
-                     <button id="undelegate-btn" class="flex-1 sm:flex-none bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-4 sm:px-6 rounded-lg transition-colors text-sm sm:text-base">Undelegate</button>
+                     <button id="undelegate-btn" class="flex-1 sm:flex-none bg-blue-800 hover:bg-blue-900 text-white font-bold py-2.5 px-4 sm:px-6 rounded-lg transition-colors text-sm sm:text-base">Undelegate</button>
                  </div>
              </div>
         </div>`;
