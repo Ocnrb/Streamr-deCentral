@@ -980,7 +980,17 @@
     <!-- Settings Modal -->
     <div id="settingsModal" class="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-3 sm:p-4 z-50 hidden">
         <div class="bg-[#1E1E1E] rounded-lg p-5 sm:p-8 max-w-md w-full text-gray-300 border border-[#333333] shadow-2xl max-h-[90vh] overflow-y-auto">
-            <h2 class="text-xl sm:text-2xl font-bold mb-3 sm:mb-4 text-white">Settings</h2>
+            <div class="flex items-center justify-between gap-4 mb-3 sm:mb-4">
+                <h2 class="text-xl sm:text-2xl font-bold text-white">Settings</h2>
+                <button id="settings-about-btn" type="button" class="flex items-center gap-1.5 px-2 py-1 -mr-2 rounded-md text-sm font-medium text-gray-400 hover:text-white hover:bg-white/5 transition-colors">
+                    <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="10"/>
+                        <path d="M12 16v-4"/>
+                        <path d="M12 8h.01"/>
+                    </svg>
+                    About
+                </button>
+            </div>
             <div class="space-y-4">
                 <div>
                     <label for="thegraph-api-key-input" class="block text-sm font-medium text-gray-400 mb-2"><a href="https://thegraph.com/studio/apikeys/" target="_blank" rel="noopener noreferrer" class="hover:text-white transition-colors underline underline-offset-2">The Graph</a> API Key</label>
@@ -1328,16 +1338,6 @@
                 <span class="hidden lg:block text-sm font-medium">Settings</span>
             </button>
             
-            <!-- About -->
-            <button id="sidebar-about-btn" class="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-gray-400 hover:text-white hover:bg-white/5 transition-all">
-                <svg class="w-6 h-6 p-0.5 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <circle cx="12" cy="12" r="10"/>
-                    <path d="M9 9h.01"/>
-                    <path d="M9 9a3 3 0 1 1 3 3v1"/>
-                    <path d="M12 17h.01"/>
-                </svg>
-                <span class="hidden lg:block text-sm font-medium">About</span>
-            </button>
             
             <!-- Wallet Info (Sidebar) - with dropdown -->
             <div class="relative mt-2">
@@ -1586,15 +1586,6 @@
                         <span class="text-sm font-medium">Settings</span>
                     </button>
                     
-                    <!-- About -->
-                    <button id="bottom-nav-about" class="w-full flex items-center gap-3 px-4 py-3 text-gray-300 hover:bg-[#2a2a2a] transition-colors">
-                        <svg class="w-6 h-6 p-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <circle cx="12" cy="12" r="10"/>
-                            <path d="M12 16v-4"/>
-                            <path d="M12 8h.01"/>
-                        </svg>
-                        <span class="text-sm font-medium">About</span>
-                    </button>
                 </div>
             </div>
         </div>

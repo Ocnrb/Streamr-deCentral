@@ -227,15 +227,6 @@ class NavigationController {
             });
         }
         
-        // About button (in More menu)
-        const bottomNavAbout = document.getElementById('bottom-nav-about');
-        if (bottomNavAbout) {
-            bottomNavAbout.addEventListener('click', () => {
-                hideMoreMenu();
-                this.openAbout();
-            });
-        }
-        
         // Sidebar buttons
         const sidebarAutostaker = document.getElementById('sidebar-autostaker-btn');
         const sidebarSettings = document.getElementById('sidebar-settings-btn');
@@ -252,10 +243,11 @@ class NavigationController {
             });
         }
         
-        // About button (sidebar)
-        const sidebarAbout = document.getElementById('sidebar-about-btn');
-        if (sidebarAbout) {
-            sidebarAbout.addEventListener('click', () => {
+        // About (from the Settings modal)
+        const settingsAbout = document.getElementById('settings-about-btn');
+        if (settingsAbout) {
+            settingsAbout.addEventListener('click', () => {
+                document.getElementById('settingsModal')?.classList.add('hidden');
                 this.openAbout();
             });
         }
