@@ -1343,7 +1343,18 @@ export const OperatorLogic = {
         });
         
         UI.mainContainer.addEventListener('mousemove', (e) => {
+            // The element under the tooltip may have been re-rendered (e.g. the token select after a change,
+            // a table row on refresh): it never fires mouseout, so hide the tooltip once the pointer is not on
+            // an element with a tooltip any more
+            if (!UI.customTooltip.classList.contains('hidden') && !e.target.closest('[data-tooltip-value], [data-tooltip-content]')) {
+                UI.customTooltip.classList.add('hidden');
+                return;
+            }
             UI.positionTooltip(e);
+        });
+
+        UI.mainContainer.addEventListener('mouseleave', () => {
+            UI.customTooltip.classList.add('hidden');
         });
         
         UI.mainContainer.addEventListener('mouseout', (e) => {
