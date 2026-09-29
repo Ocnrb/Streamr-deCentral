@@ -55,7 +55,10 @@ const ROOT_CHAIN_MANAGER_ABI = [
     'function depositFor(address user, address rootToken, bytes depositData)',
     'function exit(bytes inputData)'
 ];
-const ROOT_CHAIN_ABI = ['function getLastChildBlock() view returns (uint256)'];
+const ROOT_CHAIN_ABI = [
+    'function getLastChildBlock() view returns (uint256)',
+    'function headerBlocks(uint256) view returns (bytes32 root, uint256 start, uint256 end, uint256 createdAt, address proposer)'
+];
 const STATE_RECEIVER_ABI = ['function lastStateId() view returns (uint256)'];
 
 const DEPOSIT_GAS_FALLBACK = 180000;   // depositFor can't be estimated before the approval
@@ -94,6 +97,7 @@ const state = {
     submitting: false,
     claiming: new Set(),     // burn tx hashes with a claim in progress
     claimChecked: new Set(), // burn tx hashes already checked for a past claim this session
+    timeChecked: new Set(),  // burn tx hashes whose checkpoint time was looked up this session
     estimateSeq: 0,
     estimatedCost: null,     // { wei, symbol }
     pollTimer: null,
@@ -324,9 +328,69 @@ async function recoverFromExplorer() {
         state.transfers.push(transfer);
         added = true;
     }
-    if (added) {
+    // Arrival of deposits: the DATA minted on Polygon (same amount, first one after the deposit)
+    const mints = polygonTransfers
+        .filter(tx => tx.from === ethers.constants.AddressZero && tx.to?.toLowerCase() === state.address)
+        .map(tx => ({ value: tx.value, at: Number(tx.timeStamp) * 1000 }));
+    // Claims of withdrawals: the DATA released on Ethereum by the ERC20 predicate
+    const exits = ethTransfers
+        .filter(tx => tx.from?.toLowerCase() === ERC20_PREDICATE.toLowerCase() && tx.to?.toLowerCase() === state.address)
+        .map(tx => ({ value: tx.value, at: Number(tx.timeStamp) * 1000 }));
+    state.explorerEvents = { mints, exits };
+    const timed = applyExplorerTimes();
+    if (added || timed) {
         state.transfers.sort((a, b) => b.createdAt - a.createdAt);
         saveTransfers();
+    }
+}
+
+/** Exact arrival (Polygon mint) and claim (Ethereum release) times from the last explorer read */
+function applyExplorerTimes() {
+    const { mints = [], exits = [] } = state.explorerEvents || {};
+    return matchTimes(state.transfers.filter(t => t.kind === 'deposit' && t.status !== 'failed' && !t.arrivedExact), mints, (t, at) => { t.arrivedAt = at; t.arrivedExact = true; })
+        + matchTimes(state.transfers.filter(t => t.kind === 'withdraw' && t.status === 'claimed' && !t.claimedAt), exits, (t, at) => { t.claimedAt = at; });
+}
+
+/** Pairs transfers with later events of the same amount, oldest first, each event used once */
+function matchTimes(transfers, events, apply) {
+    const pool = [...events].sort((a, b) => a.at - b.at);
+    let count = 0;
+    for (const t of [...transfers].sort((a, b) => a.createdAt - b.createdAt)) {
+        const i = pool.findIndex(e => e.value === String(t.amountWei) && e.at >= t.createdAt - 60000);
+        if (i === -1) continue;
+        apply(t, pool[i].at);
+        pool.splice(i, 1);
+        count++;
+    }
+    return count;
+}
+
+/** When the checkpoint that covers a burn reached Ethereum: its header number is the first field of the exit proof */
+async function checkpointTime(payload) {
+    const fields = ethers.utils.RLP.decode(payload);
+    const headerNumber = ethers.BigNumber.from(fields[0]);
+    const header = await ethRead(p => new ethers.Contract(ROOT_CHAIN, ROOT_CHAIN_ABI, p).headerBlocks(headerNumber));
+    return header.createdAt.gt(0) ? header.createdAt.toNumber() * 1000 : null;
+}
+
+/** Checkpoint times of withdrawals past the checkpoint (a few per refresh, once per session each) */
+async function fillCheckpointTimes() {
+    const pending = state.transfers
+        .filter(t => t.kind === 'withdraw' && ['ready', 'claiming', 'claimed'].includes(t.status) && !t.checkpointAt && !state.timeChecked.has(t.txHash))
+        .slice(0, 5);
+    let changed = false;
+    for (const t of pending) {
+        state.timeChecked.add(t.txHash);
+        try {
+            const at = await checkpointTime(await fetchExitPayload(t.txHash));
+            if (at) { t.checkpointAt = at; changed = true; }
+        } catch (e) {
+            logger.warn(`Bridge: checkpoint time not found for ${t.txHash}`, e);
+        }
+    }
+    if (changed) {
+        saveTransfers();
+        renderTransfers();
     }
 }
 
@@ -378,7 +442,12 @@ async function refreshStatuses() {
                 if (lastStateId === null) {
                     lastStateId = await polygonRead(p => new ethers.Contract(STATE_RECEIVER, STATE_RECEIVER_ABI, p).lastStateId()).catch(() => undefined);
                 }
-                if (lastStateId && lastStateId.gte(t.stateId)) { t.status = 'done'; changed = true; }
+                if (lastStateId && lastStateId.gte(t.stateId)) {
+                    t.status = 'done';
+                    // Seen arriving from this page: replaced by the exact mint time from the explorer
+                    if (!t.arrivedAt && t.local) t.arrivedAt = Date.now();
+                    changed = true;
+                }
             } else {
                 if (t.status === 'claiming') {
                     const receipt = t.claimTxHash ? await ethRead(p => p.getTransactionReceipt(t.claimTxHash)) : null;
@@ -449,6 +518,32 @@ function shortHash(hash) {
     return `${hash.slice(0, 6)}…${hash.slice(-4)}`;
 }
 
+function formatDuration(ms) {
+    if (!Number.isFinite(ms)) return '';
+    const minutes = Math.round(ms / 60000);
+    if (minutes < 1) return '< 1 min';
+    if (minutes < 60) return `${minutes} min`;
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return `${hours} h${minutes % 60 ? ` ${minutes % 60} min` : ''}`;
+    return `${Math.floor(hours / 24)} d${hours % 24 ? ` ${hours % 24} h` : ''}`;
+}
+
+/** How long each stage took (or has been running) */
+function timeCell(t) {
+    const line = (label, value, approx = false) => `<div class="whitespace-nowrap"><span class="text-gray-500">${label}</span> <span class="text-gray-200">${approx && !value.startsWith('<') ? '~' : ''}${value}</span></div>`;
+    const since = formatDuration(Date.now() - t.createdAt);
+    if (t.status === 'failed') return '<span class="text-gray-500">—</span>';
+    if (t.kind === 'deposit') {
+        if (t.status === 'done') return t.arrivedAt ? line('Arrived in', formatDuration(t.arrivedAt - t.createdAt), !t.arrivedExact) : '';
+        return line('In progress ·', since);
+    }
+    if (t.status === 'pending' || t.status === 'checkpoint') return line('Waiting ·', since);
+    const rows = t.checkpointAt ? [line('Checkpoint in', formatDuration(t.checkpointAt - t.createdAt))] : [];
+    if (t.claimedAt) rows.push(line('Claimed after', formatDuration(t.claimedAt - t.createdAt)));
+    else if (t.status === 'ready' && t.checkpointAt) rows.push(line('Claimable for', formatDuration(Date.now() - t.checkpointAt)));
+    return rows.join('');
+}
+
 function transferHtml(t) {
     const [label, badgeClass] = STATUS_BADGES[t.status] || STATUS_BADGES.pending;
     const deposit = t.kind === 'deposit';
@@ -481,7 +576,7 @@ function transferHtml(t) {
             <td class="py-3 pr-3">${action}</td>
             <td class="py-3 pr-3"><span class="inline-flex items-center gap-2 whitespace-nowrap"><span class="text-white font-medium">${formatData(t.amountWei)}</span>${chip(DATA_ICON, 'DATA')}</span></td>
             <td class="py-3 pr-3"><span class="inline-flex items-center gap-1.5 whitespace-nowrap">${chip(from.icon, from.name)}<span class="text-gray-500">→</span>${chip(to.icon, to.name)}</span></td>
-            <td class="py-3 pr-3"><span class="px-2 py-0.5 rounded-full text-[11px] font-semibold whitespace-nowrap ${badgeClass} ${hint ? 'cursor-help' : ''}" ${hint ? `title="${hint}"` : ''}>${label}</span></td>
+            <td class="py-3 pr-3"><span class="px-2 py-0.5 rounded-full text-[11px] font-semibold whitespace-nowrap ${badgeClass} ${hint ? 'cursor-help' : ''}" ${hint ? `title="${hint}"` : ''}>${label}</span><div class="text-xs mt-1 space-y-0.5">${timeCell(t)}</div></td>
             <td class="py-3 pr-3 text-xs space-y-0.5">${links.join('')}</td>
             <td class="py-3 text-right">${claimButton}</td>
         </tr>`;
@@ -701,7 +796,7 @@ async function runStep(step, flow) {
         const tx = await new ethers.Contract(ROOT_CHAIN_MANAGER, ROOT_CHAIN_MANAGER_ABI, signer).depositFor(address, ETH_DATA, depositData);
         step.txHash = tx.hash;
         flow.sent = true;
-        upsertTransfer({ kind: 'deposit', txHash: tx.hash, amountWei: flow.amountWei.toString(), createdAt: Date.now(), status: 'pending' });
+        upsertTransfer({ kind: 'deposit', txHash: tx.hash, amountWei: flow.amountWei.toString(), createdAt: Date.now(), status: 'pending', local: true });
         renderProgress();
         const receipt = await ethRead(p => p.waitForTransaction(tx.hash));
         if (receipt.status !== 1) {
@@ -717,7 +812,7 @@ async function runStep(step, flow) {
         }, window.appSigner);
         step.txHash = tx.hash;
         flow.sent = true;
-        upsertTransfer({ kind: 'withdraw', txHash: tx.hash, amountWei: flow.amountWei.toString(), createdAt: Date.now(), status: 'pending' });
+        upsertTransfer({ kind: 'withdraw', txHash: tx.hash, amountWei: flow.amountWei.toString(), createdAt: Date.now(), status: 'pending', local: true });
         renderProgress();
         const receipt = await tx.wait();
         upsertTransfer({ txHash: tx.hash, status: 'checkpoint', block: receipt.blockNumber });
@@ -839,7 +934,7 @@ async function claim(burnTxHash) {
         await restorePolygon();
         const receipt = await ethRead(p => p.waitForTransaction(tx.hash));
         if (receipt.status !== 1) throw new Error('The claim failed on-chain.');
-        upsertTransfer({ txHash: burnTxHash, status: 'claimed' });
+        upsertTransfer({ txHash: burnTxHash, status: 'claimed', claimedAt: Date.now() });
         UI.showToast({ type: 'success', title: 'Withdrawal Claimed', message: `${formatData(t.amountWei)} DATA are in your Ethereum wallet.`, duration: 8000 });
         loadBalances();
     } catch (e) {
@@ -875,6 +970,11 @@ async function refreshAll() {
         await Promise.all([loadBalances(), recoverFromExplorer()]);
         renderTransfers();
         await refreshStatuses();
+        if (applyExplorerTimes()) {
+            saveTransfers();
+            renderTransfers();
+        }
+        await fillCheckpointTimes();
     } finally {
         btn?.classList.remove('animate-spin');
     }
