@@ -130,6 +130,7 @@ const state = {
     balances: {},            // symbol -> BigNumber
     pools: new Map(),        // pairKey -> { qv2, sushi, qv3: pool address | null, uni: Map(fee -> pool) } (session cache)
     liquidity: null,         // DATA pools with their balances (Liquidity section)
+    poolBalances: new Map(), // pool address -> { [token]: BigNumber, at } (skips empty pools before quoting)
     quote: null,             // { route, amountIn, amountOut, impact, key }
     quoteSeq: 0,
     quoteError: null,
@@ -239,22 +240,71 @@ async function ensurePairs(pairs) {
     });
 }
 
-/** Candidate routes from tokenIn to tokenOut: direct, or through one intermediate on the same venue */
+// Below these balances a pool is treated as empty (quoting an empty Uniswap v3 pool can burn a lot of gas)
+const MIN_POOL_BALANCE = {
+    [DATA.toLowerCase()]: ethers.utils.parseUnits('1', 18),
+    [WPOL.toLowerCase()]: ethers.utils.parseUnits('0.01', 18),
+    [USDC.toLowerCase()]: ethers.utils.parseUnits('0.01', 6),
+    [USDCE.toLowerCase()]: ethers.utils.parseUnits('0.01', 6),
+    [USDT.toLowerCase()]: ethers.utils.parseUnits('0.01', 6),
+    [WETH.toLowerCase()]: ethers.utils.parseUnits('0.000005', 18),
+    [DAI.toLowerCase()]: ethers.utils.parseUnits('0.01', 18)
+};
+const POOL_BALANCE_TTL_MS = 5 * 60 * 1000;
+
+/** Token balances of the pools (cached for a few minutes) */
+async function ensurePoolBalances(pools) {
+    const now = Date.now();
+    const missing = [...new Map(pools.map(pool => [lower(pool.address), pool])).values()]
+        .filter(pool => !(state.poolBalances.get(lower(pool.address))?.at > now - POOL_BALANCE_TTL_MS));
+    if (!missing.length) return;
+    const results = await multicall(missing.flatMap(pool => [
+        { target: pool.a, iface: IFACES.erc20, fn: 'balanceOf', args: [pool.address] },
+        { target: pool.b, iface: IFACES.erc20, fn: 'balanceOf', args: [pool.address] }
+    ]));
+    missing.forEach((pool, i) => {
+        const balanceA = results[i * 2]?.[0];
+        const balanceB = results[i * 2 + 1]?.[0];
+        if (!balanceA || !balanceB) return;   // unknown: not cached, the pool stays a candidate
+        state.poolBalances.set(lower(pool.address), { [lower(pool.a)]: balanceA, [lower(pool.b)]: balanceB, at: now });
+    });
+}
+
+function hasLiquidity(address, a, b) {
+    const balances = state.poolBalances.get(lower(address));
+    if (!balances) return true;   // balances unknown: let the quote decide
+    return [a, b].every(token => balances[lower(token)]?.gte(MIN_POOL_BALANCE[lower(token)] || 1));
+}
+
+/** Candidate routes from tokenIn to tokenOut: direct, or through one intermediate on the same venue (empty pools skipped) */
 async function candidateRoutes(tokenIn, tokenOut) {
     const mids = INTERMEDIATES.filter(m => lower(m) !== lower(tokenIn) && lower(m) !== lower(tokenOut));
     const paths = [[tokenIn, tokenOut], ...mids.map(m => [tokenIn, m, tokenOut])];
     await ensurePairs(paths.flatMap(path => path.slice(1).map((token, i) => [path[i], token])));
+
+    const hopsOf = (path) => path.slice(1).map((token, i) => state.pools.get(pairKey(path[i], token)));
+    const pools = [];
+    for (const path of paths) {
+        for (const h of hopsOf(path)) {
+            if (!h) continue;
+            for (const venue of ['qv2', 'sushi', 'qv3']) if (h[venue]) pools.push({ address: h[venue], a: h.a, b: h.b });
+            for (const address of h.uni.values()) pools.push({ address, a: h.a, b: h.b });
+        }
+    }
+    await ensurePoolBalances(pools);
+
     const routes = [];
     for (const path of paths) {
-        const hops = path.slice(1).map((token, i) => state.pools.get(pairKey(path[i], token)));
+        const hops = hopsOf(path);
         if (hops.some(h => !h)) continue;
         for (const venue of ['qv2', 'sushi', 'qv3']) {
-            if (hops.every(h => h[venue])) routes.push({ venue, path });
+            if (hops.every(h => h[venue] && hasLiquidity(h[venue], h.a, h.b))) routes.push({ venue, path });
         }
-        if (hops.every(h => h.uni.size)) {
-            // Every fee tier combination of the existing pools
+        const feesPerHop = hops.map(h => [...h.uni.entries()].filter(([, address]) => hasLiquidity(address, h.a, h.b)).map(([fee]) => fee));
+        if (feesPerHop.every(fees => fees.length)) {
+            // Every fee tier combination of the pools with liquidity
             let combos = [[]];
-            for (const h of hops) combos = combos.flatMap(c => [...h.uni.keys()].map(fee => [...c, fee]));
+            for (const fees of feesPerHop) combos = combos.flatMap(c => fees.map(fee => [...c, fee]));
             for (const fees of combos) routes.push({ venue: 'uni', path, fees });
         }
     }
@@ -295,9 +345,27 @@ function quoteOutput(route, result) {
     return out && out.gt(0) ? out : null;
 }
 
+/**
+ * Quotes each route in its own eth_call (4 at a time): quoters are gas hungry, and inside one
+ * Multicall3 batch an expensive quote could starve the next ones of gas
+ */
 async function quoteRoutes(routes, amountIn) {
-    const results = await multicall(routes.map(route => quoteCall(route, amountIn)), 25);
-    return results.map((result, i) => quoteOutput(routes[i], result));
+    const outputs = new Array(routes.length).fill(null);
+    let next = 0;
+    const worker = async () => {
+        while (next < routes.length) {
+            const i = next++;
+            const call = quoteCall(routes[i], amountIn);
+            try {
+                const data = await read(p => p.call({ to: call.target, data: call.iface.encodeFunctionData(call.fn, call.args) }));
+                outputs[i] = quoteOutput(routes[i], call.iface.decodeFunctionResult(call.fn, data));
+            } catch (e) {
+                outputs[i] = null;
+            }
+        }
+    };
+    await Promise.all(Array.from({ length: Math.min(4, routes.length) }, worker));
+    return outputs;
 }
 
 async function quoteRoute(route, amountIn) {
@@ -346,9 +414,13 @@ async function loadLiquidity() {
         { target: DATA, iface: IFACES.erc20, fn: 'balanceOf', args: [pool.address] },
         { target: pool.partner, iface: IFACES.erc20, fn: 'balanceOf', args: [pool.address] }
     ]));
+    const now = Date.now();
     pools.forEach((pool, i) => {
         pool.data = balances[i * 2]?.[0] || ethers.constants.Zero;
         pool.other = balances[i * 2 + 1]?.[0] || ethers.constants.Zero;
+        if (balances[i * 2] && balances[i * 2 + 1]) {
+            state.poolBalances.set(lower(pool.address), { [lower(DATA)]: pool.data, [lower(pool.partner)]: pool.other, at: now });
+        }
     });
     pools.sort((x, y) => (y.data.gt(x.data) ? 1 : y.data.lt(x.data) ? -1 : 0));
     state.liquidity = { pools, complete: INTERMEDIATES.every(m => state.pools.has(pairKey(DATA, m))) };
