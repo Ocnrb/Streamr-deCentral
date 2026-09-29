@@ -7,6 +7,7 @@ import * as Constants from '../core/constants.js';
 import * as Utils from '../core/utils.js';
 import * as UI from '../ui/ui.js';
 import { OperatorForm } from './operatorForm.js';
+import { OperatorWallets } from './operatorWallets.js';
 import * as Services from '../core/services.js';
 
 const { logger } = Utils;
@@ -1154,6 +1155,7 @@ export const OperatorLogic = {
             if (target.id === 'collect-all-earnings-btn') handleCollectAllEarningsClick(target);
             if (target.id === 'load-more-delegators-btn') handleLoadMoreDelegators(target);
             if (target.id === 'edit-operator-settings-btn') handleEditOperatorSettingsClick();
+            if (target.closest('#manage-wallets-btn')) OperatorWallets.open(state.currentOperatorData, () => OperatorLogic.refreshData(true));
             
             // Save as Profile button (in header)
             const profileBtn = target.closest('#desktop-save-profile-btn, #mobile-save-profile-btn');

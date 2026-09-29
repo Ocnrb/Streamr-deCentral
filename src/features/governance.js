@@ -335,18 +335,16 @@ function renderAll() {
     renderProcess();
     renderList();
     renderLeaderboards();
-    const range = RANGES[state.range];
-    el('gov-range-note').textContent = state.truncated
-        ? `Showing the latest ${state.flags.length} flags`
-        : `${state.flags.length} flag${state.flags.length === 1 ? '' : 's'} ${range.seconds ? `in the last ${range.label}` : 'in total'}`;
+    // Only when the range holds more flags than were loaded (the count is already on the Flags tile)
+    el('gov-range-note').textContent = state.truncated ? `Showing the latest ${state.flags.length} flags` : '';
 }
 
 function kpiTile(label, value, sub = '', accent = '') {
     return `
         <div class="detail-section p-4">
-            <p class="text-[11px] font-semibold text-gray-500 uppercase tracking-wider flex items-center gap-1.5">${accent}${label}</p>
+            <p class="text-[11px] font-semibold text-gray-400 uppercase tracking-wider flex items-center gap-1.5">${accent}${label}</p>
             <p class="text-2xl font-bold text-white mt-1.5">${value}</p>
-            <p class="text-xs text-gray-500 mt-0.5 truncate">${sub}</p>
+            <p class="text-xs text-gray-400 mt-0.5 truncate">${sub}</p>
         </div>`;
 }
 
@@ -384,13 +382,13 @@ function renderLive() {
             <div role="button" tabindex="0" data-flag-id="${flag.id}" class="gov-flag-open text-left p-4 rounded-xl bg-[#121212] border border-[#333] hover:border-[#555] cursor-pointer transition-colors min-w-[260px] sm:min-w-0">
                 <div class="flex items-center justify-between gap-2">
                     ${statusBadge(flag)}
-                    <span class="text-[11px] text-gray-500">${voted}/${flag.reviewerCount} voted</span>
+                    <span class="text-[11px] text-gray-400">${voted}/${flag.reviewerCount} voted</span>
                 </div>
                 <div class="flex items-center gap-2.5 mt-3">
                     ${avatar(flag.target)}
                     <div class="min-w-0">
                         <p class="text-sm font-semibold truncate">${operatorLink(flag.target, 'text-white')}</p>
-                        <p class="text-xs truncate">${streamLink(flag.sponsorship, 'text-gray-500')}</p>
+                        <p class="text-xs truncate">${streamLink(flag.sponsorship, 'text-gray-400')}</p>
                     </div>
                 </div>
                 <div class="mt-3">${voteBar(flag)}</div>
@@ -490,7 +488,7 @@ function renderProcess() {
         </li>`;
 
     if (!n) {
-        el('gov-process').innerHTML = '<p class="text-sm text-gray-500">Network parameters unavailable.</p>';
+        el('gov-process').innerHTML = '<p class="text-sm text-gray-400">Network parameters unavailable.</p>';
         return;
     }
     const slashing = formatPercent(Number(BigInt(n.slashingFraction || '0') * 10000n / 10n ** 18n) / 10000);
@@ -503,7 +501,7 @@ function renderProcess() {
             ${step(4, 'Outcome', `Kicked: the target is removed and ${value(slashing)} of its stake is slashed. Reviewers earn ${value(formatData(n.flagReviewerRewardWei))} each; a successful flagger earns ${value(formatData(n.flaggerRewardWei))}.`)}
             ${step(5, 'Protection', `After a flag, the target cannot be flagged again for ${value(formatDuration(n.flagProtectionSeconds))}.`)}
         </ol>
-        <p class="text-xs text-gray-500 mt-4 pt-4 border-t border-[#2a2a2a]">${value(formatBigNumber(String(n.eligibleVotersCount)))} operators are currently eligible to review.</p>`;
+        <p class="text-xs text-gray-400 mt-4 pt-4 border-t border-[#2a2a2a]">${value(formatBigNumber(String(n.eligibleVotersCount)))} operators are currently eligible to review.</p>`;
 }
 
 function filteredFlags() {
@@ -534,7 +532,7 @@ function renderList() {
     });
 
     if (!flags.length) {
-        el('gov-flags-list').innerHTML = `<p class="p-6 text-sm text-gray-500 text-center">No flags match the current filters.</p>`;
+        el('gov-flags-list').innerHTML = `<p class="p-6 text-sm text-gray-400 text-center">No flags match the current filters.</p>`;
         el('gov-show-more').classList.add('hidden');
         el('gov-show-all').classList.add('hidden');
         return;
@@ -550,18 +548,18 @@ function renderList() {
                     ${avatar(flag.target)}
                     <div class="min-w-0">
                         <p class="text-sm font-medium truncate">${operatorLink(flag.target, 'text-white')}</p>
-                        <p class="text-xs text-gray-500 truncate">flagged by ${operatorLink(flag.flagger, 'text-gray-400')}</p>
+                        <p class="text-xs text-gray-400 truncate">flagged by ${operatorLink(flag.flagger, 'text-gray-400')}</p>
                     </div>
                 </div>
                 <div class="hidden md:block min-w-0">
                     <p class="text-xs truncate">${streamLink(flag.sponsorship, 'text-gray-300')}</p>
-                    <p class="text-[11px] text-gray-500 truncate">${sponsorshipLink(flag.sponsorship, 'text-gray-500')}</p>
+                    <p class="text-[11px] text-gray-400 truncate">${sponsorshipLink(flag.sponsorship, 'text-gray-400')}</p>
                 </div>
                 <div class="col-span-2 md:col-span-1 min-w-0">
                     ${voteBar(flag)}
-                    <p class="text-[11px] text-gray-500 mt-1">${split ? `${formatPercent(split.kickShare)} kick · ` : ''}${voted}/${flag.reviewerCount} voted</p>
+                    <p class="text-[11px] text-gray-400 mt-1">${split ? `${formatPercent(split.kickShare)} kick · ` : ''}${voted}/${flag.reviewerCount} voted</p>
                 </div>
-                <p class="col-start-2 row-start-1 md:col-auto md:row-auto text-xs text-gray-500 text-right whitespace-nowrap" title="${formatDate(flag.flaggingTimestamp)}">${timeAgo(flag.flaggingTimestamp)}</p>
+                <p class="col-start-2 row-start-1 md:col-auto md:row-auto text-xs text-gray-400 text-right whitespace-nowrap" title="${formatDate(flag.flaggingTimestamp)}">${timeAgo(flag.flaggingTimestamp)}</p>
             </div>`;
     }).join('');
 
@@ -579,7 +577,7 @@ function leaderboardRow(operator, primary, secondary) {
             <a href="${operatorHref(operator)}" class="flex-1 min-w-0 text-sm text-gray-300 truncate ${LINK_CLASS}" title="${escapeHtml(operator.id)}">${escapeHtml(info.name)}</a>
             <div class="text-right flex-shrink-0">
                 <p class="text-sm font-semibold text-white tabular-nums">${primary}</p>
-                <p class="text-[11px] text-gray-500">${secondary}</p>
+                <p class="text-[11px] text-gray-400">${secondary}</p>
             </div>
         </li>`;
 }
@@ -616,7 +614,7 @@ function renderLeaderboards() {
         });
     });
 
-    const empty = '<li class="py-6 text-sm text-gray-500 text-center">No data in this range.</li>';
+    const empty = '<li class="py-6 text-sm text-gray-400 text-center">No data in this range.</li>';
     el('gov-top-targets').innerHTML = topBy(targets).map(e =>
         leaderboardRow(e.operator, e.count, `${e.kicked} kicked`)).join('') || empty;
     el('gov-top-flaggers').innerHTML = topBy(flaggers).map(e =>
@@ -639,11 +637,11 @@ function timelineStep(label, ts, isFuture, detail = '') {
             <span class="absolute left-[5px] top-4 bottom-0 w-px bg-[#333] group-last:hidden"></span>
             <div class="flex items-baseline justify-between gap-3">
                 <p class="text-sm ${isFuture ? 'text-gray-400' : 'text-white'} font-medium">${label}</p>
-                <p class="text-xs text-gray-500 whitespace-nowrap" title="${formatDate(ts)}">${isFuture
+                <p class="text-xs text-gray-400 whitespace-nowrap" title="${formatDate(ts)}">${isFuture
                     ? `in <span data-countdown="${ts}" class="tabular-nums">${formatDuration(ts - now())}</span>`
                     : timeAgo(ts)}</p>
             </div>
-            <p class="text-xs text-gray-500 mt-0.5">${formatDate(ts)}${detail ? ` · ${detail}` : ''}</p>
+            <p class="text-xs text-gray-400 mt-0.5">${formatDate(ts)}${detail ? ` · ${detail}` : ''}</p>
         </li>`;
 }
 
@@ -675,7 +673,7 @@ function renderDrawer(flag) {
         <div class="flex items-center gap-3">
             ${avatar(flag.target, 'w-12 h-12')}
             <div class="min-w-0">
-                <div class="flex items-center gap-2">${statusBadge(flag)}<span class="text-xs text-gray-500">Flag #${flag.lastFlagIndex ?? ''}</span></div>
+                <div class="flex items-center gap-2">${statusBadge(flag)}<span class="text-xs text-gray-400">Flag #${flag.lastFlagIndex ?? ''}</span></div>
                 <p class="text-lg font-semibold truncate mt-1">${operatorLink(flag.target, 'text-white')}</p>
             </div>
         </div>
@@ -687,44 +685,44 @@ function renderDrawer(flag) {
         </div>` : ''}
 
         <dl class="grid grid-cols-2 gap-3 mt-5">
-            <div class="p-3 rounded-lg bg-[#121212] border border-[#2a2a2a]"><dt class="text-[11px] text-gray-500 uppercase tracking-wider">Target</dt><dd class="text-sm mt-1 truncate">${operatorLink(flag.target)}</dd></div>
-            <div class="p-3 rounded-lg bg-[#121212] border border-[#2a2a2a]"><dt class="text-[11px] text-gray-500 uppercase tracking-wider">Flagger</dt><dd class="text-sm mt-1 truncate">${operatorLink(flag.flagger)}</dd></div>
-            <div class="p-3 rounded-lg bg-[#121212] border border-[#2a2a2a]"><dt class="text-[11px] text-gray-500 uppercase tracking-wider">Stake at risk</dt><dd class="text-sm text-white mt-1">${formatData(flag.targetStakeAtRiskWei)}</dd></div>
-            <div class="p-3 rounded-lg bg-[#121212] border border-[#2a2a2a]"><dt class="text-[11px] text-gray-500 uppercase tracking-wider">Votes</dt><dd class="text-sm text-white mt-1">${flag.votes?.length || 0} / ${flag.reviewerCount}</dd></div>
-            <div class="col-span-2 p-3 rounded-lg bg-[#121212] border border-[#2a2a2a]"><dt class="text-[11px] text-gray-500 uppercase tracking-wider">Stream</dt><dd class="text-sm mt-1 truncate">${streamLink(flag.sponsorship, 'text-gray-300')}</dd></div>
-            <div class="col-span-2 p-3 rounded-lg bg-[#121212] border border-[#2a2a2a]"><dt class="text-[11px] text-gray-500 uppercase tracking-wider">Sponsorship</dt><dd class="text-sm mt-1 truncate">${sponsorshipLink(flag.sponsorship, 'text-gray-300', flag.sponsorship?.id)}</dd></div>
+            <div class="p-3 rounded-lg bg-[#121212] border border-[#2a2a2a]"><dt class="text-[11px] text-gray-400 uppercase tracking-wider">Target</dt><dd class="text-sm mt-1 truncate">${operatorLink(flag.target)}</dd></div>
+            <div class="p-3 rounded-lg bg-[#121212] border border-[#2a2a2a]"><dt class="text-[11px] text-gray-400 uppercase tracking-wider">Flagger</dt><dd class="text-sm mt-1 truncate">${operatorLink(flag.flagger)}</dd></div>
+            <div class="p-3 rounded-lg bg-[#121212] border border-[#2a2a2a]"><dt class="text-[11px] text-gray-400 uppercase tracking-wider">Stake at risk</dt><dd class="text-sm text-white mt-1">${formatData(flag.targetStakeAtRiskWei)}</dd></div>
+            <div class="p-3 rounded-lg bg-[#121212] border border-[#2a2a2a]"><dt class="text-[11px] text-gray-400 uppercase tracking-wider">Votes</dt><dd class="text-sm text-white mt-1">${flag.votes?.length || 0} / ${flag.reviewerCount}</dd></div>
+            <div class="col-span-2 p-3 rounded-lg bg-[#121212] border border-[#2a2a2a]"><dt class="text-[11px] text-gray-400 uppercase tracking-wider">Stream</dt><dd class="text-sm mt-1 truncate">${streamLink(flag.sponsorship, 'text-gray-300')}</dd></div>
+            <div class="col-span-2 p-3 rounded-lg bg-[#121212] border border-[#2a2a2a]"><dt class="text-[11px] text-gray-400 uppercase tracking-wider">Sponsorship</dt><dd class="text-sm mt-1 truncate">${sponsorshipLink(flag.sponsorship, 'text-gray-300', flag.sponsorship?.id)}</dd></div>
         </dl>
 
         <section class="mt-6">
-            <h3 class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Vote</h3>
+            <h3 class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Vote</h3>
             ${voteBar(flag, 'h-2.5')}
             <div class="flex justify-between mt-2 text-xs">
-                <span class="text-red-400">Kick ${split ? formatPercent(split.kickShare) : '—'} <span class="text-gray-500">· ${formatData(forKick.toString())}</span></span>
-                <span class="text-emerald-400">Keep ${split ? formatPercent(split.keepShare) : '—'} <span class="text-gray-500">· ${formatData(against.toString())}</span></span>
+                <span class="text-red-400">Kick ${split ? formatPercent(split.kickShare) : '—'} <span class="text-gray-400">· ${formatData(forKick.toString())}</span></span>
+                <span class="text-emerald-400">Keep ${split ? formatPercent(split.keepShare) : '—'} <span class="text-gray-400">· ${formatData(against.toString())}</span></span>
             </div>
         </section>
 
         <section class="mt-6">
-            <h3 class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Timeline</h3>
+            <h3 class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Timeline</h3>
             <ol>${timeline}</ol>
         </section>
 
         <section class="mt-6">
-            <h3 class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Reviewers</h3>
+            <h3 class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Reviewers</h3>
             <ul class="divide-y divide-[#2a2a2a]">
                 ${rows.map(({ operator, vote }) => `
                     <li class="flex items-center gap-3 py-2.5">
                         ${avatar(operator, 'w-7 h-7')}
                         <div class="flex-1 min-w-0 text-sm truncate">${operatorLink(operator)}</div>
                         ${vote
-                            ? `<div class="text-right"><p class="text-xs font-semibold ${vote.votedKick ? 'text-red-400' : 'text-emerald-400'}">${vote.votedKick ? 'Kick' : 'Keep'}</p><p class="text-[11px] text-gray-500">${formatData(vote.voterWeight)} · ${timeAgo(vote.timestamp)}</p></div>`
-                            : '<span class="text-xs text-gray-500">No vote</span>'}
-                    </li>`).join('') || '<li class="py-3 text-sm text-gray-500">No reviewers assigned yet.</li>'}
+                            ? `<div class="text-right"><p class="text-xs font-semibold ${vote.votedKick ? 'text-red-400' : 'text-emerald-400'}">${vote.votedKick ? 'Kick' : 'Keep'}</p><p class="text-[11px] text-gray-400">${formatData(vote.voterWeight)} · ${timeAgo(vote.timestamp)}</p></div>`
+                            : '<span class="text-xs text-gray-400">No vote</span>'}
+                    </li>`).join('') || '<li class="py-3 text-sm text-gray-400">No reviewers assigned yet.</li>'}
             </ul>
         </section>
 
         <section id="gov-drawer-metadata" class="mt-6 hidden">
-            <h3 class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Flag metadata</h3>
+            <h3 class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Flag metadata</h3>
             <pre class="p-3 rounded-lg bg-[#121212] border border-[#2a2a2a] text-xs text-gray-400 whitespace-pre-wrap break-all font-mono"></pre>
         </section>`;
 
@@ -754,7 +752,7 @@ async function openFlag(flagId) {
         }
         if (state.openFlagId !== flagId) return;
         if (!flag) {
-            el('gov-drawer-body').innerHTML = '<p class="text-sm text-gray-500">Flag not found.</p>';
+            el('gov-drawer-body').innerHTML = '<p class="text-sm text-gray-400">Flag not found.</p>';
             return;
         }
     }
