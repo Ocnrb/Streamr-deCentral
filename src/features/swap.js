@@ -98,6 +98,14 @@ const UNIVERSAL_ROUTER_ABI = ['function execute(bytes commands, bytes[] inputs, 
 const V4_SINGLE_PARAMS = 'tuple(tuple(address currency0, address currency1, uint24 fee, int24 tickSpacing, address hooks) poolKey, bool zeroForOne, uint128 amountIn, uint128 amountOutMinimum, bytes hookData)';
 const V4_MULTI_PARAMS = 'tuple(address currencyIn, tuple(address intermediateCurrency, uint24 fee, int24 tickSpacing, address hooks, bytes hookData)[] path, uint128 amountIn, uint128 amountOutMinimum)';
 const MULTICALL_ABI = ['function aggregate3((address target, bool allowFailure, bytes callData)[] calls) payable returns ((bool success, bytes returnData)[] returnData)'];
+// Chainlink POL/USD feed (proxy): rounds are phaseId << 64 | round within the phase
+const POL_USD_FEED = '0xAB594600376Ec9fD91F8e885dADF0CE036862dE0';
+const FEED_ABI = [
+    'function latestRoundData() view returns (uint80 roundId, int256 answer, uint256 startedAt, uint256 updatedAt, uint80 answeredInRound)',
+    'function getRoundData(uint80 roundId) view returns (uint80 roundId, int256 answer, uint256 startedAt, uint256 updatedAt, uint80 answeredInRound)',
+    'function phaseAggregators(uint16 phaseId) view returns (address)',
+    'function latestRound() view returns (uint256)'
+];
 const UNISWAP_ROUTER_ABI = [
     'function exactInput((bytes path, address recipient, uint256 amountIn, uint256 amountOutMinimum) params) payable returns (uint256 amountOut)',
     'function unwrapWETH9(uint256 amountMinimum, address recipient) payable',
@@ -251,7 +259,8 @@ const IFACES = {
     uniQuoter: new ethers.utils.Interface(UNISWAP_QUOTER_ABI),
     v4Manager: new ethers.utils.Interface(V4_POOL_MANAGER_ABI),
     v4Quoter: new ethers.utils.Interface(V4_QUOTER_ABI),
-    erc20: new ethers.utils.Interface(ERC20_ABI)
+    erc20: new ethers.utils.Interface(ERC20_ABI),
+    feed: new ethers.utils.Interface(FEED_ABI)
 };
 
 const poolAddress = (result) => {
@@ -1169,6 +1178,99 @@ async function settlePendingSwaps() {
     }
 }
 
+// ---------- DATA/USD of each swap ----------
+
+const USD_STABLES = ['USDC', 'USDC.e', 'USDT', 'DAI'];
+
+/** POL/USD at each time (seconds): the last Chainlink round before it, by a binary search over the feed's rounds */
+async function polUsdAt(times) {
+    const feed = IFACES.feed;
+    const price = (round) => (round && round.answer.gt(0) && round.updatedAt.gt(0) ? Number(round.answer.toString()) / 1e8 : null);
+    const [latest] = await multicall([{ target: POL_USD_FEED, iface: feed, fn: 'latestRoundData', args: [] }]);
+    if (!latest) return times.map(() => null);
+    const results = times.map(t => (t >= latest.updatedAt.toNumber() ? price(latest) : undefined));
+    let phase = latest.roundId.shr(64).toNumber();
+    let lastRound = latest.roundId.mask(64).toNumber();
+    // Current phase first, then the earlier ones for older swaps
+    for (let hops = 0; hops < 3 && phase > 0 && lastRound > 0 && results.includes(undefined); hops++) {
+        const roundId = (n) => ethers.BigNumber.from(phase).shl(64).or(n);
+        const getRound = (n) => ({ target: POL_USD_FEED, iface: feed, fn: 'getRoundData', args: [roundId(n)] });
+        const [first] = await multicall([getRound(1)]);
+        if (!price(first)) break;
+        // The answer stays in [lo, hi]: the last round with updatedAt <= t
+        const searches = results.flatMap((r, i) => (r === undefined && times[i] >= first.updatedAt.toNumber() ? [{ i, lo: 1, hi: lastRound, round: first }] : []));
+        for (let open = searches; open.length; open = searches.filter(s => s.lo < s.hi)) {
+            const mids = open.map(s => Math.ceil((s.lo + s.hi) / 2));
+            const rounds = await multicall(mids.map(getRound));
+            open.forEach((s, j) => {
+                if (!price(rounds[j])) s.lo = s.hi = 0;   // round unreadable: no price for this swap
+                else if (rounds[j].updatedAt.toNumber() <= times[s.i]) [s.lo, s.round] = [mids[j], rounds[j]];
+                else s.hi = mids[j] - 1;
+            });
+        }
+        searches.forEach(s => { results[s.i] = s.lo ? price(s.round) : null; });
+        phase -= 1;
+        if (phase < 1) break;
+        const [aggregator] = await multicall([{ target: POL_USD_FEED, iface: feed, fn: 'phaseAggregators', args: [phase] }]);
+        const address = poolAddress(aggregator);
+        const [round] = address ? await multicall([{ target: address, iface: feed, fn: 'latestRound', args: [] }]) : [null];
+        lastRound = round ? round[0].toNumber() : 0;
+    }
+    return results.map(r => r ?? null);
+}
+
+const needsPolPrice = (entry) => [entry.pay?.symbol, entry.receive?.symbol].some(s => s === 'POL' || s === 'WPOL');
+const polPriceTried = new Set();
+let pricingSwaps = false;
+
+/** POL/USD at the time of each POL swap, kept with the swap */
+async function fillPolPrices() {
+    const missing = state.history.filter(h => h.status === 'done' && h.polUsd === undefined && needsPolPrice(h) && !polPriceTried.has(lower(h.txHash)));
+    if (pricingSwaps || !missing.length) return;
+    pricingSwaps = true;
+    missing.forEach(h => polPriceTried.add(lower(h.txHash)));
+    try {
+        const prices = await polUsdAt(missing.map(h => Math.floor(h.createdAt / 1000)));
+        missing.forEach((h, i) => { if (prices[i]) h.polUsd = prices[i]; });
+        saveHistory();
+    } catch (e) {
+        logger.warn('Swap: POL/USD price not found', e);
+    } finally {
+        pricingSwaps = false;
+        renderHistory();
+    }
+}
+
+/** DATA/USD column: the price paid or got per DATA in the swap */
+function dataUsdCell(entry) {
+    const none = (tip) => `<span class="text-gray-500"${tip ? ` data-tooltip-content="${tip}"` : ''}>—</span>`;
+    if (entry.status === 'failed') return none();
+    const dataLeg = entry.pay?.symbol === 'DATA' ? entry.pay : entry.receive;
+    const otherLeg = dataLeg === entry.pay ? entry.receive : entry.pay;
+    if (!dataLeg || !otherLeg) return none();
+    const data = parseFloat(ethers.utils.formatUnits(dataLeg.amount, 18));
+    const other = parseFloat(ethers.utils.formatUnits(otherLeg.amount, SYMBOL_DECIMALS[otherLeg.symbol] ?? 18));
+    let usd;
+    let tip;
+    if (USD_STABLES.includes(otherLeg.symbol)) {
+        usd = other;
+        tip = `Price per DATA in this swap, with 1 ${otherLeg.symbol} = 1 USD`;
+    } else if (otherLeg.symbol === 'POL' || otherLeg.symbol === 'WPOL') {
+        if (entry.polUsd === undefined) {
+            return pricingSwaps || entry.status === 'pending' ? '<span class="text-gray-500">…</span>' : none('POL/USD price not available');
+        }
+        usd = other * entry.polUsd;
+        tip = `Price per DATA in this swap, with POL at ${entry.polUsd.toFixed(4)} USD (Chainlink, at the time of the swap)`;
+    } else {
+        return none();
+    }
+    if (!(data > 0) || !(usd > 0)) return none();
+    const value = usd / data;
+    const estimated = dataLeg.estimated || otherLeg.estimated;
+    const text = value >= 1 ? value.toFixed(2) : Number(value.toPrecision(4)).toString();
+    return `<span class="text-white font-medium whitespace-nowrap" data-tooltip-content="${tip}${estimated ? '<br>Estimated until the swap is confirmed' : ''}">${estimated ? '≈ ' : ''}$${text}</span>`;
+}
+
 function timeAgo(ms) {
     const seconds = Math.max(0, Math.floor((Date.now() - ms) / 1000));
     if (seconds < 60) return 'just now';
@@ -1209,7 +1311,7 @@ function routeCell(entry) {
 function renderHistory() {
     const body = $('swap-history');
     if (!body) return;
-    const empty = (text) => `<tr><td colspan="7" class="py-4 text-sm text-gray-400">${text}</td></tr>`;
+    const empty = (text) => `<tr><td colspan="8" class="py-4 text-sm text-gray-400">${text}</td></tr>`;
     if (!state.address) {
         body.innerHTML = empty('Connect a wallet to see your swaps.');
         return;
@@ -1232,11 +1334,13 @@ function renderHistory() {
                 <td class="py-3 pr-3">${action}</td>
                 <td class="py-3 pr-3">${amount(entry.pay)}</td>
                 <td class="py-3 pr-3">${amount(entry.receive)}</td>
+                <td class="py-3 pr-3">${dataUsdCell(entry)}</td>
                 <td class="py-3 pr-3 text-xs text-gray-400">${routeCell(entry)}</td>
                 <td class="py-3 pr-3"><span class="px-2 py-0.5 rounded-full text-[11px] font-semibold whitespace-nowrap ${badge}">${label}</span></td>
                 <td class="py-3 text-right whitespace-nowrap"><a href="https://polygonscan.com/tx/${hash}" target="_blank" rel="noopener noreferrer" class="font-mono text-xs text-blue-400 hover:text-blue-300">${hash.slice(0, 6)}…${hash.slice(-4)} ↗</a></td>
             </tr>`;
     }).join('');
+    fillPolPrices();
 }
 
 /** Spins a refresh button's icon while the work runs (at least half a second, so it is noticed) */
