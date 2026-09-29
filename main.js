@@ -1790,6 +1790,30 @@ function setupRouter() {
     router.addRoute('/governance', () => showGovernance());
     router.addRoute('/governance/flag/:id', (params) => showGovernance(params.id));
 
+    // Swap: DATA against POL / USDC on Polygon (stops itself when the route changes)
+    router.addRoute('/swap', async () => {
+        OperatorLogic.stop();
+        Services.unsubscribeFromCoordinationStream();
+        if (RaceLogic) RaceLogic.stop();
+        if (VisualLogic) VisualLogic.stop();
+        if (DelegatorsLogic) DelegatorsLogic.deactivate();
+        if (StreamsLogic) StreamsLogic.stop();
+        if (GovernanceLogic) GovernanceLogic.stop();
+        if (SubgraphLogic) SubgraphLogic.stop();
+
+        UI.displayView('swap');
+        UI.hideProfileButtons();
+        navigationController.updateActiveState('swap');
+
+        try {
+            const { SwapLogic } = await import('./src/features/swap.js');
+            SwapLogic.show();
+        } catch (error) {
+            console.error('Failed to load swap module:', error);
+            UI.showToast({ type: 'error', title: 'Failed to load Swap', message: error.message, duration: 5000 });
+        }
+    });
+
     // Bridge: DATA between Ethereum and Polygon (stops itself when the route changes)
     router.addRoute('/bridge', async () => {
         OperatorLogic.stop();

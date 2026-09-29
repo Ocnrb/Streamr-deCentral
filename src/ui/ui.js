@@ -398,6 +398,8 @@ export function displayView(view) {
     if (subgraphEl) subgraphEl.style.display = 'none';
     const governanceEl = document.getElementById('governance-view');
     if (governanceEl) governanceEl.style.display = 'none';
+    const swapEl = document.getElementById('swap-view');
+    if (swapEl) swapEl.style.display = 'none';
     const bridgeEl = document.getElementById('bridge-view');
     if (bridgeEl) bridgeEl.style.display = 'none';
 
@@ -427,6 +429,8 @@ export function displayView(view) {
         window.scrollTo(0, 0);
     } else if (view === 'governance') {
         if (governanceEl) governanceEl.style.display = 'block';
+    } else if (view === 'swap') {
+        if (swapEl) swapEl.style.display = 'block';
     } else if (view === 'bridge') {
         if (bridgeEl) bridgeEl.style.display = 'block';
     } else if (view === 'subgraph') {

@@ -44,6 +44,7 @@ class NavigationController {
             'streams': 'Streams',
             'subgraph': 'Subgraph',
             'governance': 'Governance',
+            'swap': 'Swap',
             'bridge': 'Bridge'
         };
 
@@ -56,6 +57,7 @@ class NavigationController {
             'streams': 'Streamr streams and sponsorships: payouts, APY, staked operators and funding.',
             'subgraph': 'Explore the Streamr Network subgraph: operators, sponsorships, streams, flags and more.',
             'governance': 'Streamr Network governance: flags, votes, kicks and slashing.',
+            'swap': 'Swap DATA against POL and USDC on Polygon through QuickSwap, SushiSwap and Uniswap pools.',
             'bridge': 'Bridge DATA between Ethereum and Polygon with the official Polygon PoS bridge.'
         };
         
