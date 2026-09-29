@@ -404,6 +404,7 @@ function validateAvatar(avatarForm) {
             if (probe && !probe.registered) errors.push('This address is not a registered storage node.');
             else if (probe && !probe.urls.length) errors.push('This storage node has no HTTPS endpoint to read the avatar from.');
             else if (probe && !probe.reachable) errors.push("deCentral can't reach this storage node over HTTPS.");
+            else if (probe && !probe.pombo) errors.push('Choose a Pombo storage node: deCentral only shows stream avatars from nodes that verify who published them.');
         }
     } else if (ethers.utils.isAddress(node) && !av.storedBy.has(node)) {
         errors.push('Choose the image again to store it on the new storage node.');
@@ -484,6 +485,7 @@ function renderStorageStatus() {
     if (!probe.urls.length) return setStatus('operator-form-avatar-storage-status', 'No HTTPS endpoint: the avatar could not be read back.', 'error');
     const host = new URL(probe.urls[0]).host;
     if (!probe.reachable) return setStatus('operator-form-avatar-storage-status', `${host} is not reachable from deCentral.`, 'error');
+    if (!probe.pombo) return setStatus('operator-form-avatar-storage-status', `${host} does not verify publishers: avatars stored there are not shown.`, 'error');
     setStatus('operator-form-avatar-storage-status', probe.purge ? `${host} · supports deleting old avatars` : host, 'ok');
 }
 

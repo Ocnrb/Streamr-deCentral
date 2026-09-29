@@ -7,8 +7,10 @@
  * The latest message on that partition holds the avatar:
  *   { "type": "avatar", "mime": "image/webp", "width": 256, "height": 256, "data": "data:image/webp;base64,..." }
  *
- * Reading goes over HTTPS to the stream's storage nodes (`/data/partitions/:p/last`), which works on
- * vanilla Streamr storage nodes and Pombo storage nodes alike. Pombo nodes also support purge.
+ * Reading goes over HTTPS to the stream's storage nodes (`/data/partitions/:p/last`). Only Pombo storage
+ * nodes are read: they check the signature and PUBLISH permission before storing, while a vanilla Streamr
+ * storage node stores whatever reaches it, so anyone could slip a newer "avatar" into its history.
+ * Pombo nodes also support purge.
  */
 
 import { runQuery } from './services.js';
@@ -29,9 +31,15 @@ export const POMBO_STORAGE_NODE = '0xae340e799e8151f6a4999d245e466197aa217667';
 const DATA_URL_REGEX = /^data:image\/(webp|png|jpeg);base64,[A-Za-z0-9+/]+=*$/;
 const MAX_AVATAR_BYTES = 400 * 1024;
 const CACHE_TTL_MS = 10 * 60 * 1000;
+const MAX_STORAGE_URLS = 3;                   // endpoints tried per stream (registry metadata is open to anyone)
+const MAX_RESPONSE_BYTES = 600 * 1024;        // one avatar message plus JSON envelope
+const MAX_SMALL_RESPONSE_BYTES = 64 * 1024;   // capabilities, message metadata lists
+const FETCH_TIMEOUT_MS = 10 * 1000;
+const POMBO_NODE_NAME = 'pombo-storage-node';
 
 const avatarCache = new Map();   // streamId#partition -> { promise, at }
 const urlCache = new Map();      // streamId -> Promise<string[]>
+const pomboCache = new Map();    // base URL -> Promise<boolean>
 
 export function profileStreamIdFor(ownerAddress) {
     return `${ownerAddress.toLowerCase()}${PROFILE_STREAM_PATH}`;
@@ -53,7 +61,7 @@ export function storageNodeUrls(nodeMetadataJson) {
 async function getStreamStorageUrls(streamId) {
     if (!urlCache.has(streamId)) {
         const promise = runQuery(`{ stream(id: "${streamId.replace(/"/g, '')}") { storageNodes { id metadata } } }`)
-            .then(data => (data?.stream?.storageNodes || []).flatMap(node => storageNodeUrls(node.metadata)))
+            .then(data => [...new Set((data?.stream?.storageNodes || []).flatMap(node => storageNodeUrls(node.metadata)))].slice(0, MAX_STORAGE_URLS))
             .catch(() => { urlCache.delete(streamId); return []; });
         urlCache.set(streamId, promise);
     }
@@ -71,14 +79,64 @@ export function avatarFromContent(content) {
 }
 
 /**
+ * GET a JSON document from a storage node, with a timeout and a size cap
+ * (the node comes from registry metadata, so its responses are untrusted)
+ */
+async function fetchJsonLimited(url, maxBytes) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+    try {
+        const response = await fetch(url, { cache: 'no-store', signal: controller.signal });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const declared = Number(response.headers.get('content-length'));
+        if (declared > maxBytes) throw new Error('Response too large');
+        if (!response.body) return JSON.parse(await response.text());
+        const reader = response.body.getReader();
+        const chunks = [];
+        let size = 0;
+        for (;;) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            size += value.byteLength;
+            if (size > maxBytes) {
+                reader.cancel().catch(() => {});
+                throw new Error('Response too large');
+            }
+            chunks.push(value);
+        }
+        const bytes = new Uint8Array(size);
+        let offset = 0;
+        for (const chunk of chunks) {
+            bytes.set(chunk, offset);
+            offset += chunk.byteLength;
+        }
+        return JSON.parse(new TextDecoder().decode(bytes));
+    } finally {
+        clearTimeout(timer);
+    }
+}
+
+/**
  * Latest message of a stream partition from one storage node (public read)
  */
 export async function fetchLastMessage(baseUrl, streamId, partition, format = 'object') {
     const url = `${baseUrl}/streams/${encodeURIComponent(streamId)}/data/partitions/${partition}/last?count=1&format=${format}`;
-    const response = await fetch(url, { cache: 'no-store' });
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    const messages = await response.json();
+    const messages = await fetchJsonLimited(url, MAX_RESPONSE_BYTES);
     return Array.isArray(messages) && messages.length ? messages[messages.length - 1] : null;
+}
+
+/**
+ * Whether an endpoint is a Pombo storage node, which validates messages before storing them (cached)
+ */
+function isPomboEndpoint(baseUrl) {
+    if (!pomboCache.has(baseUrl)) {
+        const promise = getCapabilities(baseUrl).then(caps => {
+            if (!caps) pomboCache.delete(baseUrl);   // unreachable: ask again next time
+            return caps?.name === POMBO_NODE_NAME;
+        });
+        pomboCache.set(baseUrl, promise);
+    }
+    return pomboCache.get(baseUrl);
 }
 
 /**
@@ -93,7 +151,11 @@ export function loadStreamAvatar(streamId, partition = AVATAR_PARTITION, { force
         const urls = await getStreamStorageUrls(streamId);
         for (const baseUrl of urls) {
             try {
-                const message = await fetchLastMessage(baseUrl, streamId, partition);
+                const [pombo, message] = await Promise.all([
+                    isPomboEndpoint(baseUrl),
+                    fetchLastMessage(baseUrl, streamId, partition)
+                ]);
+                if (!pombo) continue;
                 const avatar = avatarFromContent(message?.content);
                 if (avatar) return avatar;
             } catch (e) {
@@ -320,8 +382,8 @@ export async function isStoredBy(baseUrl, streamId, partition = AVATAR_PARTITION
 
 export async function getCapabilities(baseUrl) {
     try {
-        const response = await fetch(`${baseUrl}/capabilities`, { cache: 'no-store' });
-        return response.ok ? await response.json() : null;
+        const caps = await fetchJsonLimited(`${baseUrl}/capabilities`, MAX_SMALL_RESPONSE_BYTES);
+        return caps && typeof caps === 'object' ? caps : null;
     } catch (e) {
         return null;
     }
@@ -332,9 +394,7 @@ export async function getCapabilities(baseUrl) {
  */
 export async function listStoredMessages(baseUrl, streamId, partition, count = 50) {
     const url = `${baseUrl}/streams/${encodeURIComponent(streamId)}/data/partitions/${partition}/last?count=${count}&format=metadata`;
-    const response = await fetch(url, { cache: 'no-store' });
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    const messages = await response.json();
+    const messages = await fetchJsonLimited(url, MAX_SMALL_RESPONSE_BYTES);
     return Array.isArray(messages) ? messages : [];
 }
 
