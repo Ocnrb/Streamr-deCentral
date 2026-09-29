@@ -463,6 +463,9 @@
       max-width: 96rem;
     }
   }
+  .m-px {
+    margin: 1px;
+  }
   .-mx-3 {
     margin-inline: calc(var(--spacing) * -3);
   }
@@ -475,8 +478,8 @@
   .mx-auto {
     margin-inline: auto;
   }
-  .my-3 {
-    margin-block: calc(var(--spacing) * 3);
+  .my-2 {
+    margin-block: calc(var(--spacing) * 2);
   }
   .mt-0\.5 {
     margin-top: calc(var(--spacing) * 0.5);
@@ -671,6 +674,9 @@
   .h-96 {
     height: calc(var(--spacing) * 96);
   }
+  .h-\[22px\] {
+    height: 22px;
+  }
   .h-\[92px\] {
     height: 92px;
   }
@@ -802,6 +808,9 @@
   }
   .w-\[6\.5rem\] {
     width: 6.5rem;
+  }
+  .w-\[22px\] {
+    width: 22px;
   }
   .w-\[72px\] {
     width: 72px;
@@ -1125,6 +1134,13 @@
       --tw-space-y-reverse: 0;
       margin-block-start: calc(calc(var(--spacing) * 6) * var(--tw-space-y-reverse));
       margin-block-end: calc(calc(var(--spacing) * 6) * calc(1 - var(--tw-space-y-reverse)));
+    }
+  }
+  .space-y-px {
+    :where(& > :not(:last-child)) {
+      --tw-space-y-reverse: 0;
+      margin-block-start: calc(1px * var(--tw-space-y-reverse));
+      margin-block-end: calc(1px * calc(1 - var(--tw-space-y-reverse)));
     }
   }
   .gap-x-1 {
@@ -1928,9 +1944,6 @@
   .p-8 {
     padding: calc(var(--spacing) * 8);
   }
-  .p-px {
-    padding: 1px;
-  }
   .px-1 {
     padding-inline: calc(var(--spacing) * 1);
   }
@@ -2229,9 +2242,6 @@
   }
   .text-\[\#444\] {
     color: #444;
-  }
-  .text-\[\#7264f1\] {
-    color: #7264f1;
   }
   .text-amber-200\/80 {
     color: color-mix(in srgb, oklch(92.4% 0.12 95.746) 80%, transparent);
@@ -2565,11 +2575,6 @@
       @media (hover: hover) {
         opacity: 100%;
       }
-    }
-  }
-  .group-\[\.active\]\:opacity-100 {
-    &:is(:where(.group):is(.active) *) {
-      opacity: 100%;
     }
   }
   .peer-checked\:bg-blue-800 {
@@ -4547,8 +4552,8 @@
   .bottom-nav-item.active {
     color: #3b82f6;
   }
-  .bottom-nav-item.active svg {
-    color: #3b82f6;
+  .bottom-nav-item.active > span, .bottom-nav-item.active svg, .bottom-nav-item.active .icon-mask {
+    color: #e5e7eb;
   }
   .bottom-nav-item::before {
     content: '';
@@ -4569,11 +4574,18 @@
     position: relative;
   }
   .nav-link.active {
-    color: white;
+    color: #e5e7eb;
     background-color: rgba(59, 130, 246, 0.15);
   }
-  .nav-link.active svg {
-    color: #3b82f6;
+  .nav-link.active > span, .nav-link.active svg, .nav-link.active .icon-mask {
+    color: #e5e7eb;
+  }
+  .icon-mask {
+    display: inline-block;
+    flex-shrink: 0;
+    background-color: currentColor;
+    -webkit-mask: var(--icon) center / contain no-repeat;
+    mask: var(--icon) center / contain no-repeat;
   }
   .nav-link::before {
     content: '';
