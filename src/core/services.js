@@ -43,68 +43,124 @@ let currentLivePrice = null;
 
 // --- Centralized RPC Provider ---
 
-let _readOnlyProvider = null;
-let _currentRpcIndex = 0;
+// Errors of the RPC endpoint itself (down, overloaded, rate limited, unauthorized, timed out): another
+// endpoint may answer. Answers of the chain (revert, nonce, funds...) are the same everywhere: never retried.
+const CHAIN_ANSWER = /revert|insufficient funds|nonce|underpriced|already known|known transaction|intrinsic gas|gas required exceeds|exceeds block gas limit|invalid sender|invalid opcode/i;
+const ENDPOINT_TROUBLE = /rate limit|too many requests|limit exceeded|timeout|timed out|failed to fetch|missing response|bad response|could not detect network|unavailable|capacity|unauthorized|forbidden|api key|upstream|gateway|node error|internal error|header not found|missing trie node|no response/i;
+const ENDPOINT_ERROR_CODES = [-32005, -32090, -32603, -32701, -32001, -32002];
 
-// Storage key for persisting working RPC index
-const RPC_INDEX_STORAGE_KEY = 'polygon_rpc_index';
+/** The node's own error message, without the request dump ethers adds */
+function rpcErrorMessage(error) {
+    if (typeof error?.body === 'string') {
+        try {
+            return JSON.parse(error.body)?.error?.message || error.body;
+        } catch (e) {
+            return error.body;
+        }
+    }
+    return error?.error?.message || error?.message || '';
+}
+
+/** true when the error comes from the RPC endpoint (another endpoint may answer), not from the chain */
+export function isRpcEndpointError(error) {
+    const message = rpcErrorMessage(error);
+    if (CHAIN_ANSWER.test(message)) return false;
+    if (['SERVER_ERROR', 'TIMEOUT', 'NETWORK_ERROR'].includes(error?.code)) return true;
+    if (ENDPOINT_ERROR_CODES.includes(error?.code)) return true;
+    return ENDPOINT_TROUBLE.test(message);
+}
+
+const RPC_TIMEOUT_MS = 15 * 1000;       // a hanging endpoint moves on instead of waiting ethers' 2 minutes
+const RPC_COOLDOWN_MS = 60 * 1000;      // a failed endpoint is skipped for a while when picking the next one
 
 /**
- * Load the last working RPC index from localStorage
+ * JSON-RPC provider over several endpoints: each request goes to the current endpoint and moves on to
+ * the next one when the endpoint fails (HTTP 5xx, rate limit, timeout...). The working endpoint is
+ * remembered across page loads.
  */
-function loadRpcIndex() {
-    try {
-        const stored = localStorage.getItem(RPC_INDEX_STORAGE_KEY);
-        if (stored !== null) {
-            const index = parseInt(stored, 10);
-            if (!isNaN(index) && index >= 0 && index < POLYGON_RPC_FALLBACKS.length) {
-                _currentRpcIndex = index;
-                console.log(`[RPC] Loaded last working RPC index: ${index} (${POLYGON_RPC_FALLBACKS[index]})`);
+export class FailoverRpcProvider extends ethers.providers.StaticJsonRpcProvider {
+    constructor(urls, network, storageKey = null) {
+        let start = 0;
+        try {
+            const stored = storageKey ? parseInt(localStorage.getItem(storageKey), 10) : NaN;
+            if (stored >= 0 && stored < urls.length) start = stored;
+        } catch (e) { /* storage blocked */ }
+        super({ url: urls[start], timeout: RPC_TIMEOUT_MS, throttleLimit: 1 }, network);
+        this._failover = {
+            urls,
+            index: start,
+            storageKey,
+            coolUntil: urls.map(() => 0),
+            endpoints: urls.map(url => new ethers.providers.StaticJsonRpcProvider({ url, timeout: RPC_TIMEOUT_MS, throttleLimit: 1 }, network))
+        };
+    }
+
+    get currentUrl() {
+        return this._failover.urls[this._failover.index];
+    }
+
+    /** Moves from the given endpoint to the next one not cooling down */
+    switchEndpoint(from = this._failover.index, reason = '') {
+        const f = this._failover;
+        if (f.index !== from) return;   // a concurrent request already moved on
+        f.coolUntil[from] = Date.now() + RPC_COOLDOWN_MS;
+        let next = (from + 1) % f.urls.length;
+        for (let i = 1; i <= f.urls.length; i++) {
+            const candidate = (from + i) % f.urls.length;
+            if (f.coolUntil[candidate] <= Date.now()) { next = candidate; break; }
+        }
+        f.index = next;
+        console.log(`[RPC] ${f.urls[from]} failed${reason ? ` (${reason})` : ''}, switching to ${f.urls[next]}`);
+        try {
+            if (f.storageKey) localStorage.setItem(f.storageKey, String(next));
+        } catch (e) { /* storage blocked */ }
+    }
+
+    async send(method, params) {
+        const f = this._failover;
+        let lastError = null;
+        for (let attempt = 0; attempt < f.urls.length; attempt++) {
+            const index = f.index;
+            try {
+                return await f.endpoints[index].send(method, params);
+            } catch (e) {
+                lastError = e;
+                // The same signed transaction sent again on another endpoint: it is already out
+                if (method === 'eth_sendRawTransaction' && /already known|known transaction/i.test(rpcErrorMessage(e))) {
+                    return ethers.utils.keccak256(params[0]);
+                }
+                if (!isRpcEndpointError(e)) throw e;
+                this.switchEndpoint(index, String(e?.status || e?.code || 'error'));
             }
         }
-    } catch (e) {
-        // Ignore localStorage errors
+        throw lastError;
     }
 }
 
-/**
- * Save the current RPC index to localStorage
- */
-function saveRpcIndex() {
-    try {
-        localStorage.setItem(RPC_INDEX_STORAGE_KEY, String(_currentRpcIndex));
-    } catch (e) {
-        // Ignore localStorage errors
-    }
-}
+const RPC_INDEX_STORAGE_KEY = 'polygon_rpc_index';
+let _readOnlyProvider = null;
 
 /**
- * Get or create a singleton read-only JsonRpcProvider for Polygon.
+ * Get or create the singleton read-only provider for Polygon (all RPC endpoints with failover).
  * This should be used for all read operations that don't require a signer.
- * @returns {ethers.providers.JsonRpcProvider}
+ * @returns {FailoverRpcProvider}
  */
 export function getReadOnlyProvider() {
     if (!_readOnlyProvider) {
-        // Load last working RPC on first call
-        loadRpcIndex();
-        const rpcUrl = POLYGON_RPC_FALLBACKS[_currentRpcIndex] || POLYGON_RPC_URL;
-        _readOnlyProvider = new ethers.providers.JsonRpcProvider(rpcUrl);
-        console.log(`[RPC] Initialized with: ${rpcUrl}`);
+        _readOnlyProvider = new FailoverRpcProvider(POLYGON_RPC_FALLBACKS.length ? POLYGON_RPC_FALLBACKS : [POLYGON_RPC_URL], 137, RPC_INDEX_STORAGE_KEY);
+        console.log(`[RPC] Initialized with: ${_readOnlyProvider.currentUrl}`);
     }
     return _readOnlyProvider;
 }
 
 /**
- * Switch to next available RPC endpoint when rate limited.
- * @returns {ethers.providers.JsonRpcProvider} New provider with fallback RPC
+ * Move to the next RPC endpoint (e.g. when rate limited). The provider stays the same object.
+ * @returns {FailoverRpcProvider}
  */
 export function switchToFallbackRpc() {
-    _currentRpcIndex = (_currentRpcIndex + 1) % POLYGON_RPC_FALLBACKS.length;
-    const newRpcUrl = POLYGON_RPC_FALLBACKS[_currentRpcIndex];
-    console.log(`[RPC] Switching to fallback RPC: ${newRpcUrl}`);
-    _readOnlyProvider = new ethers.providers.JsonRpcProvider(newRpcUrl);
-    saveRpcIndex(); // Persist the new working RPC
-    return _readOnlyProvider;
+    const provider = getReadOnlyProvider();
+    provider.switchEndpoint(undefined, 'rate limited');
+    return provider;
 }
 
 /**
@@ -112,7 +168,7 @@ export function switchToFallbackRpc() {
  * @returns {string} Current RPC URL
  */
 export function getCurrentRpcUrl() {
-    return POLYGON_RPC_FALLBACKS[_currentRpcIndex] || POLYGON_RPC_URL;
+    return getReadOnlyProvider().currentUrl;
 }
 
 /**
@@ -349,8 +405,8 @@ export async function readWithFallback(readFn, maxRetries = 3) {
         } catch (e) {
             lastError = e;
             
-            if (isRateLimitError(e) && attempt < maxRetries - 1) {
-                console.log(`[RPC] Read rate limited, switching to fallback (attempt ${attempt + 1}/${maxRetries})...`);
+            if ((isRateLimitError(e) || isRpcEndpointError(e)) && attempt < maxRetries - 1) {
+                console.log(`[RPC] Read failed on the RPC, switching to fallback (attempt ${attempt + 1}/${maxRetries})...`);
                 
                 // Switch to fallback RPC
                 switchToFallbackRpc();
