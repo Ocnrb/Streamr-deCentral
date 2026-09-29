@@ -398,6 +398,8 @@ export function displayView(view) {
     if (subgraphEl) subgraphEl.style.display = 'none';
     const governanceEl = document.getElementById('governance-view');
     if (governanceEl) governanceEl.style.display = 'none';
+    const bridgeEl = document.getElementById('bridge-view');
+    if (bridgeEl) bridgeEl.style.display = 'none';
 
     // Show/hide navigation based on view (visual is fullscreen)
     const bottomNav = document.getElementById('bottom-nav');
@@ -425,6 +427,8 @@ export function displayView(view) {
         window.scrollTo(0, 0);
     } else if (view === 'governance') {
         if (governanceEl) governanceEl.style.display = 'block';
+    } else if (view === 'bridge') {
+        if (bridgeEl) bridgeEl.style.display = 'block';
     } else if (view === 'subgraph') {
         // Flex row: query builder + entity navigation panel on the right
         if (subgraphEl) subgraphEl.style.display = 'flex';

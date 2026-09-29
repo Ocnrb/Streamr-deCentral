@@ -21,6 +21,7 @@
     --color-amber-500: oklch(76.9% 0.188 70.08);
     --color-amber-600: oklch(66.6% 0.179 58.318);
     --color-amber-900: oklch(41.4% 0.112 45.904);
+    --color-yellow-200: oklch(94.5% 0.129 101.54);
     --color-yellow-300: oklch(90.5% 0.182 98.111);
     --color-yellow-400: oklch(85.2% 0.199 91.936);
     --color-yellow-500: oklch(79.5% 0.184 86.047);
@@ -53,6 +54,7 @@
     --color-indigo-500: oklch(58.5% 0.233 277.117);
     --color-indigo-600: oklch(51.1% 0.262 276.966);
     --color-indigo-700: oklch(45.7% 0.24 277.023);
+    --color-violet-300: oklch(81.1% 0.111 293.571);
     --color-violet-400: oklch(70.2% 0.183 293.541);
     --color-violet-500: oklch(60.6% 0.25 292.717);
     --color-purple-400: oklch(71.4% 0.203 305.504);
@@ -892,6 +894,9 @@
   .min-w-\[520px\] {
     min-width: 520px;
   }
+  .min-w-\[820px\] {
+    min-width: 820px;
+  }
   .min-w-max {
     min-width: max-content;
   }
@@ -1113,6 +1118,9 @@
       margin-block-start: calc(calc(var(--spacing) * 6) * var(--tw-space-y-reverse));
       margin-block-end: calc(calc(var(--spacing) * 6) * calc(1 - var(--tw-space-y-reverse)));
     }
+  }
+  .gap-x-1 {
+    column-gap: calc(var(--spacing) * 1);
   }
   .gap-x-4 {
     column-gap: calc(var(--spacing) * 4);
@@ -1639,6 +1647,12 @@
       background-color: color-mix(in oklab, var(--color-gray-500) 10%, transparent);
     }
   }
+  .bg-gray-500\/15 {
+    background-color: color-mix(in srgb, oklch(55.1% 0.027 264.364) 15%, transparent);
+    @supports (color: color-mix(in lab, red, red)) {
+      background-color: color-mix(in oklab, var(--color-gray-500) 15%, transparent);
+    }
+  }
   .bg-gray-500\/20 {
     background-color: color-mix(in srgb, oklch(55.1% 0.027 264.364) 20%, transparent);
     @supports (color: color-mix(in lab, red, red)) {
@@ -1658,6 +1672,12 @@
     background-color: color-mix(in srgb, oklch(72.3% 0.219 149.579) 10%, transparent);
     @supports (color: color-mix(in lab, red, red)) {
       background-color: color-mix(in oklab, var(--color-green-500) 10%, transparent);
+    }
+  }
+  .bg-green-500\/15 {
+    background-color: color-mix(in srgb, oklch(72.3% 0.219 149.579) 15%, transparent);
+    @supports (color: color-mix(in lab, red, red)) {
+      background-color: color-mix(in oklab, var(--color-green-500) 15%, transparent);
     }
   }
   .bg-green-500\/20 {
@@ -1780,6 +1800,12 @@
   .bg-violet-500 {
     background-color: var(--color-violet-500);
   }
+  .bg-violet-500\/15 {
+    background-color: color-mix(in srgb, oklch(60.6% 0.25 292.717) 15%, transparent);
+    @supports (color: color-mix(in lab, red, red)) {
+      background-color: color-mix(in oklab, var(--color-violet-500) 15%, transparent);
+    }
+  }
   .bg-white {
     background-color: var(--color-white);
   }
@@ -1805,6 +1831,12 @@
     background-color: color-mix(in srgb, oklch(79.5% 0.184 86.047) 10%, transparent);
     @supports (color: color-mix(in lab, red, red)) {
       background-color: color-mix(in oklab, var(--color-yellow-500) 10%, transparent);
+    }
+  }
+  .bg-yellow-500\/15 {
+    background-color: color-mix(in srgb, oklch(79.5% 0.184 86.047) 15%, transparent);
+    @supports (color: color-mix(in lab, red, red)) {
+      background-color: color-mix(in oklab, var(--color-yellow-500) 15%, transparent);
     }
   }
   .bg-gradient-to-br {
@@ -2038,6 +2070,9 @@
   .text-right {
     text-align: right;
   }
+  .align-middle {
+    vertical-align: middle;
+  }
   .font-mono {
     font-family: var(--font-mono);
   }
@@ -2268,6 +2303,9 @@
   .text-red-400 {
     color: var(--color-red-400);
   }
+  .text-violet-300 {
+    color: var(--color-violet-300);
+  }
   .text-violet-400\/70 {
     color: color-mix(in srgb, oklch(70.2% 0.183 293.541) 70%, transparent);
     @supports (color: color-mix(in lab, red, red)) {
@@ -2276,6 +2314,9 @@
   }
   .text-white {
     color: var(--color-white);
+  }
+  .text-yellow-200 {
+    color: var(--color-yellow-200);
   }
   .text-yellow-300 {
     color: var(--color-yellow-300);
@@ -3194,6 +3235,11 @@
       outline-style: none;
     }
   }
+  .disabled\:pointer-events-none {
+    &:disabled {
+      pointer-events: none;
+    }
+  }
   .disabled\:cursor-not-allowed {
     &:disabled {
       cursor: not-allowed;
@@ -3399,6 +3445,11 @@
   .sm\:p-4 {
     @media (width >= 40rem) {
       padding: calc(var(--spacing) * 4);
+    }
+  }
+  .sm\:p-5 {
+    @media (width >= 40rem) {
+      padding: calc(var(--spacing) * 5);
     }
   }
   .sm\:p-6 {

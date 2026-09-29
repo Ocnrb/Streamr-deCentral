@@ -43,7 +43,8 @@ class NavigationController {
             'delegators': 'Delegators',
             'streams': 'Streams',
             'subgraph': 'Subgraph',
-            'governance': 'Governance'
+            'governance': 'Governance',
+            'bridge': 'Bridge'
         };
 
         // Per-page descriptions for search engines (the link previews use the static tags in index.html)
@@ -54,7 +55,8 @@ class NavigationController {
             'delegators': 'Streamr Network delegators: delegations to operators, value and returns.',
             'streams': 'Streamr streams and sponsorships: payouts, APY, staked operators and funding.',
             'subgraph': 'Explore the Streamr Network subgraph: operators, sponsorships, streams, flags and more.',
-            'governance': 'Streamr Network governance: flags, votes, kicks and slashing.'
+            'governance': 'Streamr Network governance: flags, votes, kicks and slashing.',
+            'bridge': 'Bridge DATA between Ethereum and Polygon with the official Polygon PoS bridge.'
         };
         
         this.currentPage = 'operators';
