@@ -42,6 +42,14 @@ const UNISWAP_V3_QUOTER = '0x61fFE014bA17989E743c5F6cB21bF9697530B21e';
 const UNISWAP_V3_ROUTER = '0x68b3465833fb72A70ecDF485E0e4C7bD8665Fc45';   // SwapRouter02
 const UNISWAP_ADDRESS_THIS = '0x0000000000000000000000000000000000000002'; // SwapRouter02: keep the output in the router (to unwrap)
 const UNISWAP_FEES = [100, 500, 3000, 10000];
+// Uniswap v4: one PoolManager holds every pool; pools are found by computing the ids of hookless pools
+// with the standard fee / tick spacing pairs and reading their state (extsload). Read-only for now.
+const UNISWAP_V4_POOL_MANAGER = '0x67366782805870060151383f4bbff9dab53e5cd6';
+const UNISWAP_V4_QUOTER = '0xb3d5c3dfc3a7aebff71895a7191796bffc2c81b9';
+const V4_TIERS = [[100, 1], [500, 10], [3000, 60], [10000, 200]];
+const V4_POOLS_SLOT = 6;
+const NATIVE = ethers.constants.AddressZero;
+const Q96 = ethers.BigNumber.from(2).pow(96);
 
 const ERC20_ABI = [
     'function balanceOf(address) view returns (uint256)',
@@ -64,6 +72,8 @@ const ALGEBRA_ROUTER_ABI = [
 ];
 const UNISWAP_FACTORY_ABI = ['function getPool(address, address, uint24) view returns (address)'];
 const UNISWAP_QUOTER_ABI = ['function quoteExactInput(bytes path, uint256 amountIn) returns (uint256 amountOut, uint160[] sqrtPriceX96AfterList, uint32[] initializedTicksCrossedList, uint256 gasEstimate)'];
+const V4_POOL_MANAGER_ABI = ['function extsload(bytes32 slot) view returns (bytes32)'];
+const V4_QUOTER_ABI = ['function quoteExactInputSingle(((address currency0, address currency1, uint24 fee, int24 tickSpacing, address hooks) poolKey, bool zeroForOne, uint128 exactAmount, bytes hookData) params) returns (uint256 amountOut, uint256 gasEstimate)'];
 const MULTICALL_ABI = ['function aggregate3((address target, bool allowFailure, bytes callData)[] calls) payable returns ((bool success, bytes returnData)[] returnData)'];
 const UNISWAP_ROUTER_ABI = [
     'function exactInput((bytes path, address recipient, uint256 amountIn, uint256 amountOutMinimum) params) payable returns (uint256 amountOut)',
@@ -75,7 +85,8 @@ const VENUES = {
     qv2: { name: 'QuickSwap V2', router: QUICKSWAP_V2_ROUTER, factory: QUICKSWAP_V2_FACTORY },
     sushi: { name: 'SushiSwap V2', router: SUSHI_V2_ROUTER, factory: SUSHI_V2_FACTORY },
     qv3: { name: 'QuickSwap V3', router: QUICKSWAP_V3_ROUTER },
-    uni: { name: 'Uniswap v3', router: UNISWAP_V3_ROUTER }
+    uni: { name: 'Uniswap v3', router: UNISWAP_V3_ROUTER },
+    v4: { name: 'Uniswap v4', router: null }   // quotes only
 };
 
 // ============================================
@@ -106,7 +117,8 @@ const KNOWN_TOKENS = {
     [USDCE.toLowerCase()]: { symbol: 'USDC.e', decimals: 6 },
     [USDT.toLowerCase()]: { symbol: 'USDT', decimals: 6 },
     [WETH.toLowerCase()]: { symbol: 'WETH', decimals: 18 },
-    [DAI.toLowerCase()]: { symbol: 'DAI', decimals: 18 }
+    [DAI.toLowerCase()]: { symbol: 'DAI', decimals: 18 },
+    [NATIVE]: { symbol: 'POL', decimals: 18 }
 };
 
 const DEADLINE_SECONDS = 20 * 60;
@@ -131,6 +143,7 @@ const state = {
     pools: new Map(),        // pairKey -> { qv2, sushi, qv3: pool address | null, uni: Map(fee -> pool) } (session cache)
     liquidity: null,         // DATA pools with their balances (Liquidity section)
     poolBalances: new Map(), // pool address -> { [token]: BigNumber, at } (skips empty pools before quoting)
+    v4Pools: null,           // initialized Uniswap v4 DATA pools with liquidity
     quote: null,             // { route, amountIn, amountOut, impact, key }
     quoteSeq: 0,
     quoteError: null,
@@ -212,6 +225,8 @@ const IFACES = {
     algebraQuoter: new ethers.utils.Interface(ALGEBRA_QUOTER_ABI),
     uniFactory: new ethers.utils.Interface(UNISWAP_FACTORY_ABI),
     uniQuoter: new ethers.utils.Interface(UNISWAP_QUOTER_ABI),
+    v4Manager: new ethers.utils.Interface(V4_POOL_MANAGER_ABI),
+    v4Quoter: new ethers.utils.Interface(V4_QUOTER_ABI),
     erc20: new ethers.utils.Interface(ERC20_ABI)
 };
 
@@ -277,6 +292,89 @@ function hasLiquidity(address, a, b) {
     return [a, b].every(token => balances[lower(token)]?.gte(MIN_POOL_BALANCE[lower(token)] || 1));
 }
 
+// ---------- Uniswap v4 (read-only) ----------
+
+function v4PoolKey(a, b, fee, tickSpacing) {
+    const [currency0, currency1] = lower(a) < lower(b) ? [a, b] : [b, a];
+    return { currency0, currency1, fee, tickSpacing, hooks: NATIVE };
+}
+
+function v4PoolId(key) {
+    return ethers.utils.keccak256(ethers.utils.defaultAbiCoder.encode(
+        ['address', 'address', 'uint24', 'int24', 'address'],
+        [key.currency0, key.currency1, key.fee, key.tickSpacing, key.hooks]
+    ));
+}
+
+/** Hookless v4 pools of DATA (against native POL and the other tokens) that are initialized and hold liquidity */
+async function discoverV4Pools() {
+    if (state.v4Pools) return state.v4Pools;
+    const candidates = [];
+    for (const counter of [NATIVE, ...INTERMEDIATES]) {
+        for (const [fee, tickSpacing] of V4_TIERS) {
+            const key = v4PoolKey(DATA, counter, fee, tickSpacing);
+            const id = v4PoolId(key);
+            const stateSlot = ethers.utils.keccak256(ethers.utils.solidityPack(['bytes32', 'bytes32'], [id, ethers.utils.hexZeroPad(ethers.utils.hexlify(V4_POOLS_SLOT), 32)]));
+            const liquiditySlot = ethers.utils.hexZeroPad(ethers.BigNumber.from(stateSlot).add(3).toHexString(), 32);
+            candidates.push({ counter, fee, tickSpacing, key, id, stateSlot, liquiditySlot });
+        }
+    }
+    const results = await multicall(candidates.flatMap(c => [
+        { target: UNISWAP_V4_POOL_MANAGER, iface: IFACES.v4Manager, fn: 'extsload', args: [c.stateSlot] },
+        { target: UNISWAP_V4_POOL_MANAGER, iface: IFACES.v4Manager, fn: 'extsload', args: [c.liquiditySlot] }
+    ]));
+    if (results.some(r => r === null)) throw new Error('Uniswap v4 lookup incomplete');
+    const mask160 = ethers.BigNumber.from(2).pow(160).sub(1);
+    const mask128 = ethers.BigNumber.from(2).pow(128).sub(1);
+    state.v4Pools = candidates.map((c, i) => ({
+        ...c,
+        sqrtPriceX96: ethers.BigNumber.from(results[i * 2][0]).and(mask160),
+        liquidity: ethers.BigNumber.from(results[i * 2 + 1][0]).and(mask128)
+    })).filter(pool => !pool.sqrtPriceX96.isZero() && !pool.liquidity.isZero());
+    return state.v4Pools;
+}
+
+/** Amount out within the current price range (no tick crossing): fallback when the v4 quoter is not reachable */
+function v4LocalEstimate(pool, zeroForOne, amountIn) {
+    const L = pool.liquidity;
+    const sp = pool.sqrtPriceX96;
+    const net = amountIn.mul(1000000 - pool.fee).div(1000000);
+    if (zeroForOne) {
+        const next = L.mul(Q96).mul(sp).div(L.mul(Q96).add(net.mul(sp)));
+        return L.mul(sp.sub(next)).div(Q96);
+    }
+    const next = sp.add(net.mul(Q96).div(L));
+    return L.mul(Q96).mul(next.sub(sp)).div(next.mul(sp));
+}
+
+/** 1 DATA in the other token, from the pool's sqrt price */
+function v4DataPrice(pool) {
+    const counterInfo = KNOWN_TOKENS[lower(pool.counter)];
+    const ratio = Math.pow(parseFloat(pool.sqrtPriceX96.toString()) / Math.pow(2, 96), 2);   // currency1 per currency0 (raw units)
+    const dataIsZero = lower(pool.key.currency0) === lower(DATA);
+    const raw = dataIsZero ? ratio : 1 / ratio;
+    return raw * Math.pow(10, 18 - counterInfo.decimals);
+}
+
+/** Single-pool v4 routes between DATA and the token (POL matches native and WPOL pools) */
+async function v4Routes(tokenIn, tokenOut) {
+    let pools;
+    try {
+        pools = await discoverV4Pools();
+    } catch (e) {
+        logger.warn('Swap: Uniswap v4 lookup failed', e);
+        return [];
+    }
+    const counterToken = lower(tokenIn.address) === lower(DATA) ? tokenOut : tokenIn;
+    const matches = (address) => counterToken.native ? [NATIVE, lower(WPOL)].includes(lower(address)) : lower(address) === lower(counterToken.address);
+    return pools.filter(pool => matches(pool.counter)).map(pool => ({
+        venue: 'v4',
+        path: [tokenIn.address, tokenOut.address],
+        v4: pool,
+        executable: false
+    }));
+}
+
 /** Candidate routes from tokenIn to tokenOut: direct, or through one intermediate on the same venue (empty pools skipped) */
 async function candidateRoutes(tokenIn, tokenOut) {
     const mids = INTERMEDIATES.filter(m => lower(m) !== lower(tokenIn) && lower(m) !== lower(tokenOut));
@@ -330,7 +428,17 @@ function encodeUniswapPath(path, fees) {
     return ethers.utils.solidityPack(types, values);
 }
 
+function v4ZeroForOne(route) {
+    const pool = route.v4;
+    const inIsData = lower(route.path[0]) === lower(DATA);
+    const dataIsZero = lower(pool.key.currency0) === lower(DATA);
+    return inIsData === dataIsZero;
+}
+
 function quoteCall(route, amountIn) {
+    if (route.venue === 'v4') {
+        return { target: UNISWAP_V4_QUOTER, iface: IFACES.v4Quoter, fn: 'quoteExactInputSingle', args: [{ poolKey: route.v4.key, zeroForOne: v4ZeroForOne(route), exactAmount: amountIn, hookData: '0x' }] };
+    }
     if (route.venue === 'qv2' || route.venue === 'sushi') {
         return { target: VENUES[route.venue].router, iface: IFACES.v2Router, fn: 'getAmountsOut', args: [amountIn, route.path] };
     }
@@ -365,6 +473,16 @@ async function quoteRoutes(routes, amountIn, errors = []) {
                 outputs[i] = null;
                 errors[i] = (e?.reason || e?.error?.message || e?.message || 'failed').toString().slice(0, 120);
                 logger.warn(`Swap: quote failed on ${routeLabel(routes[i])}`, e);
+                if (routes[i].venue === 'v4') {
+                    // Quoter not reachable: estimate within the current price range
+                    try {
+                        const estimate = v4LocalEstimate(routes[i].v4, v4ZeroForOne(routes[i]), amountIn);
+                        if (estimate.gt(0)) {
+                            outputs[i] = estimate;
+                            errors[i] = `estimate (quoter: ${errors[i].slice(0, 60)})`;
+                        }
+                    } catch (err) { /* keep the failure */ }
+                }
             }
         }
     };
@@ -380,7 +498,7 @@ async function quoteRoute(route, amountIn) {
 
 /** Best route for amountIn, with its price impact */
 async function findBestQuote(tokenIn, tokenOut, amountIn) {
-    const routes = await candidateRoutes(tokenIn.address, tokenOut.address);
+    const routes = [...await candidateRoutes(tokenIn.address, tokenOut.address), ...await v4Routes(tokenIn, tokenOut)];
     if (!routes.length) throw new Error(`No ${tokenIn.symbol} / ${tokenOut.symbol} pool found on QuickSwap, SushiSwap or Uniswap.`);
     const errors = [];
     const outputs = await quoteRoutes(routes, amountIn, errors);
@@ -388,7 +506,7 @@ async function findBestQuote(tokenIn, tokenOut, amountIn) {
     const checked = routes.map((route, i) => ({ route, out: outputs[i], error: errors[i] || null }));
     let best = null;
     outputs.forEach((out, i) => {
-        if (out && (!best || out.gt(best.amountOut))) best = { route: routes[i], amountOut: out };
+        if (out && routes[i].executable !== false && (!best || out.gt(best.amountOut))) best = { route: routes[i], amountOut: out };
     });
     if (!best) {
         const error = new Error('No pool can fill this amount right now.');
@@ -434,7 +552,15 @@ async function loadLiquidity() {
         }
     });
     pools.sort((x, y) => (y.data.gt(x.data) ? 1 : y.data.lt(x.data) ? -1 : 0));
-    state.liquidity = { pools, complete: INTERMEDIATES.every(m => state.pools.has(pairKey(DATA, m))) };
+    let v4 = [];
+    let v4Complete = true;
+    try {
+        v4 = await discoverV4Pools();
+    } catch (e) {
+        v4Complete = false;
+        logger.warn('Swap: Uniswap v4 lookup failed', e);
+    }
+    state.liquidity = { pools, v4, complete: v4Complete && INTERMEDIATES.every(m => state.pools.has(pairKey(DATA, m))) };
     renderLiquidity();
 }
 
@@ -442,8 +568,17 @@ function renderLiquidity() {
     const list = $('swap-liquidity-list');
     const count = $('swap-liquidity-count');
     if (!list || !state.liquidity) return;
-    const { pools, complete } = state.liquidity;
-    count.textContent = `(${pools.length})`;
+    const { pools, v4 = [], complete } = state.liquidity;
+    count.textContent = `(${pools.length + v4.length})`;
+    const v4Rows = v4.map(pool => {
+        const counter = KNOWN_TOKENS[lower(pool.counter)];
+        const price = v4DataPrice(pool);
+        return `
+            <li class="flex items-center justify-between gap-3 py-1.5 border-b border-[#2a2a2a] last:border-0">
+                <span class="text-gray-300">Uniswap v4 ${pool.fee / 10000}% · DATA / ${counter.symbol}</span>
+                <span class="text-right text-gray-400 whitespace-nowrap">1 DATA = ${price < 0.0001 ? price.toExponential(3) : Number(price.toPrecision(5))} ${counter.symbol}</span>
+            </li>`;
+    });
     const rows = pools.map(pool => {
         const partner = KNOWN_TOKENS[lower(pool.partner)];
         const venue = `${VENUES[pool.venue].name}${pool.fee ? ` ${pool.fee / 10000}%` : ''}`;
@@ -453,12 +588,17 @@ function renderLiquidity() {
                 <span class="text-right text-gray-400 whitespace-nowrap">${formatAmount(pool.data, 18)} DATA · ${formatAmount(pool.other, partner.decimals)} ${partner.symbol}</span>
             </li>`;
     });
-    list.innerHTML = (rows.join('') || '<li class="py-1.5 text-gray-400">No DATA pool found on these DEXes.</li>')
+    list.innerHTML = ([...v4Rows, ...rows].join('') || '<li class="py-1.5 text-gray-400">No DATA pool found on these DEXes.</li>')
         + (complete ? '' : '<li class="py-1.5 text-yellow-300">Some pools could not be checked (RPC). Refresh to try again.</li>');
 }
 
 function routeLabel(route) {
     const symbol = (address) => KNOWN_TOKENS[lower(address)]?.symbol || Utils.shortAddress(address);
+    if (route.venue === 'v4') {
+        const counter = KNOWN_TOKENS[lower(route.v4.counter)]?.symbol;
+        const [a, b] = lower(route.path[0]) === lower(DATA) ? ['DATA', counter] : [counter, 'DATA'];
+        return `Uniswap v4 (${route.v4.fee / 10000}%) · ${a} → ${b}`;
+    }
     const fees = route.fees ? ` (${route.fees.map(f => `${f / 10000}%`).join(' / ')})` : '';
     return `${VENUES[route.venue].name}${fees} · ${route.path.map(symbol).join(' → ')}`;
 }
@@ -625,7 +765,7 @@ function renderCheckedRoutes(checked) {
     const sorted = [...checked].sort((x, y) => (x.out && y.out ? (y.out.gt(x.out) ? 1 : -1) : x.out ? -1 : y.out ? 1 : 0));
     list.innerHTML = sorted.map(item => `
         <li class="flex items-start justify-between gap-3 py-1 border-b border-[#2a2a2a] last:border-0">
-            <span class="text-gray-300">${Utils.escapeHtml(routeLabel(item.route))}</span>
+            <span class="text-gray-300">${Utils.escapeHtml(routeLabel(item.route))}${item.route.executable === false ? ' <span class="text-gray-500">(view only)</span>' : ''}</span>
             <span class="text-right whitespace-nowrap ${item.out ? 'text-gray-200' : 'text-gray-500'}" ${item.error ? `title="${Utils.escapeHtml(item.error)}"` : ''}>${item.out ? formatToken(item.out, receive) : `failed${item.error ? `: ${Utils.escapeHtml(item.error.slice(0, 40))}` : ''}`}</span>
         </li>`).join('');
 }
@@ -997,6 +1137,7 @@ function setupListeners() {
     });
     $('swap-refresh')?.addEventListener('click', () => {
         if (state.flow) return;
+        state.v4Pools = null;   // re-read v4 prices / liquidity
         loadBalances();
         updateQuote();
         loadLiquidity().catch(e => logger.warn('Swap: pool discovery failed', e));
