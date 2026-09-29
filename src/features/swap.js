@@ -1155,33 +1155,51 @@ function timeAgo(ms) {
 
 const HISTORY_BADGES = {
     pending: ['Confirming', 'bg-blue-500/15 text-blue-300'],
-    done: ['Swapped', 'bg-green-500/15 text-green-400'],
+    done: ['Completed', 'bg-green-500/15 text-green-400'],
     failed: ['Failed', 'bg-red-500/15 text-red-400']
 };
 
+/** Token chip: logo + ticker */
+function tokenChip(symbol) {
+    const icon = (ICONS[symbol === 'WPOL' ? 'POL' : symbol === 'USDC.e' ? 'USDC' : symbol] || '').replace('w-7 h-7', 'w-4 h-4');
+    const fallback = `<span class="w-4 h-4 rounded-full bg-[#444] text-[9px] font-bold text-white flex items-center justify-center flex-shrink-0">${Utils.escapeHtml(symbol.slice(0, 1))}</span>`;
+    return `<span class="inline-flex items-center gap-1.5 pl-1 pr-2 py-0.5 rounded-full bg-[#2C2C2C] text-xs font-semibold text-gray-200 whitespace-nowrap">${icon || fallback}${Utils.escapeHtml(symbol)}</span>`;
+}
+
+function formatDateTime(ms) {
+    return new Date(ms).toLocaleString(undefined, { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
+
 function renderHistory() {
-    const list = $('swap-history');
-    if (!list) return;
+    const body = $('swap-history');
+    if (!body) return;
+    const empty = (text) => `<tr><td colspan="7" class="py-4 text-sm text-gray-400">${text}</td></tr>`;
     if (!state.address) {
-        list.innerHTML = '<li class="text-sm text-gray-400">Connect a wallet to see your swaps.</li>';
+        body.innerHTML = empty('Connect a wallet to see your swaps.');
         return;
     }
     if (!state.history.length) {
-        list.innerHTML = '<li class="text-sm text-gray-400">No DATA swaps yet.</li>';
+        body.innerHTML = empty('No DATA swaps yet.');
         return;
     }
-    const amount = (leg) => `${formatAmount(leg.amount, SYMBOL_DECIMALS[leg.symbol] ?? 18)} ${Utils.escapeHtml(leg.symbol)}`;
-    list.innerHTML = state.history.slice(0, HISTORY_LIMIT).map(entry => {
+    const amount = (leg) => `<span class="inline-flex items-center gap-2 whitespace-nowrap"><span class="text-white font-medium">${leg.estimated ? '≈ ' : ''}${formatAmount(leg.amount, SYMBOL_DECIMALS[leg.symbol] ?? 18)}</span>${tokenChip(leg.symbol)}</span>`;
+    body.innerHTML = state.history.slice(0, HISTORY_LIMIT).map(entry => {
         const [label, badge] = HISTORY_BADGES[entry.status] || HISTORY_BADGES.pending;
+        const selling = entry.pay?.symbol === 'DATA';
+        const action = selling
+            ? '<span class="px-2 py-0.5 rounded-md text-[11px] font-semibold whitespace-nowrap bg-orange-500/15 text-orange-300">Sell DATA</span>'
+            : '<span class="px-2 py-0.5 rounded-md text-[11px] font-semibold whitespace-nowrap bg-emerald-500/15 text-emerald-300">Buy DATA</span>';
+        const hash = Utils.escapeHtml(entry.txHash);
         return `
-            <li class="p-3 bg-[#121212] border border-[#333] rounded-lg">
-                <div class="flex items-center justify-between gap-2">
-                    <span class="text-sm font-semibold text-white">${amount(entry.pay)} <span class="text-gray-400 font-normal">→</span> ${entry.receive?.estimated ? '≈ ' : ''}${amount(entry.receive)}</span>
-                    <span class="flex-shrink-0 px-2 py-0.5 rounded-full text-[11px] font-semibold ${badge}">${label}</span>
-                </div>
-                <p class="text-xs text-gray-400 mt-1">${entry.route ? `${Utils.escapeHtml(entry.route)} · ` : ''}${timeAgo(entry.createdAt)}</p>
-                <a href="https://polygonscan.com/tx/${Utils.escapeHtml(entry.txHash)}" target="_blank" rel="noopener noreferrer" class="inline-block mt-2 text-xs text-blue-400 hover:text-blue-300">View on Polygonscan</a>
-            </li>`;
+            <tr class="border-b border-[#2a2a2a] last:border-0 align-middle">
+                <td class="py-3 pr-4 whitespace-nowrap"><div class="text-gray-200">${formatDateTime(entry.createdAt)}</div><div class="text-xs text-gray-500">${timeAgo(entry.createdAt)}</div></td>
+                <td class="py-3 pr-4">${action}</td>
+                <td class="py-3 pr-4">${amount(entry.pay)}</td>
+                <td class="py-3 pr-4">${amount(entry.receive)}</td>
+                <td class="py-3 pr-4 text-xs text-gray-400">${entry.route ? Utils.escapeHtml(entry.route) : '<span class="text-gray-500">Other app</span>'}</td>
+                <td class="py-3 pr-4"><span class="px-2 py-0.5 rounded-full text-[11px] font-semibold whitespace-nowrap ${badge}">${label}</span></td>
+                <td class="py-3 text-right whitespace-nowrap"><a href="https://polygonscan.com/tx/${hash}" target="_blank" rel="noopener noreferrer" class="font-mono text-xs text-blue-400 hover:text-blue-300">${hash.slice(0, 6)}…${hash.slice(-4)} ↗</a></td>
+            </tr>`;
     }).join('');
 }
 
@@ -1367,6 +1385,18 @@ function scheduleRefresh() {
     }, QUOTE_REFRESH_MS);
 }
 
+function openPoolsModal() {
+    $('swapPoolsModal')?.classList.remove('hidden');
+    document.body.classList.add('overflow-hidden');
+    renderLiquidity();
+    loadLiquidity().catch(e => logger.warn('Swap: pool discovery failed', e));
+}
+
+function closePoolsModal() {
+    $('swapPoolsModal')?.classList.add('hidden');
+    document.body.classList.remove('overflow-hidden');
+}
+
 function setupListeners() {
     if (state.listenersSetup) return;
     state.listenersSetup = true;
@@ -1425,8 +1455,19 @@ function setupListeners() {
     });
     $('swap-submit')?.addEventListener('click', handleSubmit);
     $('swap-history-refresh')?.addEventListener('click', () => refreshHistory());
+    $('swap-pools-btn')?.addEventListener('click', openPoolsModal);
+    $('swap-pools-close')?.addEventListener('click', closePoolsModal);
+    $('swapPoolsModal')?.addEventListener('click', (e) => {
+        if (e.target.id === 'swapPoolsModal') closePoolsModal();
+    });
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && !$('swapPoolsModal')?.classList.contains('hidden')) closePoolsModal();
+    });
     window.addEventListener('app:routechange', (e) => {
-        if (!e.detail?.path?.startsWith('/swap')) SwapLogic.stop();
+        if (!e.detail?.path?.startsWith('/swap')) {
+            closePoolsModal();
+            SwapLogic.stop();
+        }
     });
 }
 
