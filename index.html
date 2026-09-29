@@ -1208,25 +1208,25 @@
                 
                 <!-- Streams -->
                 <a href="/streams" data-nav="streams" class="nav-link group flex items-center gap-3 px-3 py-2 rounded-md text-gray-400 hover:text-white hover:bg-white/[0.03] transition-all duration-200">
-                    <img src="/assets/stream_icon.png" alt="Streams" class="w-6 h-6 p-px flex-shrink-0 opacity-70 group-hover:opacity-100 group-[.active]:opacity-100">
+                    <span aria-hidden="true" class="icon-mask w-[22px] h-[22px] m-px" style="--icon: url(/assets/stream_icon.png)"></span>
                     <span class="hidden lg:block text-sm font-medium">Streams</span>
                 </a>
 
                 <!-- Operators -->
                 <a href="/" data-nav="operators" class="nav-link group flex items-center gap-3 px-3 py-2 rounded-md text-gray-400 hover:text-white hover:bg-white/[0.03] transition-all duration-200">
-                    <img src="/assets/operator_icon.png" alt="" class="w-6 h-6 flex-shrink-0 opacity-70 group-hover:opacity-100 group-[.active]:opacity-100">
+                    <span aria-hidden="true" class="icon-mask w-6 h-6" style="--icon: url(/assets/operator_icon.png)"></span>
                     <span class="hidden lg:block text-sm font-medium">Operators</span>
                 </a>
 
                 <!-- Delegators -->
                 <a href="/delegators" data-nav="delegators" class="nav-link group flex items-center gap-3 px-3 py-2 rounded-md hover:bg-white/[0.02] transition-colors text-gray-400">
-                    <img src="/assets/delegator_icon.png" alt="" class="w-6 h-6 flex-shrink-0 opacity-70 group-hover:opacity-100 group-[.active]:opacity-100">
+                    <span aria-hidden="true" class="icon-mask w-6 h-6" style="--icon: url(/assets/delegator_icon.png)"></span>
                     <span class="hidden lg:block text-sm font-medium">Delegators</span>
                 </a>
 
                 <!-- Governance -->
                 <a href="/governance" data-nav="governance" class="nav-link group flex items-center gap-3 px-3 py-2 rounded-md text-gray-400 hover:text-white hover:bg-white/[0.03] transition-all duration-200">
-                    <svg class="w-6 h-6 flex-shrink-0 text-[#7264f1] opacity-70 group-hover:opacity-100 group-[.active]:opacity-100" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+                    <svg class="w-6 h-6 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
                         <path d="m16 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z"/>
                         <path d="m2 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z"/>
                         <path d="M7 21h10"/>
@@ -1246,7 +1246,7 @@
                 
                 <!-- Network Map -->
                 <a href="/visual" data-nav="visual" class="nav-link group flex items-center gap-3 px-3 py-2 rounded-md text-gray-400 hover:text-white hover:bg-white/[0.03] transition-all duration-200">
-                    <svg class="w-6 h-6 flex-shrink-0 text-[#7264f1] opacity-70 group-hover:opacity-100 group-[.active]:opacity-100" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
+                    <svg class="w-6 h-6 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
                         <circle cx="12" cy="12" r="3"/>
                         <circle cx="19" cy="6" r="2"/>
                         <circle cx="5" cy="5" r="2"/>
@@ -1262,7 +1262,7 @@
 
                 <!-- Leaderboard -->
                 <a href="/race" data-nav="race" class="nav-link group flex items-center gap-3 px-3 py-2 rounded-md text-gray-400 hover:text-white hover:bg-white/[0.03] transition-all duration-200">
-                    <svg class="w-6 h-6 flex-shrink-0 text-[#7264f1] opacity-70 group-hover:opacity-100 group-[.active]:opacity-100" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
+                    <svg class="w-6 h-6 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
                         <path d="M8 21h8m-4-4v4m-4-8h8m-8 0a4 4 0 0 1-4-4V5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v4a4 4 0 0 1-4 4m-8 0h8"/>
                     </svg>
                     <span class="hidden lg:block text-sm font-medium">Leaderboard</span>
@@ -1278,7 +1278,7 @@
                 
                 <!-- Autostaker -->
                 <button id="sidebar-autostaker-btn" class="nav-link group w-full flex items-center gap-3 px-3 py-2 rounded-md text-gray-400 hover:text-white hover:bg-white/[0.03] transition-all duration-200">
-                    <svg class="w-6 h-6 flex-shrink-0 text-[#7264f1] opacity-70 group-hover:opacity-100 group-[.active]:opacity-100" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
+                    <svg class="w-6 h-6 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
                         <path d="M13 10V3L4 14h7v7l9-11h-7z"/>
                     </svg>
                     <span class="hidden lg:block text-sm font-medium">Autostaker</span>
@@ -1286,13 +1286,13 @@
 
                 <!-- Swap -->
                 <a href="/swap" data-nav="swap" class="nav-link group flex items-center gap-3 px-3 py-2 rounded-md text-gray-400 hover:text-white hover:bg-white/[0.03] transition-all duration-200">
-                    <svg class="w-6 h-6 flex-shrink-0 text-[#7264f1] opacity-70 group-hover:opacity-100 group-[.active]:opacity-100" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="m16 3 4 4-4 4"/><path d="M20 7H4"/><path d="m8 21-4-4 4-4"/><path d="M4 17h16"/></svg>
+                    <svg class="w-6 h-6 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="m16 3 4 4-4 4"/><path d="M20 7H4"/><path d="m8 21-4-4 4-4"/><path d="M4 17h16"/></svg>
                     <span class="hidden lg:block text-sm font-medium">Swap</span>
                 </a>
 
                 <!-- Bridge -->
                 <a href="/bridge" data-nav="bridge" class="nav-link group flex items-center gap-3 px-3 py-2 rounded-md text-gray-400 hover:text-white hover:bg-white/[0.03] transition-all duration-200">
-                    <svg class="w-6 h-6 flex-shrink-0 text-[#7264f1] opacity-70 group-hover:opacity-100 group-[.active]:opacity-100" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M2 8h20"/><path d="M4 8v10"/><path d="M20 8v10"/><path d="M4 18a8 8 0 0 1 16 0"/><path d="M8 8v3"/><path d="M12 8v2"/><path d="M16 8v3"/></svg>
+                    <svg class="w-6 h-6 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M2 8h20"/><path d="M4 8v10"/><path d="M20 8v10"/><path d="M4 18a8 8 0 0 1 16 0"/><path d="M8 8v3"/><path d="M12 8v2"/><path d="M16 8v3"/></svg>
                     <span class="hidden lg:block text-sm font-medium">Bridge</span>
                 </a>
 
@@ -1306,7 +1306,7 @@
                 
                 <!-- Subgraph -->
                 <a href="/subgraph" data-nav="subgraph" class="nav-link group flex items-center gap-3 px-3 py-2 rounded-md text-gray-400 hover:text-white hover:bg-white/[0.03] transition-all duration-200">
-                    <svg class="w-6 h-6 flex-shrink-0 text-[#7264f1] opacity-70 group-hover:opacity-100 group-[.active]:opacity-100" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+                    <svg class="w-6 h-6 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
                         <path d="M14 2v4a2 2 0 0 0 2 2h4"/>
                         <path d="M4.268 21a2 2 0 0 0 1.727 1H18a2 2 0 0 0 2-2V7l-5-5H6a2 2 0 0 0-2 2v3"/>
                         <path d="m9 18-1.5-1.5"/>
@@ -1456,25 +1456,25 @@
         <div class="flex justify-around items-center h-16 px-2">
             <!-- Streams -->
             <a href="/streams" data-nav="streams" class="bottom-nav-item flex flex-col items-center justify-center gap-1 p-2 min-w-[56px] text-gray-400 transition-colors">
-                <img src="/assets/stream_icon.png" alt="Streams" class="w-6 h-6">
+                <span aria-hidden="true" class="icon-mask w-6 h-6" style="--icon: url(/assets/stream_icon.png)"></span>
                 <span class="text-[10px] font-medium">Streams</span>
             </a>
 
             <!-- Operators -->
             <a href="/" data-nav="operators" class="bottom-nav-item flex flex-col items-center justify-center gap-1 p-2 min-w-[56px] text-gray-400 transition-colors">
-                <img src="/assets/operator_icon.png" alt="" class="w-6 h-6">
+                <span aria-hidden="true" class="icon-mask w-6 h-6" style="--icon: url(/assets/operator_icon.png)"></span>
                 <span class="text-[10px] font-medium">Operators</span>
             </a>
 
             <!-- Delegators --> 
             <a href="/delegators" data-nav="delegators" class="bottom-nav-item flex flex-col items-center justify-center gap-1 p-2 min-w-[56px] text-gray-400 transition-colors">
-                <img src="/assets/delegator_icon.png" alt="" class="w-6 h-6">
+                <span aria-hidden="true" class="icon-mask w-6 h-6" style="--icon: url(/assets/delegator_icon.png)"></span>
                 <span class="text-[10px] font-medium">Delegators</span>
             </a>
 
             <!-- Autostaker -->
             <button id="bottom-nav-autostaker" class="bottom-nav-item flex flex-col items-center justify-center gap-1 p-2 min-w-[56px] text-gray-400 transition-colors">
-                <svg class="w-6 h-6 text-[#7264f1]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
+                <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
                     <path d="M13 10V3L4 14h7v7l9-11h-7z"/>
                 </svg>
                 <span class="text-[10px] font-medium">Autostaker</span>
@@ -1514,7 +1514,7 @@
                     <div class="px-4 pt-3 pb-1 text-[10px] font-semibold text-gray-500 uppercase tracking-widest">Explore</div>
                     <!-- Governance -->
                     <a href="/governance" data-nav="governance" class="flex items-center gap-3 px-4 py-3 text-gray-300 hover:bg-[#2a2a2a] transition-colors">
-                        <svg class="w-6 h-6 text-[#7264f1]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+                        <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
                             <path d="m16 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z"/>
                             <path d="m2 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z"/>
                             <path d="M7 21h10"/>
@@ -1526,7 +1526,7 @@
                     <div class="px-4 pt-3 pb-1 text-[10px] font-semibold text-gray-500 uppercase tracking-widest">Visualize</div>
                     <!-- Network Map -->
                     <a href="/visual" data-nav="visual" class="flex items-center gap-3 px-4 py-3 text-gray-300 hover:bg-[#2a2a2a] transition-colors">
-                        <svg class="w-6 h-6 text-[#7264f1]" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2.33">
+                        <svg class="w-6 h-6" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2.33">
                             <circle cx="16" cy="16" r="5"/>
                             <circle cx="25" cy="9" r="2"/>
                             <circle cx="7" cy="7" r="2"/>
@@ -1541,7 +1541,7 @@
                     </a>
                     <!-- Leaderboard -->
                     <a href="/race" data-nav="race" class="flex items-center gap-3 px-4 py-3 text-gray-300 hover:bg-[#2a2a2a] transition-colors">
-                        <svg class="w-6 h-6 text-[#7264f1]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
+                        <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
                             <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/>
                             <path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/>
                             <path d="M4 22h16"/>
@@ -1554,18 +1554,18 @@
                     <div class="px-4 pt-3 pb-1 text-[10px] font-semibold text-gray-500 uppercase tracking-widest">Tools</div>
                     <!-- Swap -->
                     <a href="/swap" data-nav="swap" class="flex items-center gap-3 px-4 py-3 text-gray-300 hover:bg-[#2a2a2a] transition-colors">
-                        <svg class="w-6 h-6 text-[#7264f1]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="m16 3 4 4-4 4"/><path d="M20 7H4"/><path d="m8 21-4-4 4-4"/><path d="M4 17h16"/></svg>
+                        <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="m16 3 4 4-4 4"/><path d="M20 7H4"/><path d="m8 21-4-4 4-4"/><path d="M4 17h16"/></svg>
                         <span class="text-sm font-medium">Swap</span>
                     </a>
                     <!-- Bridge -->
                     <a href="/bridge" data-nav="bridge" class="flex items-center gap-3 px-4 py-3 text-gray-300 hover:bg-[#2a2a2a] transition-colors">
-                        <svg class="w-6 h-6 text-[#7264f1]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M2 8h20"/><path d="M4 8v10"/><path d="M20 8v10"/><path d="M4 18a8 8 0 0 1 16 0"/><path d="M8 8v3"/><path d="M12 8v2"/><path d="M16 8v3"/></svg>
+                        <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M2 8h20"/><path d="M4 8v10"/><path d="M20 8v10"/><path d="M4 18a8 8 0 0 1 16 0"/><path d="M8 8v3"/><path d="M12 8v2"/><path d="M16 8v3"/></svg>
                         <span class="text-sm font-medium">Bridge</span>
                     </a>
                     <div class="px-4 pt-3 pb-1 text-[10px] font-semibold text-gray-500 uppercase tracking-widest">For Developers</div>
                     <!-- Subgraph -->
                     <a href="/subgraph" data-nav="subgraph" class="flex items-center gap-3 px-4 py-3 text-gray-300 hover:bg-[#2a2a2a] transition-colors">
-                        <svg class="w-6 h-6 text-[#7264f1]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+                        <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
                             <path d="M14 2v4a2 2 0 0 0 2 2h4"/>
                             <path d="M4.268 21a2 2 0 0 0 1.727 1H18a2 2 0 0 0 2-2V7l-5-5H6a2 2 0 0 0-2 2v3"/>
                             <path d="m9 18-1.5-1.5"/>

@@ -392,7 +392,8 @@
     color: #3b82f6;
   }
   
-  .bottom-nav-item.active svg {
+  .bottom-nav-item.active svg,
+  .bottom-nav-item.active .icon-mask {
     color: #3b82f6;
   }
   
@@ -423,8 +424,18 @@
     background-color: rgba(59, 130, 246, 0.15);
   }
   
-  .nav-link.active svg {
+  .nav-link.active svg,
+  .nav-link.active .icon-mask {
     color: #3b82f6;
+  }
+
+  /* Single-color PNG icon painted in the text color (the image is only the shape) */
+  .icon-mask {
+    display: inline-block;
+    flex-shrink: 0;
+    background-color: currentColor;
+    -webkit-mask: var(--icon) center / contain no-repeat;
+    mask: var(--icon) center / contain no-repeat;
   }
   
   .nav-link::before {
