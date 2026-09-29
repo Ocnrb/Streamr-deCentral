@@ -180,13 +180,13 @@ export const SUBGRAPH_ID = 'EGWFdhhiWypDuz22Uy7b3F69E9MEkyfU9iAQMttkH5Rj';
 export const DATA_HISTORY_STREAM_ID = '0xd5a8024414f59cf0c453c35fc3655a31251645f6/DATA_History';
 export const POLYGON_RPC_URL = 'https://polygon.drpc.org';
 
-// Polygon RPC fallback URLs (used when primary RPC is rate limited)
+// Polygon RPC endpoints (the read provider moves to the next one when one fails)
 // Order: primary first, then most reliable fallbacks. polygon-rpc.com now answers 401 without an
 // API key: kept last only as a final fallback.
 export const POLYGON_RPC_FALLBACKS = [
     'https://polygon.drpc.org',
     'https://polygon-bor-rpc.publicnode.com',
-    'https://polygon.llamarpc.com',
+    'https://rpc-mainnet.matic.quiknode.pro',
     'https://1rpc.io/matic',
     'https://polygon-rpc.com'
 ];
