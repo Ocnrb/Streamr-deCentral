@@ -1,8 +1,9 @@
 /**
  * Swap: DATA against POL / USDC / USDC.e on Polygon, straight through the DEX contracts (no aggregator API)
- * - Pools are discovered on-chain (factories of QuickSwap V2, QuickSwap V3 (Algebra) and Uniswap v3):
- *   DATA against WPOL / USDC / USDC.e and the pools between those three (for two-hop routes).
- * - Each candidate route is quoted with the venue's own quoter (QuickSwap V2 router getAmountsOut,
+ * - Pools are discovered on-chain (factories of QuickSwap V2, SushiSwap V2, QuickSwap V3 (Algebra) and
+ *   Uniswap v3, every fee tier): DATA against WPOL / USDC / USDC.e / USDT / WETH / DAI, and the pools
+ *   between those tokens (two-hop routes). All reads go through Multicall3 (one RPC call per batch).
+ * - Each candidate route is quoted with the venue's own quoter (V2 routers getAmountsOut,
  *   Algebra Quoter, Uniswap QuoterV2); the best output wins.
  * - The swap goes to that venue's router with the minimum output (slippage) and a deadline. POL is
  *   wrapped / unwrapped by the router in the same transaction. Approvals are for the exact amount.
@@ -23,10 +24,16 @@ const { logger } = Utils;
 const WPOL = '0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270';
 const USDC = '0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359';
 const USDCE = '0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174';
+const USDT = '0xc2132D05D31c914a87C6611C10748AEb04B58e8F';
+const WETH = '0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619';
+const DAI = '0x8f3Cf7ad23Cd3CaDbD9735AFf958023239c6A063';
 const DATA = DATA_TOKEN_ADDRESS_POLYGON;
+const MULTICALL3 = '0xcA11bde05977b3631167028862bE2a173976CA11';
 
 const QUICKSWAP_V2_FACTORY = '0x5757371414417b8C6CAad45bAeF941aBc7d3Ab32';
 const QUICKSWAP_V2_ROUTER = '0xa5E0829CaCEd8fFDD4De3c43696c57F7D7A678ff';
+const SUSHI_V2_FACTORY = '0xc35DADB65012eC5796536bD9864eD8773aBc74C4';
+const SUSHI_V2_ROUTER = '0x1b02dA8Cb0d097eB8D57A175b88c7D8b47997506';
 const QUICKSWAP_V3_FACTORY = '0x411b0fAcC3489691f28ad58c47006AF5E3Ab3A28';
 const QUICKSWAP_V3_QUOTER = '0xa15F0D7377B2A0C0c10db057f641beD21028FC89';
 const QUICKSWAP_V3_ROUTER = '0xf5b509bB0909a69B1c207E495f687a596C168E12';
@@ -57,6 +64,7 @@ const ALGEBRA_ROUTER_ABI = [
 ];
 const UNISWAP_FACTORY_ABI = ['function getPool(address, address, uint24) view returns (address)'];
 const UNISWAP_QUOTER_ABI = ['function quoteExactInput(bytes path, uint256 amountIn) returns (uint256 amountOut, uint160[] sqrtPriceX96AfterList, uint32[] initializedTicksCrossedList, uint256 gasEstimate)'];
+const MULTICALL_ABI = ['function aggregate3((address target, bool allowFailure, bytes callData)[] calls) payable returns ((bool success, bytes returnData)[] returnData)'];
 const UNISWAP_ROUTER_ABI = [
     'function exactInput((bytes path, address recipient, uint256 amountIn, uint256 amountOutMinimum) params) payable returns (uint256 amountOut)',
     'function unwrapWETH9(uint256 amountMinimum, address recipient) payable',
@@ -64,7 +72,8 @@ const UNISWAP_ROUTER_ABI = [
 ];
 
 const VENUES = {
-    qv2: { name: 'QuickSwap V2', router: QUICKSWAP_V2_ROUTER },
+    qv2: { name: 'QuickSwap V2', router: QUICKSWAP_V2_ROUTER, factory: QUICKSWAP_V2_FACTORY },
+    sushi: { name: 'SushiSwap V2', router: SUSHI_V2_ROUTER, factory: SUSHI_V2_FACTORY },
     qv3: { name: 'QuickSwap V3', router: QUICKSWAP_V3_ROUTER },
     uni: { name: 'Uniswap v3', router: UNISWAP_V3_ROUTER }
 };
@@ -88,7 +97,17 @@ const TOKENS = {
     'USDC.e': { symbol: 'USDC.e', address: USDCE, decimals: 6, icon: ICONS.USDC }
 };
 const COUNTER_TOKENS = ['POL', 'USDC', 'USDC.e'];
-const INTERMEDIATES = [WPOL, USDC, USDCE];
+const INTERMEDIATES = [WPOL, USDC, USDCE, USDT, WETH, DAI];
+// Symbol / decimals of every token a route or pool can hold
+const KNOWN_TOKENS = {
+    [DATA.toLowerCase()]: { symbol: 'DATA', decimals: 18 },
+    [WPOL.toLowerCase()]: { symbol: 'WPOL', decimals: 18 },
+    [USDC.toLowerCase()]: { symbol: 'USDC', decimals: 6 },
+    [USDCE.toLowerCase()]: { symbol: 'USDC.e', decimals: 6 },
+    [USDT.toLowerCase()]: { symbol: 'USDT', decimals: 6 },
+    [WETH.toLowerCase()]: { symbol: 'WETH', decimals: 18 },
+    [DAI.toLowerCase()]: { symbol: 'DAI', decimals: 18 }
+};
 
 const DEADLINE_SECONDS = 20 * 60;
 const QUOTE_REFRESH_MS = 30 * 1000;
@@ -109,7 +128,8 @@ const state = {
     sellData: true,          // true: pay DATA, receive counter; false: the reverse
     slippage: 0.5,
     balances: {},            // symbol -> BigNumber
-    pools: null,             // discovered pools (session cache)
+    pools: new Map(),        // pairKey -> { qv2, sushi, qv3: pool address | null, uni: Map(fee -> pool) } (session cache)
+    liquidity: null,         // DATA pools with their balances (Liquidity section)
     quote: null,             // { route, amountIn, amountOut, impact, key }
     quoteSeq: 0,
     quoteError: null,
@@ -164,47 +184,77 @@ function formatTxError(error) {
 // Pools and quotes
 // ============================================
 
-/** Which pools exist on each venue, for DATA and the intermediates (once per session) */
-async function discoverPools() {
-    if (state.pools) return state.pools;
-    const pairs = [];
-    const tokens = [DATA, ...INTERMEDIATES];
-    for (let i = 0; i < tokens.length; i++) {
-        for (let j = i + 1; j < tokens.length; j++) pairs.push([tokens[i], tokens[j]]);
+/** Read calls in batches through Multicall3; a failed call gives null */
+async function multicall(calls, batchSize = 60) {
+    const results = [];
+    for (let i = 0; i < calls.length; i += batchSize) {
+        const batch = calls.slice(i, i + batchSize);
+        const encoded = batch.map(c => ({ target: c.target, allowFailure: true, callData: c.iface.encodeFunctionData(c.fn, c.args) }));
+        const raw = await read(p => new ethers.Contract(MULTICALL3, MULTICALL_ABI, p).callStatic.aggregate3(encoded));
+        raw.forEach((r, j) => {
+            if (!r.success) { results.push(null); return; }
+            try {
+                results.push(batch[j].iface.decodeFunctionResult(batch[j].fn, r.returnData));
+            } catch (e) {
+                results.push(null);
+            }
+        });
     }
-    const exists = (address) => address && address !== ethers.constants.AddressZero;
-    const pools = { qv2: new Set(), qv3: new Set(), uni: new Map() };
-    await Promise.all(pairs.map(async ([a, b]) => {
-        const key = pairKey(a, b);
-        const [v2, v3, ...uni] = await Promise.all([
-            read(p => new ethers.Contract(QUICKSWAP_V2_FACTORY, V2_FACTORY_ABI, p).getPair(a, b)).catch(() => null),
-            read(p => new ethers.Contract(QUICKSWAP_V3_FACTORY, ALGEBRA_FACTORY_ABI, p).poolByPair(a, b)).catch(() => null),
-            ...UNISWAP_FEES.map(fee => read(p => new ethers.Contract(UNISWAP_V3_FACTORY, UNISWAP_FACTORY_ABI, p).getPool(a, b, fee)).catch(() => null))
-        ]);
-        if (exists(v2)) pools.qv2.add(key);
-        if (exists(v3)) pools.qv3.add(key);
-        const fees = UNISWAP_FEES.filter((fee, i) => exists(uni[i]));
-        if (fees.length) pools.uni.set(key, fees);
-    }));
-    state.pools = pools;
-    return pools;
+    return results;
+}
+
+const IFACES = {
+    v2Factory: new ethers.utils.Interface(V2_FACTORY_ABI),
+    v2Router: new ethers.utils.Interface(V2_ROUTER_ABI),
+    algebraFactory: new ethers.utils.Interface(ALGEBRA_FACTORY_ABI),
+    algebraQuoter: new ethers.utils.Interface(ALGEBRA_QUOTER_ABI),
+    uniFactory: new ethers.utils.Interface(UNISWAP_FACTORY_ABI),
+    uniQuoter: new ethers.utils.Interface(UNISWAP_QUOTER_ABI),
+    erc20: new ethers.utils.Interface(ERC20_ABI)
+};
+
+const poolAddress = (result) => {
+    const address = result?.[0];
+    return address && address !== ethers.constants.AddressZero ? address : null;
+};
+
+/** Looks up the pools of each pair on every venue (cached; a pair whose lookup failed is asked again next time) */
+async function ensurePairs(pairs) {
+    const missing = [...new Map(pairs.map(([a, b]) => [pairKey(a, b), [a, b]])).values()].filter(([a, b]) => !state.pools.has(pairKey(a, b)));
+    if (!missing.length) return;
+    const calls = missing.flatMap(([a, b]) => [
+        { target: QUICKSWAP_V2_FACTORY, iface: IFACES.v2Factory, fn: 'getPair', args: [a, b] },
+        { target: SUSHI_V2_FACTORY, iface: IFACES.v2Factory, fn: 'getPair', args: [a, b] },
+        { target: QUICKSWAP_V3_FACTORY, iface: IFACES.algebraFactory, fn: 'poolByPair', args: [a, b] },
+        ...UNISWAP_FEES.map(fee => ({ target: UNISWAP_V3_FACTORY, iface: IFACES.uniFactory, fn: 'getPool', args: [a, b, fee] }))
+    ]);
+    const results = await multicall(calls);
+    const perPair = 3 + UNISWAP_FEES.length;
+    missing.forEach(([a, b], i) => {
+        const r = results.slice(i * perPair, (i + 1) * perPair);
+        if (r.some(x => x === null)) return;   // incomplete answer: not cached
+        const uni = new Map();
+        UNISWAP_FEES.forEach((fee, j) => { const pool = poolAddress(r[3 + j]); if (pool) uni.set(fee, pool); });
+        state.pools.set(pairKey(a, b), { a, b, qv2: poolAddress(r[0]), sushi: poolAddress(r[1]), qv3: poolAddress(r[2]), uni });
+    });
 }
 
 /** Candidate routes from tokenIn to tokenOut: direct, or through one intermediate on the same venue */
-function candidateRoutes(pools, tokenIn, tokenOut) {
-    const paths = [[tokenIn, tokenOut]];
-    for (const mid of INTERMEDIATES) {
-        if (lower(mid) !== lower(tokenIn) && lower(mid) !== lower(tokenOut)) paths.push([tokenIn, mid, tokenOut]);
-    }
+async function candidateRoutes(tokenIn, tokenOut) {
+    const mids = INTERMEDIATES.filter(m => lower(m) !== lower(tokenIn) && lower(m) !== lower(tokenOut));
+    const paths = [[tokenIn, tokenOut], ...mids.map(m => [tokenIn, m, tokenOut])];
+    await ensurePairs(paths.flatMap(path => path.slice(1).map((token, i) => [path[i], token])));
     const routes = [];
     for (const path of paths) {
-        const hops = path.slice(1).map((token, i) => pairKey(path[i], token));
-        if (hops.every(k => pools.qv2.has(k))) routes.push({ venue: 'qv2', path });
-        if (hops.every(k => pools.qv3.has(k))) routes.push({ venue: 'qv3', path });
-        if (hops.every(k => pools.uni.has(k))) {
+        const hops = path.slice(1).map((token, i) => state.pools.get(pairKey(path[i], token)));
+        if (hops.some(h => !h)) continue;
+        for (const venue of ['qv2', 'sushi', 'qv3']) {
+            if (hops.every(h => h[venue])) routes.push({ venue, path });
+        }
+        if (hops.every(h => h.uni.size)) {
             // Every fee tier combination of the existing pools
             let combos = [[]];
-            for (const k of hops) combos = combos.flatMap(c => pools.uni.get(k).map(fee => [...c, fee]));
+            for (const h of hops) combos = combos.flatMap(c => [...h.uni.keys()].map(fee => [...c, fee]));
             for (const fees of combos) routes.push({ venue: 'uni', path, fees });
         }
     }
@@ -229,28 +279,41 @@ function encodeUniswapPath(path, fees) {
     return ethers.utils.solidityPack(types, values);
 }
 
-async function quoteRoute(route, amountIn) {
-    if (route.venue === 'qv2') {
-        const amounts = await read(p => new ethers.Contract(QUICKSWAP_V2_ROUTER, V2_ROUTER_ABI, p).getAmountsOut(amountIn, route.path));
-        return amounts[amounts.length - 1];
+function quoteCall(route, amountIn) {
+    if (route.venue === 'qv2' || route.venue === 'sushi') {
+        return { target: VENUES[route.venue].router, iface: IFACES.v2Router, fn: 'getAmountsOut', args: [amountIn, route.path] };
     }
     if (route.venue === 'qv3') {
-        const result = await read(p => new ethers.Contract(QUICKSWAP_V3_QUOTER, ALGEBRA_QUOTER_ABI, p).callStatic.quoteExactInput(encodeAlgebraPath(route.path), amountIn));
-        return result.amountOut;
+        return { target: QUICKSWAP_V3_QUOTER, iface: IFACES.algebraQuoter, fn: 'quoteExactInput', args: [encodeAlgebraPath(route.path), amountIn] };
     }
-    const result = await read(p => new ethers.Contract(UNISWAP_V3_QUOTER, UNISWAP_QUOTER_ABI, p).callStatic.quoteExactInput(encodeUniswapPath(route.path, route.fees), amountIn));
-    return result.amountOut;
+    return { target: UNISWAP_V3_QUOTER, iface: IFACES.uniQuoter, fn: 'quoteExactInput', args: [encodeUniswapPath(route.path, route.fees), amountIn] };
+}
+
+function quoteOutput(route, result) {
+    if (!result) return null;
+    const out = route.venue === 'qv2' || route.venue === 'sushi' ? result.amounts[result.amounts.length - 1] : result.amountOut;
+    return out && out.gt(0) ? out : null;
+}
+
+async function quoteRoutes(routes, amountIn) {
+    const results = await multicall(routes.map(route => quoteCall(route, amountIn)), 25);
+    return results.map((result, i) => quoteOutput(routes[i], result));
+}
+
+async function quoteRoute(route, amountIn) {
+    const [out] = await quoteRoutes([route], amountIn);
+    if (!out) throw new Error('This route can not fill the amount.');
+    return out;
 }
 
 /** Best route for amountIn, with its price impact */
 async function findBestQuote(tokenIn, tokenOut, amountIn) {
-    const pools = await discoverPools();
-    const routes = candidateRoutes(pools, tokenIn.address, tokenOut.address);
-    if (!routes.length) throw new Error(`No ${tokenIn.symbol} / ${tokenOut.symbol} pool found on QuickSwap or Uniswap.`);
-    const results = await Promise.allSettled(routes.map(route => quoteRoute(route, amountIn)));
+    const routes = await candidateRoutes(tokenIn.address, tokenOut.address);
+    if (!routes.length) throw new Error(`No ${tokenIn.symbol} / ${tokenOut.symbol} pool found on QuickSwap, SushiSwap or Uniswap.`);
+    const outputs = await quoteRoutes(routes, amountIn);
     let best = null;
-    results.forEach((r, i) => {
-        if (r.status === 'fulfilled' && r.value.gt(0) && (!best || r.value.gt(best.amountOut))) best = { route: routes[i], amountOut: r.value };
+    outputs.forEach((out, i) => {
+        if (out && (!best || out.gt(best.amountOut))) best = { route: routes[i], amountOut: out };
     });
     if (!best) throw new Error('No pool can fill this amount right now.');
 
@@ -260,10 +323,8 @@ async function findBestQuote(tokenIn, tokenOut, amountIn) {
     if (small.gt(0)) {
         try {
             const smallOut = await quoteRoute(best.route, small);
-            if (smallOut.gt(0)) {
-                const ratio = best.amountOut.mul(small).mul(1000000).div(smallOut.mul(amountIn)).toNumber() / 1000000;
-                impact = Math.max(0, (1 - ratio) * 100);
-            }
+            const ratio = best.amountOut.mul(small).mul(1000000).div(smallOut.mul(amountIn)).toNumber() / 1000000;
+            impact = Math.max(0, (1 - ratio) * 100);
         } catch (e) {
             logger.warn('Swap: price impact quote failed', e);
         }
@@ -271,8 +332,50 @@ async function findBestQuote(tokenIn, tokenOut, amountIn) {
     return { ...best, amountIn, impact };
 }
 
+/** Every DATA pool with its token balances (Liquidity section) */
+async function loadLiquidity() {
+    await ensurePairs(INTERMEDIATES.map(m => [DATA, m]));
+    const pools = [];
+    for (const m of INTERMEDIATES) {
+        const entry = state.pools.get(pairKey(DATA, m));
+        if (!entry) continue;
+        for (const venue of ['qv2', 'sushi', 'qv3']) if (entry[venue]) pools.push({ venue, partner: m, address: entry[venue] });
+        for (const [fee, address] of entry.uni) pools.push({ venue: 'uni', fee, partner: m, address });
+    }
+    const balances = await multicall(pools.flatMap(pool => [
+        { target: DATA, iface: IFACES.erc20, fn: 'balanceOf', args: [pool.address] },
+        { target: pool.partner, iface: IFACES.erc20, fn: 'balanceOf', args: [pool.address] }
+    ]));
+    pools.forEach((pool, i) => {
+        pool.data = balances[i * 2]?.[0] || ethers.constants.Zero;
+        pool.other = balances[i * 2 + 1]?.[0] || ethers.constants.Zero;
+    });
+    pools.sort((x, y) => (y.data.gt(x.data) ? 1 : y.data.lt(x.data) ? -1 : 0));
+    state.liquidity = { pools, complete: INTERMEDIATES.every(m => state.pools.has(pairKey(DATA, m))) };
+    renderLiquidity();
+}
+
+function renderLiquidity() {
+    const list = $('swap-liquidity-list');
+    const count = $('swap-liquidity-count');
+    if (!list || !state.liquidity) return;
+    const { pools, complete } = state.liquidity;
+    count.textContent = `(${pools.length})`;
+    const rows = pools.map(pool => {
+        const partner = KNOWN_TOKENS[lower(pool.partner)];
+        const venue = `${VENUES[pool.venue].name}${pool.fee ? ` ${pool.fee / 10000}%` : ''}`;
+        return `
+            <li class="flex items-center justify-between gap-3 py-1.5 border-b border-[#2a2a2a] last:border-0">
+                <a href="https://polygonscan.com/address/${Utils.escapeHtml(pool.address)}" target="_blank" rel="noopener noreferrer" class="text-gray-300 hover:text-white">${venue} · DATA / ${partner.symbol}</a>
+                <span class="text-right text-gray-400 whitespace-nowrap">${formatAmount(pool.data, 18)} DATA · ${formatAmount(pool.other, partner.decimals)} ${partner.symbol}</span>
+            </li>`;
+    });
+    list.innerHTML = (rows.join('') || '<li class="py-1.5 text-gray-400">No DATA pool found on these DEXes.</li>')
+        + (complete ? '' : '<li class="py-1.5 text-yellow-300">Some pools could not be checked (RPC). Refresh to try again.</li>');
+}
+
 function routeLabel(route) {
-    const symbol = (address) => Object.values(TOKENS).find(t => lower(t.address) === lower(address))?.symbol.replace(/^POL$/, 'WPOL') || Utils.shortAddress(address);
+    const symbol = (address) => KNOWN_TOKENS[lower(address)]?.symbol || Utils.shortAddress(address);
     const fees = route.fees ? ` (${route.fees.map(f => `${f / 10000}%`).join(' / ')})` : '';
     return `${VENUES[route.venue].name}${fees} · ${route.path.map(symbol).join(' → ')}`;
 }
@@ -292,14 +395,14 @@ function buildSwapTx(quote, recipient) {
     const deadline = Math.floor(Date.now() / 1000) + DEADLINE_SECONDS;
     const value = tokenIn.native ? amountIn : ethers.constants.Zero;
 
-    if (route.venue === 'qv2') {
+    if (route.venue === 'qv2' || route.venue === 'sushi') {
         const iface = new ethers.utils.Interface(V2_ROUTER_ABI);
         const data = tokenIn.native
             ? iface.encodeFunctionData('swapExactETHForTokens', [minimum, route.path, recipient, deadline])
             : tokenOut.native
                 ? iface.encodeFunctionData('swapExactTokensForETH', [amountIn, minimum, route.path, recipient, deadline])
                 : iface.encodeFunctionData('swapExactTokensForTokens', [amountIn, minimum, route.path, recipient, deadline]);
-        return { to: QUICKSWAP_V2_ROUTER, data, value };
+        return { to: VENUES[route.venue].router, data, value };
     }
     if (route.venue === 'qv3') {
         const iface = new ethers.utils.Interface(ALGEBRA_ROUTER_ABI);
@@ -793,6 +896,7 @@ function setupListeners() {
         if (state.flow) return;
         loadBalances();
         updateQuote();
+        loadLiquidity().catch(e => logger.warn('Swap: pool discovery failed', e));
     });
     $('swap-submit')?.addEventListener('click', handleSubmit);
     window.addEventListener('app:routechange', (e) => {
@@ -828,8 +932,8 @@ export const SwapLogic = {
         renderQuote();
         loadBalances();
         if (readAmount().wei) updateQuote();
-        // Discover the pools early so the first quote is quick
-        discoverPools().catch(e => logger.warn('Swap: pool discovery failed', e));
+        // DATA pools early: the first quote is quicker and the Liquidity section fills in
+        if (!state.liquidity?.complete) loadLiquidity().catch(e => logger.warn('Swap: pool discovery failed', e));
         scheduleRefresh();
     },
 

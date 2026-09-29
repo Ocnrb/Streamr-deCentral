@@ -2752,7 +2752,7 @@
                     <div class="flex items-start justify-between gap-3">
                         <div>
                             <h2 class="text-lg font-semibold text-white">Swap DATA</h2>
-                            <p class="text-xs text-gray-400 mt-0.5">On Polygon · best price across QuickSwap and Uniswap pools</p>
+                            <p class="text-xs text-gray-400 mt-0.5">On Polygon · best price across QuickSwap, SushiSwap and Uniswap pools</p>
                         </div>
                         <button id="swap-refresh" type="button" title="Refresh the quote" aria-label="Refresh the quote" class="p-2 rounded-lg bg-[#1E1E1E] border border-[#333] text-gray-400 hover:text-white transition-colors">
                             <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36L21 8"/><path d="M21 3v5h-5"/></svg>
@@ -2822,6 +2822,13 @@
                     <button id="swap-submit" type="button" class="w-full bg-blue-800 hover:bg-blue-900 text-white font-bold py-3 px-4 rounded-lg transition-colors flex justify-center items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-blue-800">Swap</button>
                     <p class="text-[11px] text-gray-500 text-center">Swaps go straight to the pool contracts: deCentral takes no fee. Pool fees are included in the quote.</p>
                 </section>
+
+                <!-- Where the DATA liquidity is -->
+                <details id="swap-liquidity" class="detail-section mt-4 px-4 sm:px-5 py-3">
+                    <summary class="cursor-pointer text-sm font-semibold text-white">DATA pools on Polygon <span id="swap-liquidity-count" class="text-gray-400 font-normal"></span></summary>
+                    <p class="text-xs text-gray-400 mt-2">Pools of DATA found on QuickSwap, SushiSwap and Uniswap, with the tokens they hold. Small pools give a high price impact.</p>
+                    <ul id="swap-liquidity-list" class="mt-2 text-xs"><li class="py-1.5 text-gray-400">Looking for pools...</li></ul>
+                </details>
             </div>
         </div>
 
