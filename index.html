@@ -2808,6 +2808,10 @@
                             </div>
                         </div>
                         <div class="flex justify-between items-baseline gap-3"><span class="text-gray-400">Network fee</span><span id="swap-cost" class="text-gray-200 text-right">--</span></div>
+                        <details id="swap-routes" class="hidden pt-1">
+                            <summary class="cursor-pointer text-gray-400 hover:text-gray-200">Routes checked <span id="swap-routes-count"></span></summary>
+                            <ul id="swap-routes-list" class="mt-1 text-[11px]"></ul>
+                        </details>
                     </div>
 
                     <p id="swap-warning" class="hidden px-3 py-2 rounded-lg text-xs border"></p>

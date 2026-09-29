@@ -134,6 +134,7 @@ const state = {
     quote: null,             // { route, amountIn, amountOut, impact, key }
     quoteSeq: 0,
     quoteError: null,
+    quoteChecked: null,      // routes tried by the last failed quote
     quoting: false,
     flow: null,
     submitting: false,
@@ -349,7 +350,7 @@ function quoteOutput(route, result) {
  * Quotes each route in its own eth_call (4 at a time): quoters are gas hungry, and inside one
  * Multicall3 batch an expensive quote could starve the next ones of gas
  */
-async function quoteRoutes(routes, amountIn) {
+async function quoteRoutes(routes, amountIn, errors = []) {
     const outputs = new Array(routes.length).fill(null);
     let next = 0;
     const worker = async () => {
@@ -359,8 +360,11 @@ async function quoteRoutes(routes, amountIn) {
             try {
                 const data = await read(p => p.call({ to: call.target, data: call.iface.encodeFunctionData(call.fn, call.args) }));
                 outputs[i] = quoteOutput(routes[i], call.iface.decodeFunctionResult(call.fn, data));
+                if (!outputs[i]) errors[i] = 'no output';
             } catch (e) {
                 outputs[i] = null;
+                errors[i] = (e?.reason || e?.error?.message || e?.message || 'failed').toString().slice(0, 120);
+                logger.warn(`Swap: quote failed on ${routeLabel(routes[i])}`, e);
             }
         }
     };
@@ -378,12 +382,19 @@ async function quoteRoute(route, amountIn) {
 async function findBestQuote(tokenIn, tokenOut, amountIn) {
     const routes = await candidateRoutes(tokenIn.address, tokenOut.address);
     if (!routes.length) throw new Error(`No ${tokenIn.symbol} / ${tokenOut.symbol} pool found on QuickSwap, SushiSwap or Uniswap.`);
-    const outputs = await quoteRoutes(routes, amountIn);
+    const errors = [];
+    const outputs = await quoteRoutes(routes, amountIn, errors);
+    // Every route that was tried, for the "Routes checked" list
+    const checked = routes.map((route, i) => ({ route, out: outputs[i], error: errors[i] || null }));
     let best = null;
     outputs.forEach((out, i) => {
         if (out && (!best || out.gt(best.amountOut))) best = { route: routes[i], amountOut: out };
     });
-    if (!best) throw new Error('No pool can fill this amount right now.');
+    if (!best) {
+        const error = new Error('No pool can fill this amount right now.');
+        error.checked = checked;
+        throw error;
+    }
 
     // Price impact: this quote against a quote for 1/1000 of the amount on the same route
     let impact = null;
@@ -397,7 +408,7 @@ async function findBestQuote(tokenIn, tokenOut, amountIn) {
             logger.warn('Swap: price impact quote failed', e);
         }
     }
-    return { ...best, amountIn, impact };
+    return { ...best, amountIn, impact, checked };
 }
 
 /** Every DATA pool with its token balances (Liquidity section) */
@@ -591,6 +602,8 @@ function renderQuote() {
         ['swap-rate', 'swap-route', 'swap-impact', 'swap-min'].forEach(id => { $(id).textContent = '--'; });
     }
 
+    renderCheckedRoutes(valid ? q.checked : state.quoteChecked);
+
     if (!state.flow) {
         if (error) setWarning('', null);
         else if (state.quoteError && wei) setWarning(state.quoteError, 'error');
@@ -599,6 +612,22 @@ function renderQuote() {
         else setWarning('', null);
     }
     renderSubmit();
+}
+
+function renderCheckedRoutes(checked) {
+    const box = $('swap-routes');
+    const list = $('swap-routes-list');
+    if (!box || !list) return;
+    box.classList.toggle('hidden', !checked?.length);
+    if (!checked?.length) return;
+    const receive = receiveToken();
+    $('swap-routes-count').textContent = `(${checked.length})`;
+    const sorted = [...checked].sort((x, y) => (x.out && y.out ? (y.out.gt(x.out) ? 1 : -1) : x.out ? -1 : y.out ? 1 : 0));
+    list.innerHTML = sorted.map(item => `
+        <li class="flex items-start justify-between gap-3 py-1 border-b border-[#2a2a2a] last:border-0">
+            <span class="text-gray-300">${Utils.escapeHtml(routeLabel(item.route))}</span>
+            <span class="text-right whitespace-nowrap ${item.out ? 'text-gray-200' : 'text-gray-500'}" ${item.error ? `title="${Utils.escapeHtml(item.error)}"` : ''}>${item.out ? formatToken(item.out, receive) : `failed${item.error ? `: ${Utils.escapeHtml(item.error.slice(0, 40))}` : ''}`}</span>
+        </li>`).join('');
 }
 
 function canSubmit() {
@@ -705,6 +734,7 @@ async function updateQuote() {
     const seq = ++state.quoteSeq;
     const { wei, error } = readAmount();
     state.quoteError = null;
+    state.quoteChecked = null;
     if (!wei || error) {
         state.quote = null;
         state.quoting = false;
@@ -722,6 +752,7 @@ async function updateQuote() {
         if (seq !== state.quoteSeq) return;
         logger.warn('Swap quote failed:', e);
         state.quote = null;
+        state.quoteChecked = e.checked || null;
         state.quoteError = e.message?.startsWith('No ') ? e.message : `Could not get a quote: ${formatTxError(e)}`;
     }
     state.quoting = false;
