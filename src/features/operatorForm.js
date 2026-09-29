@@ -160,7 +160,7 @@ function formatTxError(error) {
 function setStatus(elementId, text, tone) {
     const el = $(elementId);
     if (!el) return;
-    const tones = { ok: 'text-green-400', warn: 'text-yellow-400', error: 'text-red-400', info: 'text-gray-500' };
+    const tones = { ok: 'text-green-400', warn: 'text-yellow-400', error: 'text-red-400', info: 'text-gray-400' };
     el.classList.remove('hidden', ...Object.values(tones));
     if (!text) {
         el.classList.add('hidden');
@@ -707,7 +707,7 @@ function renderProgress() {
         done: '<svg class="w-4 h-4 text-green-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg>',
         error: '<svg class="w-4 h-4 text-red-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M6 18L18 6M6 6l12 12"/></svg>'
     };
-    const textClass = { pending: 'text-gray-500', active: 'text-white', done: 'text-gray-300', error: 'text-red-400' };
+    const textClass = { pending: 'text-gray-400', active: 'text-white', done: 'text-gray-300', error: 'text-red-400' };
 
     list.innerHTML = state.flow.steps.map(step => `
         <li class="flex items-center gap-2">

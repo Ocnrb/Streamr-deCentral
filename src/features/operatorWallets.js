@@ -77,7 +77,7 @@ function formatTxError(error) {
 function setStatus(elementId, text, tone) {
     const el = $(elementId);
     if (!el) return;
-    const tones = { ok: 'text-green-400', warn: 'text-yellow-400', error: 'text-red-400', info: 'text-gray-500' };
+    const tones = { ok: 'text-green-400', warn: 'text-yellow-400', error: 'text-red-400', info: 'text-gray-400' };
     el.classList.remove('hidden', ...Object.values(tones));
     if (!text) {
         el.classList.add('hidden');
@@ -126,8 +126,8 @@ const UNDO_ICON = '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBo
 
 function balanceCell(address, kind) {
     const balance = state.balances.get(address);
-    if (balance === undefined || balance === null) return '<span class="text-gray-500">...</span>';
-    if (balance === 'error') return '<span class="text-gray-500">N/A</span>';
+    if (balance === undefined || balance === null) return '<span class="text-gray-400">...</span>';
+    if (balance === 'error') return '<span class="text-gray-400">N/A</span>';
     const empty = balance.isZero();
     const needsGas = empty && kind === 'nodes';
     return `<span class="${needsGas ? 'text-yellow-400' : 'text-gray-300'}" ${needsGas ? 'title="This node wallet needs POL to pay for gas"' : ''}>${formatPol(balance)}</span>`;
@@ -145,10 +145,10 @@ function rowHtml(rawAddress, kind, status) {
     if (!isOwner) {
         const undo = status !== 'current';
         action = `<button type="button" data-kind="${kind}" data-address="${address}" data-action="${undo ? 'undo' : 'remove'}"
-            class="p-1.5 rounded-md text-gray-500 hover:text-white hover:bg-[#333] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            class="p-1.5 rounded-md text-gray-400 hover:text-white hover:bg-[#333] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             title="${undo ? 'Undo' : 'Remove'}" ${locked ? 'disabled' : ''}>${undo ? UNDO_ICON : REMOVE_ICON}</button>`;
     }
-    const addressClass = status === 'removed' ? 'line-through text-gray-500' : status === 'added' ? 'text-green-300' : 'text-gray-200';
+    const addressClass = status === 'removed' ? 'line-through text-gray-400' : status === 'added' ? 'text-green-300' : 'text-gray-200';
     return `
         <tr class="border-b border-[#2a2a2a] last:border-0">
             <td class="px-3 py-2 font-mono text-xs"><span class="${addressClass}" title="${address}"><span class="sm:hidden">${Utils.escapeHtml(Utils.shortAddress(rawAddress))}</span><span class="hidden sm:inline">${address}</span></span>${tag}</td>
@@ -164,7 +164,7 @@ function renderTable(kind) {
         ...state[kind].map(a => rowHtml(a, kind, state.removed[kind].has(a) ? 'removed' : 'current')),
         ...[...state.added[kind]].map(a => rowHtml(a, kind, 'added'))
     ];
-    body.innerHTML = rows.length ? rows.join('') : `<tr><td colspan="3" class="px-3 py-3 text-xs text-gray-500">${kind === 'agents' ? 'No agents.' : 'No node wallets.'}</td></tr>`;
+    body.innerHTML = rows.length ? rows.join('') : `<tr><td colspan="3" class="px-3 py-3 text-xs text-gray-400">${kind === 'agents' ? 'No agents.' : 'No node wallets.'}</td></tr>`;
 }
 
 function renderNodesWarning() {
@@ -197,7 +197,7 @@ function renderProgress() {
         done: '<svg class="w-4 h-4 text-green-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg>',
         error: '<svg class="w-4 h-4 text-red-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M6 18L18 6M6 6l12 12"/></svg>'
     };
-    const textClass = { pending: 'text-gray-500', active: 'text-white', done: 'text-gray-300', error: 'text-red-400' };
+    const textClass = { pending: 'text-gray-400', active: 'text-white', done: 'text-gray-300', error: 'text-red-400' };
     list.innerHTML = state.flow.steps.map(step => `
         <li class="flex items-center gap-2">
             ${icons[step.status]}
