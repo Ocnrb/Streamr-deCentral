@@ -335,10 +335,8 @@ function renderAll() {
     renderProcess();
     renderList();
     renderLeaderboards();
-    const range = RANGES[state.range];
-    el('gov-range-note').textContent = state.truncated
-        ? `Showing the latest ${state.flags.length} flags`
-        : `${state.flags.length} flag${state.flags.length === 1 ? '' : 's'} ${range.seconds ? `in the last ${range.label}` : 'in total'}`;
+    // Only when the range holds more flags than were loaded (the count is already on the Flags tile)
+    el('gov-range-note').textContent = state.truncated ? `Showing the latest ${state.flags.length} flags` : '';
 }
 
 function kpiTile(label, value, sub = '', accent = '') {
