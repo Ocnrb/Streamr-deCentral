@@ -41,6 +41,8 @@ const ETHEREUM_RPCS = [
 const PROOF_API = 'https://proof-generator.polygon.technology/api/v1/matic/exit-payload/';
 const TRANSFER_TOPIC = ethers.utils.id('Transfer(address,address,uint256)');
 const STATE_SYNCED_TOPIC = ethers.utils.id('StateSynced(uint256,address,bytes)');
+const STATE_COMMITTED_TOPIC = ethers.utils.id('StateCommitted(uint256,bool)');   // emitted on Polygon when a deposit lands
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 const ERC20_ABI = [
     'function balanceOf(address) view returns (uint256)',
@@ -332,11 +334,15 @@ async function recoverFromExplorer() {
     const mints = polygonTransfers
         .filter(tx => tx.from === ethers.constants.AddressZero && tx.to?.toLowerCase() === state.address)
         .map(tx => ({ value: tx.value, at: Number(tx.timeStamp) * 1000 }));
+    // Any other DATA received on Polygon (fallback when the deposit does not show as a mint)
+    const incoming = polygonTransfers
+        .filter(tx => tx.from !== ethers.constants.AddressZero && tx.to?.toLowerCase() === state.address)
+        .map(tx => ({ value: tx.value, at: Number(tx.timeStamp) * 1000 }));
     // Claims of withdrawals: the DATA released on Ethereum by the ERC20 predicate
     const exits = ethTransfers
         .filter(tx => tx.from?.toLowerCase() === ERC20_PREDICATE.toLowerCase() && tx.to?.toLowerCase() === state.address)
         .map(tx => ({ value: tx.value, at: Number(tx.timeStamp) * 1000 }));
-    state.explorerEvents = { mints, exits };
+    state.explorerEvents = { mints, incoming, exits };
     const timed = applyExplorerTimes();
     if (added || timed) {
         state.transfers.sort((a, b) => b.createdAt - a.createdAt);
@@ -346,17 +352,57 @@ async function recoverFromExplorer() {
 
 /** Exact arrival (Polygon mint) and claim (Ethereum release) times from the last explorer read */
 function applyExplorerTimes() {
-    const { mints = [], exits = [] } = state.explorerEvents || {};
-    return matchTimes(state.transfers.filter(t => t.kind === 'deposit' && t.status !== 'failed' && !t.arrivedExact), mints, (t, at) => { t.arrivedAt = at; t.arrivedExact = true; })
+    const { mints = [], incoming = [], exits = [] } = state.explorerEvents || {};
+    const arrived = (t, at) => { t.arrivedAt = at; t.arrivedExact = true; };
+    const openDeposits = () => state.transfers.filter(t => t.kind === 'deposit' && t.status !== 'failed' && !t.arrivedExact);
+    return matchTimes(openDeposits(), mints, arrived)
+        + matchTimes(openDeposits(), incoming, arrived, DAY_MS)
         + matchTimes(state.transfers.filter(t => t.kind === 'withdraw' && t.status === 'claimed' && !t.claimedAt), exits, (t, at) => { t.claimedAt = at; });
 }
 
-/** Pairs transfers with later events of the same amount, oldest first, each event used once */
-function matchTimes(transfers, events, apply) {
+/**
+ * Arrival of deposits the explorer transfers could not date: the StateCommitted event of the deposit's
+ * state sync id on Polygon (a few per refresh, once per session each)
+ */
+async function fillArrivalTimes() {
+    const pending = state.transfers
+        .filter(t => t.kind === 'deposit' && t.status === 'done' && !t.arrivedExact && !state.timeChecked.has(t.txHash))
+        .slice(0, 5);
+    let changed = false;
+    for (const t of pending) {
+        state.timeChecked.add(t.txHash);
+        try {
+            if (!t.stateId) {
+                const receipt = await ethRead(p => p.getTransactionReceipt(t.txHash));
+                t.stateId = receipt ? stateIdFromReceipt(receipt) : null;
+            }
+            if (!t.stateId) continue;
+            const url = `${POLYGONSCAN_NETWORK.apiUrl}?chainid=${POLYGON_CHAIN_ID}&module=logs&action=getLogs&address=${STATE_RECEIVER}`
+                + `&topic0=${STATE_COMMITTED_TOPIC}&topic0_1_opr=and&topic1=${ethers.utils.hexZeroPad(ethers.BigNumber.from(t.stateId).toHexString(), 32)}`
+                + `&fromBlock=0&toBlock=latest&apikey=${getEtherscanApiKey()}`;
+            const json = await fetch(url).then(r => r.json());
+            const log = Array.isArray(json?.result) ? json.result[0] : null;
+            if (log?.timeStamp) {
+                t.arrivedAt = parseInt(log.timeStamp, 16) * 1000;
+                t.arrivedExact = true;
+                changed = true;
+            }
+        } catch (e) {
+            logger.warn(`Bridge: arrival time not found for ${t.txHash}`, e);
+        }
+    }
+    if (changed) {
+        saveTransfers();
+        renderTransfers();
+    }
+}
+
+/** Pairs transfers with later events of the same amount (within maxDelayMs), oldest first, each event used once */
+function matchTimes(transfers, events, apply, maxDelayMs = Infinity) {
     const pool = [...events].sort((a, b) => a.at - b.at);
     let count = 0;
     for (const t of [...transfers].sort((a, b) => a.createdAt - b.createdAt)) {
-        const i = pool.findIndex(e => e.value === String(t.amountWei) && e.at >= t.createdAt - 60000);
+        const i = pool.findIndex(e => e.value === String(t.amountWei) && e.at >= t.createdAt - 60000 && e.at - t.createdAt <= maxDelayMs);
         if (i === -1) continue;
         apply(t, pool[i].at);
         pool.splice(i, 1);
@@ -981,6 +1027,7 @@ async function refreshAll() {
             renderTransfers();
         }
         await fillCheckpointTimes();
+        await fillArrivalTimes();
     } finally {
         // Spin for at least half a second, so the refresh is noticed
         await new Promise(resolve => setTimeout(resolve, Math.max(0, 500 - (Date.now() - started))));
