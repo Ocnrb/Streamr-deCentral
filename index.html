@@ -688,6 +688,92 @@
         </div>
     </div>
 
+    <!-- Operator Wallets Modal: owner adds / removes agent and node wallets (Operator Details) -->
+    <div id="operatorWalletsModal" class="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-3 sm:p-4 z-50 hidden">
+        <div class="bg-[#1E1E1E] rounded-xl max-w-2xl w-full text-gray-300 border border-[#333333] shadow-2xl max-h-[92vh] flex flex-col">
+            <div class="flex items-center justify-between px-5 sm:px-6 py-4 border-b border-[#333] flex-shrink-0">
+                <h2 class="text-xl font-bold text-white">Manage Wallets</h2>
+                <button id="operator-wallets-close" class="p-1.5 text-gray-500 hover:text-white hover:bg-[#333] rounded-lg transition-colors" title="Close">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                </button>
+            </div>
+
+            <div id="operator-wallets-body" class="px-5 sm:px-6 py-5 space-y-5 overflow-y-auto">
+                <!-- Agents -->
+                <section class="space-y-3">
+                    <div>
+                        <h3 class="text-sm font-semibold text-gray-200">Agents</h3>
+                        <p class="text-xs text-gray-500 mt-0.5">Agents run the operator: stake, unstake, manage node wallets and update the settings. The owner is always an agent.</p>
+                    </div>
+                    <div class="bg-[#121212] border border-[#333] rounded-lg overflow-hidden">
+                        <table class="w-full text-sm">
+                            <thead class="text-xs text-gray-500 border-b border-[#333]">
+                                <tr><th class="text-left font-medium px-3 py-2">Address</th><th class="text-right font-medium px-3 py-2">POL</th><th class="w-10"></th></tr>
+                            </thead>
+                            <tbody id="operator-wallets-agents"></tbody>
+                        </table>
+                    </div>
+                    <form id="operator-wallets-agents-add" class="flex gap-2" autocomplete="off">
+                        <input type="text" placeholder="Agent wallet address (0x...)" spellcheck="false" class="flex-1 min-w-0 p-2.5 bg-[#121212] border border-[#333] rounded-lg text-white text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500/50 disabled:opacity-50">
+                        <button type="submit" class="bg-[#444444] hover:bg-[#555555] text-white text-sm font-bold px-4 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed">Add</button>
+                    </form>
+                    <p id="operator-wallets-agents-status" class="hidden text-xs"></p>
+                </section>
+
+                <!-- Nodes -->
+                <section class="space-y-3">
+                    <div>
+                        <h3 class="text-sm font-semibold text-gray-200">Node wallets</h3>
+                        <p class="text-xs text-gray-500 mt-0.5">The wallets of your Streamr nodes: they send heartbeats and vote on flags, and need POL for gas.</p>
+                    </div>
+                    <div class="bg-[#121212] border border-[#333] rounded-lg overflow-hidden">
+                        <table class="w-full text-sm">
+                            <thead class="text-xs text-gray-500 border-b border-[#333]">
+                                <tr><th class="text-left font-medium px-3 py-2">Address</th><th class="text-right font-medium px-3 py-2">POL</th><th class="w-10"></th></tr>
+                            </thead>
+                            <tbody id="operator-wallets-nodes"></tbody>
+                        </table>
+                    </div>
+                    <form id="operator-wallets-nodes-add" class="flex gap-2" autocomplete="off">
+                        <input type="text" placeholder="Node wallet address (0x...)" spellcheck="false" class="flex-1 min-w-0 p-2.5 bg-[#121212] border border-[#333] rounded-lg text-white text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500/50 disabled:opacity-50">
+                        <button type="submit" class="bg-[#444444] hover:bg-[#555555] text-white text-sm font-bold px-4 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed">Add</button>
+                    </form>
+                    <p id="operator-wallets-nodes-status" class="hidden text-xs"></p>
+                </section>
+
+                <!-- Cost estimate -->
+                <section class="p-4 bg-[#121212] border border-[#333] rounded-lg space-y-2">
+                    <div class="flex justify-between items-baseline">
+                        <span class="text-sm text-gray-400">Network fee</span>
+                        <span id="operator-wallets-cost" class="text-lg font-semibold text-white">--</span>
+                    </div>
+                    <div class="flex justify-between items-baseline text-xs">
+                        <span class="text-gray-500">Your POL balance</span>
+                        <span id="operator-wallets-balance" class="text-gray-400">--</span>
+                    </div>
+                    <p id="operator-wallets-cost-note" class="text-xs text-gray-500"></p>
+                </section>
+
+                <section id="operator-wallets-progress" class="hidden p-4 bg-[#121212] border border-[#333] rounded-lg">
+                    <h3 class="text-sm font-semibold text-gray-200 mb-3">Progress</h3>
+                    <ol id="operator-wallets-progress-list" class="space-y-2 text-sm"></ol>
+                </section>
+
+                <section id="operator-wallets-success" class="hidden p-4 bg-green-500/10 border border-green-500/30 rounded-lg space-y-2">
+                    <p class="text-sm font-semibold text-green-400">Wallets updated</p>
+                    <p id="operator-wallets-success-text" class="text-xs text-gray-300"></p>
+                </section>
+
+                <p id="operator-wallets-error" class="hidden p-3 bg-red-500/10 border border-red-500/30 rounded-lg text-sm text-red-400 break-words"></p>
+            </div>
+
+            <div class="flex gap-3 px-5 sm:px-6 py-4 border-t border-[#333] flex-shrink-0">
+                <button id="operator-wallets-cancel" type="button" class="w-full bg-[#444444] hover:bg-[#555555] text-white font-bold py-3 px-4 rounded-lg transition-colors">Cancel</button>
+                <button id="operator-wallets-submit" type="button" class="w-full bg-blue-800 hover:bg-blue-900 text-white font-bold py-3 px-4 rounded-lg transition-colors flex justify-center items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-blue-800">Save</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Create Stream Modal -->
     <div id="createStreamModal" class="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-3 sm:p-4 z-50 hidden">
         <div class="bg-[#1E1E1E] rounded-xl max-w-2xl w-full text-gray-300 border border-[#333333] shadow-2xl max-h-[92vh] flex flex-col">

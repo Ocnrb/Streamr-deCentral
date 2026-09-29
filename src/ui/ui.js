@@ -1531,6 +1531,11 @@ export function renderOperatorDetails(data, globalState) {
             <div class="detail-section p-4 sm:p-6 lg:col-span-2">
                 <div class="flex items-center justify-between gap-3 mb-4">
                     <h3 class="text-lg sm:text-xl font-semibold text-white">Wallets</h3>
+                    <div class="flex items-center gap-2 flex-shrink-0">
+                    ${isOwner ? `<button id="manage-wallets-btn" type="button" class="flex items-center gap-1.5 bg-[#2C2C2C] hover:bg-[#3C3C3C] text-gray-300 hover:text-white px-3 py-2 rounded-lg text-xs font-medium transition-colors" title="Add or remove agent and node wallets">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931z"/></svg>
+                        <span class="hidden sm:inline">Manage</span>
+                    </button>` : ''}
                     <div id="wallets-tabs" class="flex bg-[#2C2C2C] p-1 rounded-lg flex-shrink-0">
                         <button data-tab="agents" class="px-3 py-1.5 text-xs font-medium rounded-md bg-blue-800 text-white transition-colors">
                             Agents <span class="opacity-70">(${op.controllers?.length || 0})</span>
@@ -1538,6 +1543,7 @@ export function renderOperatorDetails(data, globalState) {
                         <button data-tab="nodes" class="px-3 py-1.5 text-xs font-medium rounded-md text-gray-400 hover:text-white transition-colors">
                             Nodes <span class="opacity-70">(${op.nodes?.length || 0})</span>
                         </button>
+                    </div>
                     </div>
                 </div>
                 <div id="agents-content" data-agents-count="${op.controllers?.length || 0}"><ul class="max-h-96 overflow-y-auto pr-2">${agentsHtml}</ul></div>
