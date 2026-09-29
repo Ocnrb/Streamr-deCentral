@@ -70,13 +70,13 @@ const CHAINS = {
         name: 'Ethereum',
         gasSymbol: 'ETH',
         explorer: 'https://etherscan.io/tx/',
-        icon: '<svg class="w-6 h-6 flex-shrink-0" viewBox="0 0 32 32"><circle cx="16" cy="16" r="16" fill="#627EEA"/><path fill="#fff" fill-opacity=".6" d="M16.5 4v8.87l7.5 3.35z"/><path fill="#fff" d="M16.5 4 9 16.22l7.5-3.35z"/><path fill="#fff" fill-opacity=".6" d="M16.5 21.97V28L24 17.62z"/><path fill="#fff" d="M16.5 28v-6.03L9 17.62z"/><path fill="#fff" fill-opacity=".2" d="m16.5 20.57 7.5-4.35-7.5-3.35z"/><path fill="#fff" fill-opacity=".6" d="m9 16.22 7.5 4.35v-7.7z"/></svg>'
+        icon: '<svg class="w-5 h-5 flex-shrink-0" viewBox="0 0 32 32"><circle cx="16" cy="16" r="16" fill="#627EEA"/><path fill="#fff" fill-opacity=".6" d="M16.5 4v8.87l7.5 3.35z"/><path fill="#fff" d="M16.5 4 9 16.22l7.5-3.35z"/><path fill="#fff" fill-opacity=".6" d="M16.5 21.97V28L24 17.62z"/><path fill="#fff" d="M16.5 28v-6.03L9 17.62z"/><path fill="#fff" fill-opacity=".2" d="m16.5 20.57 7.5-4.35-7.5-3.35z"/><path fill="#fff" fill-opacity=".6" d="m9 16.22 7.5 4.35v-7.7z"/></svg>'
     },
     [POLYGON_CHAIN_ID]: {
         name: 'Polygon',
         gasSymbol: 'POL',
         explorer: 'https://polygonscan.com/tx/',
-        icon: '<svg class="w-6 h-6 flex-shrink-0" viewBox="0 0 32 32"><circle cx="16" cy="16" r="16" fill="#8247E5"/><path fill="#fff" d="M21.1 13.1a1.3 1.3 0 0 0-1.3 0l-2.9 1.7-2 1.1-2.9 1.7a1.3 1.3 0 0 1-1.3 0l-2.3-1.3a1.3 1.3 0 0 1-.6-1.1v-2.6c0-.4.2-.9.6-1.1l2.2-1.3a1.3 1.3 0 0 1 1.3 0l2.2 1.3c.4.2.6.7.6 1.1v1.7l2-1.2v-1.7c0-.4-.2-.9-.6-1.1l-4.2-2.4a1.3 1.3 0 0 0-1.3 0l-4.3 2.5c-.4.2-.6.6-.6 1v4.9c0 .4.2.9.6 1.1l4.3 2.4c.4.2.9.2 1.3 0l2.9-1.6 2-1.2 2.9-1.6a1.3 1.3 0 0 1 1.3 0l2.2 1.3c.4.2.6.7.6 1.1v2.6c0 .4-.2.9-.6 1.1l-2.2 1.3a1.3 1.3 0 0 1-1.3 0l-2.2-1.3a1.3 1.3 0 0 1-.6-1.1v-1.7l-2 1.2v1.7c0 .4.2.9.6 1.1l4.3 2.4c.4.2.9.2 1.3 0l4.3-2.4c.4-.2.6-.7.6-1.1v-4.9c0-.4-.2-.9-.6-1.1z"/></svg>'
+        icon: '<svg class="w-5 h-5 flex-shrink-0" viewBox="0 0 32 32"><circle cx="16" cy="16" r="16" fill="#8247E5"/><path fill="#fff" d="M21.1 13.1a1.3 1.3 0 0 0-1.3 0l-2.9 1.7-2 1.1-2.9 1.7a1.3 1.3 0 0 1-1.3 0l-2.3-1.3a1.3 1.3 0 0 1-.6-1.1v-2.6c0-.4.2-.9.6-1.1l2.2-1.3a1.3 1.3 0 0 1 1.3 0l2.2 1.3c.4.2.6.7.6 1.1v1.7l2-1.2v-1.7c0-.4-.2-.9-.6-1.1l-4.2-2.4a1.3 1.3 0 0 0-1.3 0l-4.3 2.5c-.4.2-.6.6-.6 1v4.9c0 .4.2.9.6 1.1l4.3 2.4c.4.2.9.2 1.3 0l2.9-1.6 2-1.2 2.9-1.6a1.3 1.3 0 0 1 1.3 0l2.2 1.3c.4.2.6.7.6 1.1v2.6c0 .4-.2.9-.6 1.1l-2.2 1.3a1.3 1.3 0 0 1-1.3 0l-2.2-1.3a1.3 1.3 0 0 1-.6-1.1v-1.7l-2 1.2v1.7c0 .4.2.9.6 1.1l4.3 2.4c.4.2.9.2 1.3 0l4.3-2.4c.4-.2.6-.7.6-1.1v-4.9c0-.4-.2-.9-.6-1.1z"/></svg>'
     }
 };
 
@@ -481,8 +481,8 @@ function renderDirection() {
     $('bridge-from-chain').innerHTML = `${from.icon}<span>${from.name}</span>`;
     $('bridge-to-chain').innerHTML = `${to.icon}<span>${to.name}</span>`;
     $('bridge-route-note').textContent = state.direction === 'deposit'
-        ? 'Two transactions on Ethereum: approve, then deposit. The DATA then shows up in the same wallet on Polygon, usually within minutes. Both need ETH for gas.'
-        : 'Two steps: burn the DATA on Polygon now, then claim it on Ethereum once a Polygon checkpoint includes the burn (the button shows up under Your transfers). The claim needs ETH for gas.';
+        ? 'Approve and deposit on Ethereum (ETH for gas). The DATA then shows up in the same wallet on Polygon, usually within minutes.'
+        : 'Burn on Polygon now, then claim on Ethereum (ETH for gas) once a Polygon checkpoint includes the burn: the Claim button shows up under Your transfers.';
     $('bridge-gas-label').textContent = state.direction === 'deposit' ? 'Your ETH balance' : 'Your POL / ETH balance';
     renderBalances();
     renderSubmit();
@@ -522,7 +522,7 @@ function renderSubmit() {
     const { wei, error } = readAmount();
     setSubmitState(!state.address ? 'Connect a wallet to bridge' : state.direction === 'deposit' ? 'Bridge to Polygon' : 'Withdraw to Ethereum', false);
     btn.disabled = !state.address || !wei || Boolean(error);
-    $('bridge-receive').textContent = wei && !error ? formatData(wei, 4) : '0.0';
+    $('bridge-receive').textContent = wei && !error ? formatData(wei, 4) : '0';
 }
 
 function setSubmitState(label, busy) {
@@ -543,6 +543,8 @@ function renderProgress() {
     const list = $('bridge-progress-list');
     if (!container || !list || !state.flow) return;
     container.classList.remove('hidden');
+    // The steps replace the explanation while a transfer runs (keeps the panel within the screen)
+    $('bridge-route-note')?.classList.add('hidden');
     const icons = {
         pending: '<span class="w-4 h-4 rounded-full border-2 border-[#555] flex-shrink-0"></span>',
         active: '<span class="w-4 h-4 border-2 border-blue-400 rounded-full border-t-transparent animate-spin flex-shrink-0"></span>',
@@ -646,7 +648,7 @@ async function updateEstimate() {
             const claimCost = ethers.BigNumber.from(EXIT_GAS_ESTIMATE).mul(ethGasPrice);
             state.estimatedCost = { wei: burnCost, symbol: 'POL' };
             costEl.textContent = `≈ ${formatGas(burnCost)} POL + ${formatGas(claimCost)} ETH`;
-            noteEl.textContent = 'Burn on Polygon now; the claim on Ethereum later (its ETH fee depends on the gas price then).';
+            noteEl.textContent = 'The ETH part is the later claim, at the gas price of that moment.';
         }
     } catch (e) {
         if (seq !== state.estimateSeq) return;
@@ -780,6 +782,7 @@ async function handleSubmit() {
         } else {
             state.flow = null;
             $('bridge-progress')?.classList.add('hidden');
+            $('bridge-route-note')?.classList.remove('hidden');
             setFormLocked(false);
             renderSubmit();
         }
@@ -791,6 +794,7 @@ function resetFlow() {
     state.submitting = false;
     $('bridge-amount').value = '';
     $('bridge-progress')?.classList.add('hidden');
+    $('bridge-route-note')?.classList.remove('hidden');
     showError('');
     showSuccess('');
     setFormLocked(false);
@@ -909,6 +913,7 @@ export const BridgeLogic = {
         }
         if (!state.flow) {
             $('bridge-progress')?.classList.add('hidden');
+            $('bridge-route-note')?.classList.remove('hidden');
             showSuccess('');
             showError('');
             setFormLocked(!state.address);
