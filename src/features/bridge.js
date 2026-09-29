@@ -486,7 +486,7 @@ function renderDirection() {
     $('bridge-from-chain').innerHTML = `${from.icon}<span>${from.name}</span>`;
     $('bridge-to-chain').innerHTML = `${to.icon}<span>${to.name}</span>`;
     $('bridge-route-note').textContent = state.direction === 'deposit'
-        ? 'Approve and deposit on Ethereum (ETH for gas). The DATA then shows up in the same wallet on Polygon, usually within minutes.'
+        ? 'Approve and deposit on Ethereum (ETH for gas). The DATA then shows up in the same wallet on Polygon.'
         : 'Burn on Polygon now, then claim on Ethereum (ETH for gas) once a Polygon checkpoint includes the burn: the Claim button shows up under Your transfers.';
     $('bridge-gas-label').textContent = state.direction === 'deposit' ? 'Your ETH balance' : 'Your POL / ETH balance';
     renderBalances();
