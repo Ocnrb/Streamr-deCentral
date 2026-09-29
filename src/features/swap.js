@@ -1325,8 +1325,8 @@ function renderHistory() {
         const [label, badge] = HISTORY_BADGES[entry.status] || HISTORY_BADGES.pending;
         const selling = entry.pay?.symbol === 'DATA';
         const action = selling
-            ? '<span class="px-2 py-0.5 rounded-md text-[11px] font-semibold whitespace-nowrap bg-orange-500/15 text-orange-300">Sell DATA</span>'
-            : '<span class="px-2 py-0.5 rounded-md text-[11px] font-semibold whitespace-nowrap bg-emerald-500/15 text-emerald-300">Buy DATA</span>';
+            ? '<span class="tx-badge tx-badge-out whitespace-nowrap">Sell DATA</span>'
+            : '<span class="tx-badge tx-badge-in whitespace-nowrap">Buy DATA</span>';
         const hash = Utils.escapeHtml(entry.txHash);
         return `
             <tr class="border-b border-[#2a2a2a] last:border-0 align-middle">
