@@ -965,7 +965,10 @@ function schedulePoll() {
 async function refreshAll() {
     if (!state.address) return;
     const btn = $('bridge-refresh');
-    btn?.classList.add('animate-spin');
+    const icon = btn?.querySelector('svg');
+    const started = Date.now();
+    if (btn) btn.disabled = true;
+    icon?.classList.add('animate-spin');
     try {
         await Promise.all([loadBalances(), recoverFromExplorer()]);
         renderTransfers();
@@ -976,7 +979,10 @@ async function refreshAll() {
         }
         await fillCheckpointTimes();
     } finally {
-        btn?.classList.remove('animate-spin');
+        // Spin for at least half a second, so the refresh is noticed
+        await new Promise(resolve => setTimeout(resolve, Math.max(0, 500 - (Date.now() - started))));
+        icon?.classList.remove('animate-spin');
+        if (btn) btn.disabled = false;
     }
 }
 
