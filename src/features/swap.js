@@ -1167,7 +1167,9 @@ function tokenChip(symbol) {
 }
 
 function formatDateTime(ms) {
-    return new Date(ms).toLocaleString(undefined, { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+    const date = new Date(ms);
+    const sameYear = date.getFullYear() === new Date().getFullYear();
+    return date.toLocaleString(undefined, { ...(sameYear ? {} : { year: 'numeric' }), month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 
 function renderHistory() {
@@ -1192,12 +1194,12 @@ function renderHistory() {
         const hash = Utils.escapeHtml(entry.txHash);
         return `
             <tr class="border-b border-[#2a2a2a] last:border-0 align-middle">
-                <td class="py-3 pr-4 whitespace-nowrap"><div class="text-gray-200">${formatDateTime(entry.createdAt)}</div><div class="text-xs text-gray-500">${timeAgo(entry.createdAt)}</div></td>
-                <td class="py-3 pr-4">${action}</td>
-                <td class="py-3 pr-4">${amount(entry.pay)}</td>
-                <td class="py-3 pr-4">${amount(entry.receive)}</td>
-                <td class="py-3 pr-4 text-xs text-gray-400">${entry.route ? Utils.escapeHtml(entry.route) : '<span class="text-gray-500">Other app</span>'}</td>
-                <td class="py-3 pr-4"><span class="px-2 py-0.5 rounded-full text-[11px] font-semibold whitespace-nowrap ${badge}">${label}</span></td>
+                <td class="py-3 pr-3 whitespace-nowrap"><div class="text-gray-200">${formatDateTime(entry.createdAt)}</div>${Date.now() - entry.createdAt < 86400000 ? `<div class="text-xs text-gray-500">${timeAgo(entry.createdAt)}</div>` : ''}</td>
+                <td class="py-3 pr-3">${action}</td>
+                <td class="py-3 pr-3">${amount(entry.pay)}</td>
+                <td class="py-3 pr-3">${amount(entry.receive)}</td>
+                <td class="py-3 pr-3 text-xs text-gray-400">${entry.route ? Utils.escapeHtml(entry.route) : '<span class="text-gray-500">Other app</span>'}</td>
+                <td class="py-3 pr-3"><span class="px-2 py-0.5 rounded-full text-[11px] font-semibold whitespace-nowrap ${badge}">${label}</span></td>
                 <td class="py-3 text-right whitespace-nowrap"><a href="https://polygonscan.com/tx/${hash}" target="_blank" rel="noopener noreferrer" class="font-mono text-xs text-blue-400 hover:text-blue-300">${hash.slice(0, 6)}…${hash.slice(-4)} ↗</a></td>
             </tr>`;
     }).join('');
