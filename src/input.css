@@ -392,6 +392,7 @@
     color: #3b82f6;
   }
   
+  .bottom-nav-item.active > span,
   .bottom-nav-item.active svg,
   .bottom-nav-item.active .icon-mask {
     color: #e5e7eb;
@@ -420,10 +421,11 @@
   }
   
   .nav-link.active {
-    color: white;
+    color: #e5e7eb;
     background-color: rgba(59, 130, 246, 0.15);
   }
   
+  .nav-link.active > span,
   .nav-link.active svg,
   .nav-link.active .icon-mask {
     color: #e5e7eb;

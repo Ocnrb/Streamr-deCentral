@@ -4552,7 +4552,7 @@
   .bottom-nav-item.active {
     color: #3b82f6;
   }
-  .bottom-nav-item.active svg, .bottom-nav-item.active .icon-mask {
+  .bottom-nav-item.active > span, .bottom-nav-item.active svg, .bottom-nav-item.active .icon-mask {
     color: #e5e7eb;
   }
   .bottom-nav-item::before {
@@ -4574,10 +4574,10 @@
     position: relative;
   }
   .nav-link.active {
-    color: white;
+    color: #e5e7eb;
     background-color: rgba(59, 130, 246, 0.15);
   }
-  .nav-link.active svg, .nav-link.active .icon-mask {
+  .nav-link.active > span, .nav-link.active svg, .nav-link.active .icon-mask {
     color: #e5e7eb;
   }
   .icon-mask {
