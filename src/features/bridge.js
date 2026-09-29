@@ -561,12 +561,13 @@ function transferHtml(t) {
     const spinner = '<span class="w-3 h-3 border-2 border-white rounded-full border-t-transparent animate-spin"></span>';
     const claiming = claimBusy || t.status === 'claiming';
     const waiting = t.status === 'pending' || t.status === 'checkpoint';
+    // Wrapped: a disabled button gets no pointer events, the tooltip sits on the wrapper
     const claimButton = !deposit && (claiming || waiting || t.status === 'ready') ? `
+        <span class="inline-flex" data-tooltip-content="${waiting ? 'Available once a Polygon checkpoint includes the burn' : claiming ? 'Waiting for the claim transaction' : 'Claim the DATA on Ethereum (needs ETH for gas)'}">
         <button type="button" data-claim="${hash}" ${claiming || waiting ? 'disabled' : ''}
-            title="${waiting ? 'Available once a Polygon checkpoint includes the burn' : 'Claim the DATA on Ethereum (needs ETH for gas)'}"
-            class="ml-auto bg-blue-800 hover:bg-blue-900 text-white text-xs font-bold px-3 py-1.5 rounded-lg transition-colors inline-flex items-center gap-2 whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-blue-800">
+            class="ml-auto bg-blue-800 hover:bg-blue-900 text-white text-xs font-bold px-3 py-1.5 rounded-lg transition-colors inline-flex items-center gap-2 whitespace-nowrap disabled:opacity-50 disabled:pointer-events-none disabled:hover:bg-blue-800">
             ${claiming ? `${spinner}Claiming...` : waiting ? `${spinner}Claim` : 'Claim'}
-        </button>` : '';
+        </button></span>` : '';
     const action = deposit
         ? '<span class="px-2 py-0.5 rounded-md text-[11px] font-semibold whitespace-nowrap bg-blue-500/15 text-blue-300">Deposit</span>'
         : '<span class="px-2 py-0.5 rounded-md text-[11px] font-semibold whitespace-nowrap bg-violet-500/15 text-violet-300">Withdraw</span>';
@@ -576,7 +577,7 @@ function transferHtml(t) {
             <td class="py-3 pr-3">${action}</td>
             <td class="py-3 pr-3"><span class="inline-flex items-center gap-2 whitespace-nowrap"><span class="text-white font-medium">${formatData(t.amountWei)}</span>${chip(DATA_ICON, 'DATA')}</span></td>
             <td class="py-3 pr-3"><span class="inline-flex items-center gap-1.5 whitespace-nowrap">${chip(from.icon, from.name)}<span class="text-gray-500">→</span>${chip(to.icon, to.name)}</span></td>
-            <td class="py-3 pr-3"><span class="px-2 py-0.5 rounded-full text-[11px] font-semibold whitespace-nowrap ${badgeClass} ${hint ? 'cursor-help' : ''}" ${hint ? `title="${hint}"` : ''}>${label}</span><div class="text-xs mt-1 space-y-0.5">${timeCell(t)}</div></td>
+            <td class="py-3 pr-3"><span class="px-2 py-0.5 rounded-full text-[11px] font-semibold whitespace-nowrap ${badgeClass} ${hint ? 'cursor-help' : ''}" ${hint ? `data-tooltip-content="${hint}"` : ''}>${label}</span><div class="text-xs mt-1 space-y-0.5">${timeCell(t)}</div></td>
             <td class="py-3 pr-3 text-xs space-y-0.5">${links.join('')}</td>
             <td class="py-3 text-right">${claimButton}</td>
         </tr>`;
