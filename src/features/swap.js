@@ -43,8 +43,19 @@ const UNISWAP_V3_ROUTER = '0x68b3465833fb72A70ecDF485E0e4C7bD8665Fc45';   // Swa
 const UNISWAP_ADDRESS_THIS = '0x0000000000000000000000000000000000000002'; // SwapRouter02: keep the output in the router (to unwrap)
 const UNISWAP_FEES = [100, 500, 3000, 10000];
 // Uniswap v4: one PoolManager holds every pool; pools are found by computing the ids of hookless pools
-// with the standard fee / tick spacing pairs and reading their state (extsload). Read-only for now.
+// with the standard fee / tick spacing pairs and reading their state (extsload). Swaps go through the
+// Universal Router (V4_SWAP), which pulls ERC-20 tokens with Permit2.
 const UNISWAP_V4_POOL_MANAGER = '0x67366782805870060151383f4bbff9dab53e5cd6';
+const UNIVERSAL_ROUTER = '0x1095692a6237d83c6a72f3f5efedb9a670c49223';
+const PERMIT2 = '0x000000000022D473030F116dDEE9F6B43aC78BA3';
+const PERMIT2_EXPIRATION_SECONDS = 30 * 60;
+// Universal Router command and v4 router actions
+const UR_V4_SWAP = '0x10';
+const V4_SWAP_EXACT_IN_SINGLE = 0x06;
+const V4_SWAP_EXACT_IN = 0x07;
+const V4_SETTLE = 0x0b;
+const V4_SETTLE_ALL = 0x0c;
+const V4_TAKE_ALL = 0x0f;
 const UNISWAP_V4_QUOTER = '0xb3d5c3dfc3a7aebff71895a7191796bffc2c81b9';
 const V4_TIERS = [[100, 1], [500, 10], [3000, 60], [10000, 200]];
 const V4_POOLS_SLOT = 6;
@@ -73,7 +84,17 @@ const ALGEBRA_ROUTER_ABI = [
 const UNISWAP_FACTORY_ABI = ['function getPool(address, address, uint24) view returns (address)'];
 const UNISWAP_QUOTER_ABI = ['function quoteExactInput(bytes path, uint256 amountIn) returns (uint256 amountOut, uint160[] sqrtPriceX96AfterList, uint32[] initializedTicksCrossedList, uint256 gasEstimate)'];
 const V4_POOL_MANAGER_ABI = ['function extsload(bytes32 slot) view returns (bytes32)'];
-const V4_QUOTER_ABI = ['function quoteExactInputSingle(((address currency0, address currency1, uint24 fee, int24 tickSpacing, address hooks) poolKey, bool zeroForOne, uint128 exactAmount, bytes hookData) params) returns (uint256 amountOut, uint256 gasEstimate)'];
+const V4_QUOTER_ABI = [
+    'function quoteExactInputSingle(((address currency0, address currency1, uint24 fee, int24 tickSpacing, address hooks) poolKey, bool zeroForOne, uint128 exactAmount, bytes hookData) params) returns (uint256 amountOut, uint256 gasEstimate)',
+    'function quoteExactInput((address exactCurrency, (address intermediateCurrency, uint24 fee, int24 tickSpacing, address hooks, bytes hookData)[] path, uint128 exactAmount) params) returns (uint256 amountOut, uint256 gasEstimate)'
+];
+const PERMIT2_ABI = [
+    'function allowance(address owner, address token, address spender) view returns (uint160 amount, uint48 expiration, uint48 nonce)',
+    'function approve(address token, address spender, uint160 amount, uint48 expiration)'
+];
+const UNIVERSAL_ROUTER_ABI = ['function execute(bytes commands, bytes[] inputs, uint256 deadline) payable'];
+const V4_SINGLE_PARAMS = 'tuple(tuple(address currency0, address currency1, uint24 fee, int24 tickSpacing, address hooks) poolKey, bool zeroForOne, uint128 amountIn, uint128 amountOutMinimum, bytes hookData)';
+const V4_MULTI_PARAMS = 'tuple(address currencyIn, tuple(address intermediateCurrency, uint24 fee, int24 tickSpacing, address hooks, bytes hookData)[] path, uint128 amountIn, uint128 amountOutMinimum)';
 const MULTICALL_ABI = ['function aggregate3((address target, bool allowFailure, bytes callData)[] calls) payable returns ((bool success, bytes returnData)[] returnData)'];
 const UNISWAP_ROUTER_ABI = [
     'function exactInput((bytes path, address recipient, uint256 amountIn, uint256 amountOutMinimum) params) payable returns (uint256 amountOut)',
@@ -86,7 +107,7 @@ const VENUES = {
     sushi: { name: 'SushiSwap V2', router: SUSHI_V2_ROUTER, factory: SUSHI_V2_FACTORY },
     qv3: { name: 'QuickSwap V3', router: QUICKSWAP_V3_ROUTER },
     uni: { name: 'Uniswap v3', router: UNISWAP_V3_ROUTER },
-    v4: { name: 'Uniswap v4', router: null }   // quotes only
+    v4: { name: 'Uniswap v4', router: UNIVERSAL_ROUTER }   // tokens pulled through Permit2
 };
 
 // ============================================
@@ -143,7 +164,7 @@ const state = {
     pools: new Map(),        // pairKey -> { qv2, sushi, qv3: pool address | null, uni: Map(fee -> pool) } (session cache)
     liquidity: null,         // DATA pools with their balances (Liquidity section)
     poolBalances: new Map(), // pool address -> { [token]: BigNumber, at } (skips empty pools before quoting)
-    v4Pools: null,           // initialized Uniswap v4 DATA pools with liquidity
+    v4Pairs: new Map(),      // pairKey -> initialized Uniswap v4 pools with liquidity (session cache)
     quote: null,             // { route, amountIn, amountOut, impact, key }
     quoteSeq: 0,
     quoteError: null,
@@ -306,32 +327,50 @@ function v4PoolId(key) {
     ));
 }
 
-/** Hookless v4 pools of DATA (against native POL and the other tokens) that are initialized and hold liquidity */
-async function discoverV4Pools() {
-    if (state.v4Pools) return state.v4Pools;
+/** Looks up the hookless v4 pools of each pair (every standard tier); a pair whose lookup failed is asked again next time */
+async function ensureV4Pairs(pairs) {
+    const missing = [...new Map(pairs.map(([a, b]) => [pairKey(a, b), [a, b]])).values()].filter(([a, b]) => !state.v4Pairs.has(pairKey(a, b)));
+    if (!missing.length) return;
     const candidates = [];
-    for (const counter of [NATIVE, ...INTERMEDIATES]) {
+    for (const [a, b] of missing) {
         for (const [fee, tickSpacing] of V4_TIERS) {
-            const key = v4PoolKey(DATA, counter, fee, tickSpacing);
+            const key = v4PoolKey(a, b, fee, tickSpacing);
             const id = v4PoolId(key);
             const stateSlot = ethers.utils.keccak256(ethers.utils.solidityPack(['bytes32', 'bytes32'], [id, ethers.utils.hexZeroPad(ethers.utils.hexlify(V4_POOLS_SLOT), 32)]));
             const liquiditySlot = ethers.utils.hexZeroPad(ethers.BigNumber.from(stateSlot).add(3).toHexString(), 32);
-            candidates.push({ counter, fee, tickSpacing, key, id, stateSlot, liquiditySlot });
+            candidates.push({ pair: pairKey(a, b), fee, tickSpacing, key, id, stateSlot, liquiditySlot });
         }
     }
     const results = await multicall(candidates.flatMap(c => [
         { target: UNISWAP_V4_POOL_MANAGER, iface: IFACES.v4Manager, fn: 'extsload', args: [c.stateSlot] },
         { target: UNISWAP_V4_POOL_MANAGER, iface: IFACES.v4Manager, fn: 'extsload', args: [c.liquiditySlot] }
     ]));
-    if (results.some(r => r === null)) throw new Error('Uniswap v4 lookup incomplete');
     const mask160 = ethers.BigNumber.from(2).pow(160).sub(1);
     const mask128 = ethers.BigNumber.from(2).pow(128).sub(1);
-    state.v4Pools = candidates.map((c, i) => ({
-        ...c,
-        sqrtPriceX96: ethers.BigNumber.from(results[i * 2][0]).and(mask160),
-        liquidity: ethers.BigNumber.from(results[i * 2 + 1][0]).and(mask128)
-    })).filter(pool => !pool.sqrtPriceX96.isZero() && !pool.liquidity.isZero());
-    return state.v4Pools;
+    const byPair = new Map();
+    let failed = new Set();
+    candidates.forEach((c, i) => {
+        const slot0 = results[i * 2];
+        const liquidity = results[i * 2 + 1];
+        if (!slot0 || !liquidity) { failed.add(c.pair); return; }
+        const pool = { ...c, sqrtPriceX96: ethers.BigNumber.from(slot0[0]).and(mask160), liquidity: ethers.BigNumber.from(liquidity[0]).and(mask128) };
+        if (!byPair.has(c.pair)) byPair.set(c.pair, []);
+        if (!pool.sqrtPriceX96.isZero() && !pool.liquidity.isZero()) byPair.get(c.pair).push(pool);
+    });
+    for (const [a, b] of missing) {
+        const key = pairKey(a, b);
+        if (!failed.has(key)) state.v4Pairs.set(key, byPair.get(key) || []);
+    }
+}
+
+const v4PoolsFor = (a, b) => state.v4Pairs.get(pairKey(a, b)) || [];
+
+/** DATA pools on v4 (Liquidity section) */
+async function discoverV4Pools() {
+    const counters = [NATIVE, ...INTERMEDIATES];
+    await ensureV4Pairs(counters.map(c => [DATA, c]));
+    if (!counters.every(c => state.v4Pairs.has(pairKey(DATA, c)))) throw new Error('Uniswap v4 lookup incomplete');
+    return counters.flatMap(counter => v4PoolsFor(DATA, counter).map(pool => ({ ...pool, counter })));
 }
 
 /** Amount out within the current price range (no tick crossing): fallback when the v4 quoter is not reachable */
@@ -356,23 +395,27 @@ function v4DataPrice(pool) {
     return raw * Math.pow(10, 18 - counterInfo.decimals);
 }
 
-/** Single-pool v4 routes between DATA and the token (POL matches native and WPOL pools) */
+const v4Currency = (token) => (token.native ? NATIVE : token.address);
+
+/** v4 routes: one pool, or two pools through an intermediate currency (POL is native POL on v4) */
 async function v4Routes(tokenIn, tokenOut) {
-    let pools;
+    const cin = v4Currency(tokenIn);
+    const cout = v4Currency(tokenOut);
+    const mids = [NATIVE, ...INTERMEDIATES].filter(m => lower(m) !== lower(cin) && lower(m) !== lower(cout));
     try {
-        pools = await discoverV4Pools();
+        await ensureV4Pairs([[cin, cout], ...mids.flatMap(m => [[cin, m], [m, cout]])]);
     } catch (e) {
         logger.warn('Swap: Uniswap v4 lookup failed', e);
         return [];
     }
-    const counterToken = lower(tokenIn.address) === lower(DATA) ? tokenOut : tokenIn;
-    const matches = (address) => counterToken.native ? [NATIVE, lower(WPOL)].includes(lower(address)) : lower(address) === lower(counterToken.address);
-    return pools.filter(pool => matches(pool.counter)).map(pool => ({
-        venue: 'v4',
-        path: [tokenIn.address, tokenOut.address],
-        v4: pool,
-        executable: false
-    }));
+    const route = (currencies, pools) => ({ venue: 'v4', currencies, pools, path: currencies.map(c => (c === NATIVE ? WPOL : c)) });
+    const routes = v4PoolsFor(cin, cout).map(pool => route([cin, cout], [pool]));
+    for (const m of mids) {
+        for (const first of v4PoolsFor(cin, m)) {
+            for (const second of v4PoolsFor(m, cout)) routes.push(route([cin, m, cout], [first, second]));
+        }
+    }
+    return routes;
 }
 
 /** Candidate routes from tokenIn to tokenOut: direct, or through one intermediate on the same venue (empty pools skipped) */
@@ -428,16 +471,26 @@ function encodeUniswapPath(path, fees) {
     return ethers.utils.solidityPack(types, values);
 }
 
-function v4ZeroForOne(route) {
-    const pool = route.v4;
-    const inIsData = lower(route.path[0]) === lower(DATA);
-    const dataIsZero = lower(pool.key.currency0) === lower(DATA);
-    return inIsData === dataIsZero;
+const v4ZeroForOne = (currencyIn, pool) => lower(currencyIn) === lower(pool.key.currency0);
+
+const v4PathKeys = (route) => route.pools.map((pool, i) => ({
+    intermediateCurrency: route.currencies[i + 1], fee: pool.fee, tickSpacing: pool.tickSpacing, hooks: NATIVE, hookData: '0x'
+}));
+
+/** Estimate hop by hop within each pool's current price range (when the v4 quoter is not reachable) */
+function v4RouteEstimate(route, amountIn) {
+    let amount = amountIn;
+    route.pools.forEach((pool, i) => { amount = v4LocalEstimate(pool, v4ZeroForOne(route.currencies[i], pool), amount); });
+    return amount;
 }
 
 function quoteCall(route, amountIn) {
     if (route.venue === 'v4') {
-        return { target: UNISWAP_V4_QUOTER, iface: IFACES.v4Quoter, fn: 'quoteExactInputSingle', args: [{ poolKey: route.v4.key, zeroForOne: v4ZeroForOne(route), exactAmount: amountIn, hookData: '0x' }] };
+        if (route.pools.length === 1) {
+            const pool = route.pools[0];
+            return { target: UNISWAP_V4_QUOTER, iface: IFACES.v4Quoter, fn: 'quoteExactInputSingle', args: [{ poolKey: pool.key, zeroForOne: v4ZeroForOne(route.currencies[0], pool), exactAmount: amountIn, hookData: '0x' }] };
+        }
+        return { target: UNISWAP_V4_QUOTER, iface: IFACES.v4Quoter, fn: 'quoteExactInput', args: [{ exactCurrency: route.currencies[0], path: v4PathKeys(route), exactAmount: amountIn }] };
     }
     if (route.venue === 'qv2' || route.venue === 'sushi') {
         return { target: VENUES[route.venue].router, iface: IFACES.v2Router, fn: 'getAmountsOut', args: [amountIn, route.path] };
@@ -476,7 +529,7 @@ async function quoteRoutes(routes, amountIn, errors = []) {
                 if (routes[i].venue === 'v4') {
                     // Quoter not reachable: estimate within the current price range
                     try {
-                        const estimate = v4LocalEstimate(routes[i].v4, v4ZeroForOne(routes[i]), amountIn);
+                        const estimate = v4RouteEstimate(routes[i], amountIn);
                         if (estimate.gt(0)) {
                             outputs[i] = estimate;
                             errors[i] = `estimate (quoter: ${errors[i].slice(0, 60)})`;
@@ -554,6 +607,7 @@ async function loadLiquidity() {
     pools.sort((x, y) => (y.data.gt(x.data) ? 1 : y.data.lt(x.data) ? -1 : 0));
     let v4 = [];
     let v4Complete = true;
+    state.v4Pairs.clear();   // fresh v4 prices
     try {
         v4 = await discoverV4Pools();
     } catch (e) {
@@ -595,9 +649,8 @@ function renderLiquidity() {
 function routeLabel(route) {
     const symbol = (address) => KNOWN_TOKENS[lower(address)]?.symbol || Utils.shortAddress(address);
     if (route.venue === 'v4') {
-        const counter = KNOWN_TOKENS[lower(route.v4.counter)]?.symbol;
-        const [a, b] = lower(route.path[0]) === lower(DATA) ? ['DATA', counter] : [counter, 'DATA'];
-        return `Uniswap v4 (${route.v4.fee / 10000}%) · ${a} → ${b}`;
+        const fees = route.pools.map(pool => `${pool.fee / 10000}%`).join(' / ');
+        return `Uniswap v4 (${fees}) · ${route.currencies.map(symbol).join(' → ')}`;
     }
     const fees = route.fees ? ` (${route.fees.map(f => `${f / 10000}%`).join(' / ')})` : '';
     return `${VENUES[route.venue].name}${fees} · ${route.path.map(symbol).join(' → ')}`;
@@ -638,6 +691,23 @@ function buildSwapTx(quote, recipient) {
         }
         return { to: QUICKSWAP_V3_ROUTER, data: iface.encodeFunctionData('exactInput', [{ path, recipient, deadline, amountIn, amountOutMinimum: minimum }]), value };
     }
+    if (route.venue === 'v4') {
+        const coder = ethers.utils.defaultAbiCoder;
+        const cin = route.currencies[0];
+        const cout = route.currencies[route.currencies.length - 1];
+        const swap = route.pools.length === 1
+            ? [V4_SWAP_EXACT_IN_SINGLE, coder.encode([V4_SINGLE_PARAMS], [{ poolKey: route.pools[0].key, zeroForOne: v4ZeroForOne(cin, route.pools[0]), amountIn, amountOutMinimum: minimum, hookData: '0x' }])]
+            : [V4_SWAP_EXACT_IN, coder.encode([V4_MULTI_PARAMS], [{ currencyIn: cin, path: v4PathKeys(route), amountIn, amountOutMinimum: minimum }])];
+        // Native POL is sent with the call and settled from the router; ERC-20 is pulled from the wallet through Permit2
+        const settle = cin === NATIVE
+            ? [V4_SETTLE, coder.encode(['address', 'uint256', 'bool'], [NATIVE, amountIn, false])]
+            : [V4_SETTLE_ALL, coder.encode(['address', 'uint256'], [cin, amountIn])];
+        const take = [V4_TAKE_ALL, coder.encode(['address', 'uint256'], [cout, minimum])];
+        const actions = ethers.utils.solidityPack(['uint8', 'uint8', 'uint8'], [swap[0], settle[0], take[0]]);
+        const input = coder.encode(['bytes', 'bytes[]'], [actions, [swap[1], settle[1], take[1]]]);
+        const iface = new ethers.utils.Interface(UNIVERSAL_ROUTER_ABI);
+        return { to: UNIVERSAL_ROUTER, data: iface.encodeFunctionData('execute', [UR_V4_SWAP, [input], deadline]), value };
+    }
     const iface = new ethers.utils.Interface(UNISWAP_ROUTER_ABI);
     const path = encodeUniswapPath(route.path, route.fees);
     const calls = tokenOut.native
@@ -651,6 +721,32 @@ function buildSwapTx(quote, recipient) {
 
 async function allowanceOf(token, spender) {
     return read(p => new ethers.Contract(token.address, ERC20_ABI, p).allowance(state.address, spender));
+}
+
+/**
+ * Approvals the quote needs before the swap: the router's allowance (V2 / V3 routers), or for v4 the
+ * token's allowance to Permit2 plus Permit2's allowance to the Universal Router (exact amount, 30 min)
+ */
+async function approvalSteps(quote) {
+    const pay = payToken();
+    if (pay.native) return [];
+    const amount = formatToken(quote.amountIn, pay);
+    const venue = VENUES[quote.route.venue];
+    if (quote.route.venue !== 'v4') {
+        const needed = await allowanceOf(pay, venue.router).then(a => a.lt(quote.amountIn)).catch(() => true);
+        return needed ? [{ key: 'approve', spender: venue.router, label: `Approve ${amount} for ${venue.name}` }] : [];
+    }
+    const [tokenAllowance, permit] = await Promise.all([
+        allowanceOf(pay, PERMIT2).catch(() => ethers.constants.Zero),
+        read(p => new ethers.Contract(PERMIT2, PERMIT2_ABI, p).allowance(state.address, pay.address, UNIVERSAL_ROUTER)).catch(() => null)
+    ]);
+    const steps = [];
+    if (tokenAllowance.lt(quote.amountIn)) steps.push({ key: 'approve', spender: PERMIT2, label: `Approve ${amount} for Permit2 (Uniswap)` });
+    const now = Math.floor(Date.now() / 1000);
+    if (!permit || permit.amount.lt(quote.amountIn) || permit.expiration < now + 120) {
+        steps.push({ key: 'permit2', label: `Allow the Uniswap router to use ${amount} (Permit2)` });
+    }
+    return steps;
 }
 
 // ============================================
@@ -909,21 +1005,17 @@ async function updateCost() {
         return;
     }
     try {
-        const pay = payToken();
-        const venueRouter = VENUES[q.route.venue].router;
-        const needsApproval = !pay.native && (await allowanceOf(pay, venueRouter)).lt(q.amountIn);
-        const [gasPrice, swapGas, approveGas] = await Promise.all([
+        const approvals = await approvalSteps(q);
+        const [gasPrice, swapGas] = await Promise.all([
             read(p => p.getGasPrice()),
-            needsApproval
+            approvals.length
                 ? ethers.BigNumber.from(SWAP_GAS_FALLBACK)
-                : read(p => p.estimateGas({ ...buildSwapTx(q, state.address), from: state.address })),
-            needsApproval
-                ? read(p => new ethers.Contract(pay.address, ERC20_ABI, p).estimateGas.approve(venueRouter, q.amountIn, { from: state.address }))
-                : ethers.constants.Zero
+                : read(p => p.estimateGas({ ...buildSwapTx(q, state.address), from: state.address }))
         ]);
         if (q !== state.quote) return;
+        const approveGas = ethers.BigNumber.from(60000).mul(approvals.length);
         const cost = swapGas.add(approveGas).mul(gasPrice);
-        el.textContent = `≈ ${formatAmount(cost, 18)} POL${needsApproval ? ' (approve + swap)' : ''}`;
+        el.textContent = `≈ ${formatAmount(cost, 18)} POL${approvals.length ? ` (${approvals.length} approval${approvals.length > 1 ? 's' : ''} + swap)` : ''}`;
     } catch (e) {
         if (q !== state.quote) return;
         logger.warn('Swap cost estimate failed:', e);
@@ -945,11 +1037,18 @@ async function sendPolygonTx(buildTx) {
 async function runStep(step, flow) {
     const pay = payToken();
     if (step.key === 'approve') {
-        const tx = await sendPolygonTx((signer, overrides) => new ethers.Contract(pay.address, ERC20_ABI, signer).approve(flow.router, flow.quote.amountIn, overrides));
+        const tx = await sendPolygonTx((signer, overrides) => new ethers.Contract(pay.address, ERC20_ABI, signer).approve(step.spender, flow.quote.amountIn, overrides));
         step.txHash = tx.hash;
         renderProgress();
         const receipt = await tx.wait();
         if (receipt.status !== 1) throw new Error('The approval failed on-chain.');
+    } else if (step.key === 'permit2') {
+        const expiration = Math.floor(Date.now() / 1000) + PERMIT2_EXPIRATION_SECONDS;
+        const tx = await sendPolygonTx((signer, overrides) => new ethers.Contract(PERMIT2, PERMIT2_ABI, signer).approve(pay.address, UNIVERSAL_ROUTER, flow.quote.amountIn, expiration, overrides));
+        step.txHash = tx.hash;
+        renderProgress();
+        const receipt = await tx.wait();
+        if (receipt.status !== 1) throw new Error('The Permit2 approval failed on-chain.');
     } else if (step.key === 'swap') {
         // Fresh quote right before sending (the minimum output follows the current price)
         const fresh = await findBestQuote(pay, receiveToken(), flow.quote.amountIn);
@@ -986,14 +1085,7 @@ async function handleSubmit() {
         const pay = payToken();
         const receive = receiveToken();
         const router = VENUES[quote.route.venue].router;
-        let needsApproval = false;
-        if (!pay.native) {
-            try {
-                needsApproval = (await allowanceOf(pay, router)).lt(quote.amountIn);
-            } catch (e) {
-                needsApproval = true;
-            }
-        }
+        const approvals = await approvalSteps(quote);
         const amount = formatToken(quote.amountIn, pay);
         state.flow = {
             quote,
@@ -1001,7 +1093,7 @@ async function handleSubmit() {
             sent: false,
             balanceBefore: state.balances[receive.symbol] || null,
             steps: [
-                ...(needsApproval ? [{ key: 'approve', label: `Approve ${amount} for ${VENUES[quote.route.venue].name}` }] : []),
+                ...approvals,
                 { key: 'swap', label: `Swap ${amount} for ${receive.symbol}` }
             ].map(step => ({ ...step, status: 'pending', txHash: null }))
         };
@@ -1137,7 +1229,6 @@ function setupListeners() {
     });
     $('swap-refresh')?.addEventListener('click', () => {
         if (state.flow) return;
-        state.v4Pools = null;   // re-read v4 prices / liquidity
         loadBalances();
         updateQuote();
         loadLiquidity().catch(e => logger.warn('Swap: pool discovery failed', e));
