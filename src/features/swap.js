@@ -1260,7 +1260,7 @@ function dataUsdCell(entry) {
             return pricingSwaps || entry.status === 'pending' ? '<span class="text-gray-500">…</span>' : none('POL/USD price not available');
         }
         usd = other * entry.polUsd;
-        tip = `Price per DATA in this swap, with POL at ${entry.polUsd.toFixed(4)} USD (Chainlink, at the time of the swap)`;
+        tip = `Price per DATA in this swap, with POL at ${entry.polUsd.toFixed(4)} USD`;
     } else {
         return none();
     }
