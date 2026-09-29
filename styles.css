@@ -474,6 +474,9 @@
   .mx-auto {
     margin-inline: auto;
   }
+  .-my-1 {
+    margin-block: calc(var(--spacing) * -1);
+  }
   .my-3 {
     margin-block: calc(var(--spacing) * 3);
   }
@@ -1639,6 +1642,12 @@
       background-color: color-mix(in oklab, var(--color-gray-500) 10%, transparent);
     }
   }
+  .bg-gray-500\/15 {
+    background-color: color-mix(in srgb, oklch(55.1% 0.027 264.364) 15%, transparent);
+    @supports (color: color-mix(in lab, red, red)) {
+      background-color: color-mix(in oklab, var(--color-gray-500) 15%, transparent);
+    }
+  }
   .bg-gray-500\/20 {
     background-color: color-mix(in srgb, oklch(55.1% 0.027 264.364) 20%, transparent);
     @supports (color: color-mix(in lab, red, red)) {
@@ -1658,6 +1667,12 @@
     background-color: color-mix(in srgb, oklch(72.3% 0.219 149.579) 10%, transparent);
     @supports (color: color-mix(in lab, red, red)) {
       background-color: color-mix(in oklab, var(--color-green-500) 10%, transparent);
+    }
+  }
+  .bg-green-500\/15 {
+    background-color: color-mix(in srgb, oklch(72.3% 0.219 149.579) 15%, transparent);
+    @supports (color: color-mix(in lab, red, red)) {
+      background-color: color-mix(in oklab, var(--color-green-500) 15%, transparent);
     }
   }
   .bg-green-500\/20 {
@@ -1805,6 +1820,12 @@
     background-color: color-mix(in srgb, oklch(79.5% 0.184 86.047) 10%, transparent);
     @supports (color: color-mix(in lab, red, red)) {
       background-color: color-mix(in oklab, var(--color-yellow-500) 10%, transparent);
+    }
+  }
+  .bg-yellow-500\/15 {
+    background-color: color-mix(in srgb, oklch(79.5% 0.184 86.047) 15%, transparent);
+    @supports (color: color-mix(in lab, red, red)) {
+      background-color: color-mix(in oklab, var(--color-yellow-500) 15%, transparent);
     }
   }
   .bg-gradient-to-br {
@@ -3904,6 +3925,11 @@
       grid-column: span 2 / span 2;
     }
   }
+  .lg\:col-span-3 {
+    @media (width >= 64rem) {
+      grid-column: span 3 / span 3;
+    }
+  }
   .lg\:mr-14 {
     @media (width >= 64rem) {
       margin-right: calc(var(--spacing) * 14);
@@ -3947,6 +3973,11 @@
   .lg\:grid-cols-4 {
     @media (width >= 64rem) {
       grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+  }
+  .lg\:grid-cols-5 {
+    @media (width >= 64rem) {
+      grid-template-columns: repeat(5, minmax(0, 1fr));
     }
   }
   .lg\:flex-col {
