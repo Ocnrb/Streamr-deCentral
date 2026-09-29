@@ -13,7 +13,7 @@
 import * as Utils from '../core/utils.js';
 import * as UI from '../ui/ui.js';
 import * as Services from '../core/services.js';
-import { DATA_TOKEN_ADDRESS_POLYGON } from '../core/constants.js';
+import { DATA_TOKEN_ADDRESS_POLYGON, POLYGONSCAN_NETWORK, getEtherscanApiKey } from '../core/constants.js';
 
 const { logger } = Utils;
 
@@ -51,6 +51,8 @@ const PERMIT2 = '0x000000000022D473030F116dDEE9F6B43aC78BA3';
 const PERMIT2_EXPIRATION_SECONDS = 30 * 60;
 // Universal Router command and v4 router actions
 const UR_V4_SWAP = '0x10';
+const UR_PERMIT2_PERMIT = '0x0a';
+const PERMIT_SINGLE = 'tuple(tuple(address token, uint160 amount, uint48 expiration, uint48 nonce) details, address spender, uint256 sigDeadline)';
 const V4_SWAP_EXACT_IN_SINGLE = 0x06;
 const V4_SWAP_EXACT_IN = 0x07;
 const V4_SETTLE = 0x0b;
@@ -173,6 +175,7 @@ const state = {
     flow: null,
     submitting: false,
     refreshTimer: null,
+    history: [],             // swaps of this wallet (localStorage + explorer)
     listenersSetup: false
 };
 
@@ -663,7 +666,7 @@ const minOut = (amountOut) => amountOut.mul(Math.round((100 - state.slippage) * 
 // ============================================
 
 /** Swap transaction for a quote: { to, data, value } (built with the venue router's ABI) */
-function buildSwapTx(quote, recipient) {
+function buildSwapTx(quote, recipient, permit = null) {
     const tokenIn = payToken();
     const tokenOut = receiveToken();
     const { route, amountIn } = quote;
@@ -706,6 +709,11 @@ function buildSwapTx(quote, recipient) {
         const actions = ethers.utils.solidityPack(['uint8', 'uint8', 'uint8'], [swap[0], settle[0], take[0]]);
         const input = coder.encode(['bytes', 'bytes[]'], [actions, [swap[1], settle[1], take[1]]]);
         const iface = new ethers.utils.Interface(UNIVERSAL_ROUTER_ABI);
+        if (permit) {
+            // The signed Permit2 allowance is submitted by the router in the same transaction
+            const permitInput = coder.encode([PERMIT_SINGLE, 'bytes'], [permit.permitSingle, permit.signature]);
+            return { to: UNIVERSAL_ROUTER, data: iface.encodeFunctionData('execute', [ethers.utils.hexConcat([UR_PERMIT2_PERMIT, UR_V4_SWAP]), [permitInput, input], deadline]), value };
+        }
         return { to: UNIVERSAL_ROUTER, data: iface.encodeFunctionData('execute', [UR_V4_SWAP, [input], deadline]), value };
     }
     const iface = new ethers.utils.Interface(UNISWAP_ROUTER_ABI);
@@ -744,7 +752,7 @@ async function approvalSteps(quote) {
     if (tokenAllowance.lt(quote.amountIn)) steps.push({ key: 'approve', spender: PERMIT2, label: `Approve ${amount} for Permit2 (Uniswap)` });
     const now = Math.floor(Date.now() / 1000);
     if (!permit || permit.amount.lt(quote.amountIn) || permit.expiration < now + 120) {
-        steps.push({ key: 'permit2', label: `Allow the Uniswap router to use ${amount} (Permit2)` });
+        steps.push({ key: 'permit-sign', noTx: true, label: `Sign the Uniswap allowance for ${amount} (Permit2, no gas)` });
     }
     return steps;
 }
@@ -858,12 +866,15 @@ function renderCheckedRoutes(checked) {
     if (!checked?.length) return;
     const receive = receiveToken();
     $('swap-routes-count').textContent = `(${checked.length})`;
-    const sorted = [...checked].sort((x, y) => (x.out && y.out ? (y.out.gt(x.out) ? 1 : -1) : x.out ? -1 : y.out ? 1 : 0));
-    list.innerHTML = sorted.map(item => `
+    const working = checked.filter(item => item.out).sort((x, y) => (y.out.gt(x.out) ? 1 : -1));
+    const failed = checked.filter(item => !item.out);
+    const row = (item) => `
         <li class="flex items-start justify-between gap-3 py-1 border-b border-[#2a2a2a] last:border-0">
-            <span class="text-gray-300">${Utils.escapeHtml(routeLabel(item.route))}${item.route.executable === false ? ' <span class="text-gray-500">(view only)</span>' : ''}</span>
-            <span class="text-right whitespace-nowrap ${item.out ? 'text-gray-200' : 'text-gray-500'}" ${item.error ? `title="${Utils.escapeHtml(item.error)}"` : ''}>${item.out ? formatToken(item.out, receive) : `failed${item.error ? `: ${Utils.escapeHtml(item.error.slice(0, 40))}` : ''}`}</span>
-        </li>`).join('');
+            <span class="${item.out ? 'text-gray-300' : 'text-gray-500'}">${Utils.escapeHtml(routeLabel(item.route))}</span>
+            <span class="text-right whitespace-nowrap ${item.out ? 'text-gray-200' : 'text-gray-500'}" ${item.error ? `title="${Utils.escapeHtml(item.error)}"` : ''}>${item.out ? `${item.error ? '≈ ' : ''}${formatToken(item.out, receive)}` : 'failed'}</span>
+        </li>`;
+    list.innerHTML = working.map(row).join('')
+        + (failed.length ? `<li class="pt-1"><details><summary class="cursor-pointer text-gray-500 hover:text-gray-300">${failed.length} route${failed.length > 1 ? 's' : ''} failed</summary><ul>${failed.map(row).join('')}</ul></details></li>` : '');
 }
 
 function canSubmit() {
@@ -1005,7 +1016,7 @@ async function updateCost() {
         return;
     }
     try {
-        const approvals = await approvalSteps(q);
+        const approvals = (await approvalSteps(q)).filter(step => !step.noTx);
         const [gasPrice, swapGas] = await Promise.all([
             read(p => p.getGasPrice()),
             approvals.length
@@ -1027,6 +1038,165 @@ async function updateCost() {
 // Swap flow
 // ============================================
 
+/** What the swap delivered: Transfer logs to the wallet (tokens), or the POL balance change plus the swap's gas */
+async function receivedAmount(receipt, token, polBefore) {
+    try {
+        if (token.native) {
+            if (!polBefore) return null;
+            const after = await read(p => p.getBalance(state.address, receipt.blockNumber));
+            const gas = receipt.gasUsed.mul(receipt.effectiveGasPrice || 0);
+            const received = after.sub(polBefore).add(gas);
+            return received.gt(0) ? received : null;
+        }
+        const transferTopic = ethers.utils.id('Transfer(address,address,uint256)');
+        const toTopic = ethers.utils.hexZeroPad(state.address, 32).toLowerCase();
+        const total = receipt.logs
+            .filter(l => lower(l.address) === lower(token.address) && l.topics[0] === transferTopic && l.topics[2]?.toLowerCase() === toTopic)
+            .reduce((sum, l) => sum.add(ethers.BigNumber.from(l.data)), ethers.constants.Zero);
+        return total.gt(0) ? total : null;
+    } catch (e) {
+        logger.warn('Swap: received amount not measured', e);
+        return null;
+    }
+}
+
+// ---------- Swap history (per wallet) ----------
+
+const HISTORY_LIMIT = 30;
+const historyKey = () => `swapHistory:${state.address}`;
+const SYMBOL_DECIMALS = { DATA: 18, POL: 18, WPOL: 18, USDC: 6, 'USDC.e': 6, USDT: 6, WETH: 18, DAI: 18 };
+
+function loadStoredHistory() {
+    try {
+        const list = JSON.parse(localStorage.getItem(historyKey()) || '[]');
+        return Array.isArray(list) ? list.filter(t => t && /^0x[0-9a-fA-F]{64}$/.test(t.txHash)) : [];
+    } catch (e) {
+        return [];
+    }
+}
+
+function saveHistory() {
+    try {
+        localStorage.setItem(historyKey(), JSON.stringify(state.history.slice(0, HISTORY_LIMIT)));
+    } catch (e) { /* storage blocked: the explorer history still shows the swaps */ }
+}
+
+function upsertSwap(entry) {
+    const existing = state.history.find(t => lower(t.txHash) === lower(entry.txHash));
+    if (existing) Object.assign(existing, entry);
+    else state.history.push(entry);
+    state.history.sort((a, b) => b.createdAt - a.createdAt);
+    saveHistory();
+    renderHistory();
+}
+
+/** DATA swaps of this wallet from the explorer (also those made in other apps): token legs in and out of one transaction */
+async function recoverSwapsFromExplorer() {
+    const base = `${POLYGONSCAN_NETWORK.apiUrl}?chainid=137&module=account&address=${state.address}&page=1&offset=200&sort=desc&apikey=${getEtherscanApiKey()}`;
+    const get = (action) => fetch(`${base}&action=${action}`).then(r => r.json()).then(j => (Array.isArray(j?.result) ? j.result : [])).catch(() => []);
+    const [tokenTx, internalTx, normalTx] = await Promise.all([get('tokentx'), get('txlistinternal'), get('txlist')]);
+    const me = state.address;
+    const txs = new Map();
+    const tx = (hash, time) => {
+        if (!txs.has(hash)) txs.set(hash, { hash, time: Number(time) * 1000, out: [], in: [] });
+        return txs.get(hash);
+    };
+    for (const t of tokenTx) {
+        const info = KNOWN_TOKENS[lower(t.contractAddress || '')];
+        if (!info || lower(t.contractAddress) === NATIVE) continue;
+        const leg = { symbol: info.symbol, amount: t.value };
+        if (lower(t.from) === me) tx(t.hash, t.timeStamp).out.push(leg);
+        if (lower(t.to) === me) tx(t.hash, t.timeStamp).in.push(leg);
+    }
+    for (const t of internalTx) {
+        if (lower(t.to) === me && t.value !== '0' && t.isError !== '1') tx(t.hash, t.timeStamp).in.push({ symbol: 'POL', amount: t.value });
+    }
+    for (const t of normalTx) {
+        if (lower(t.from) === me && t.value !== '0' && t.isError === '0' && txs.has(t.hash)) tx(t.hash, t.timeStamp).out.push({ symbol: 'POL', amount: t.value });
+    }
+    let changed = false;
+    for (const t of txs.values()) {
+        const pay = t.out[0];
+        const receive = t.in.find(leg => leg.symbol !== pay?.symbol);
+        if (!pay || !receive || (pay.symbol !== 'DATA' && receive.symbol !== 'DATA')) continue;
+        const existing = state.history.find(h => lower(h.txHash) === lower(t.hash));
+        if (existing) {
+            if (existing.receive?.estimated) {
+                existing.receive = { symbol: receive.symbol, amount: receive.amount };
+                existing.status = 'done';
+                changed = true;
+            }
+            continue;
+        }
+        state.history.push({ txHash: t.hash, createdAt: t.time, status: 'done', pay, receive: { symbol: receive.symbol, amount: receive.amount } });
+        changed = true;
+    }
+    if (changed) {
+        state.history.sort((a, b) => b.createdAt - a.createdAt);
+        saveHistory();
+    }
+}
+
+/** Swaps left pending (page closed before the receipt): confirmed or failed */
+async function settlePendingSwaps() {
+    for (const entry of state.history.filter(h => h.status === 'pending')) {
+        const receipt = await read(p => p.getTransactionReceipt(entry.txHash)).catch(() => null);
+        if (receipt) upsertSwap({ txHash: entry.txHash, status: receipt.status === 1 ? 'done' : 'failed' });
+    }
+}
+
+function timeAgo(ms) {
+    const seconds = Math.max(0, Math.floor((Date.now() - ms) / 1000));
+    if (seconds < 60) return 'just now';
+    if (seconds < 3600) return `${Math.floor(seconds / 60)} min ago`;
+    if (seconds < 86400) return `${Math.floor(seconds / 3600)} h ago`;
+    return new Date(ms).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+}
+
+const HISTORY_BADGES = {
+    pending: ['Confirming', 'bg-blue-500/15 text-blue-300'],
+    done: ['Swapped', 'bg-green-500/15 text-green-400'],
+    failed: ['Failed', 'bg-red-500/15 text-red-400']
+};
+
+function renderHistory() {
+    const list = $('swap-history');
+    if (!list) return;
+    if (!state.address) {
+        list.innerHTML = '<li class="text-sm text-gray-400">Connect a wallet to see your swaps.</li>';
+        return;
+    }
+    if (!state.history.length) {
+        list.innerHTML = '<li class="text-sm text-gray-400">No DATA swaps yet.</li>';
+        return;
+    }
+    const amount = (leg) => `${formatAmount(leg.amount, SYMBOL_DECIMALS[leg.symbol] ?? 18)} ${Utils.escapeHtml(leg.symbol)}`;
+    list.innerHTML = state.history.slice(0, HISTORY_LIMIT).map(entry => {
+        const [label, badge] = HISTORY_BADGES[entry.status] || HISTORY_BADGES.pending;
+        return `
+            <li class="p-3 bg-[#121212] border border-[#333] rounded-lg">
+                <div class="flex items-center justify-between gap-2">
+                    <span class="text-sm font-semibold text-white">${amount(entry.pay)} <span class="text-gray-400 font-normal">→</span> ${entry.receive?.estimated ? '≈ ' : ''}${amount(entry.receive)}</span>
+                    <span class="flex-shrink-0 px-2 py-0.5 rounded-full text-[11px] font-semibold ${badge}">${label}</span>
+                </div>
+                <p class="text-xs text-gray-400 mt-1">${entry.route ? `${Utils.escapeHtml(entry.route)} · ` : ''}${timeAgo(entry.createdAt)}</p>
+                <a href="https://polygonscan.com/tx/${Utils.escapeHtml(entry.txHash)}" target="_blank" rel="noopener noreferrer" class="inline-block mt-2 text-xs text-blue-400 hover:text-blue-300">View on Polygonscan</a>
+            </li>`;
+    }).join('');
+}
+
+async function refreshHistory() {
+    if (!state.address) return;
+    const btn = $('swap-history-refresh');
+    btn?.classList.add('animate-spin');
+    try {
+        await Promise.all([recoverSwapsFromExplorer(), settlePendingSwaps()]);
+        renderHistory();
+    } finally {
+        btn?.classList.remove('animate-spin');
+    }
+}
+
 async function sendPolygonTx(buildTx) {
     return Services.executeWithFallback(async (currentSigner) => {
         const overrides = await Services.getGasOverrides(currentSigner.provider);
@@ -1042,13 +1212,22 @@ async function runStep(step, flow) {
         renderProgress();
         const receipt = await tx.wait();
         if (receipt.status !== 1) throw new Error('The approval failed on-chain.');
-    } else if (step.key === 'permit2') {
+    } else if (step.key === 'permit-sign') {
+        // EIP-712 PermitSingle for the Universal Router: exact amount, expires with the signature
+        const allowance = await read(p => new ethers.Contract(PERMIT2, PERMIT2_ABI, p).allowance(state.address, pay.address, UNIVERSAL_ROUTER));
         const expiration = Math.floor(Date.now() / 1000) + PERMIT2_EXPIRATION_SECONDS;
-        const tx = await sendPolygonTx((signer, overrides) => new ethers.Contract(PERMIT2, PERMIT2_ABI, signer).approve(pay.address, UNIVERSAL_ROUTER, flow.quote.amountIn, expiration, overrides));
-        step.txHash = tx.hash;
-        renderProgress();
-        const receipt = await tx.wait();
-        if (receipt.status !== 1) throw new Error('The Permit2 approval failed on-chain.');
+        const permitSingle = {
+            details: { token: pay.address, amount: flow.quote.amountIn, expiration, nonce: allowance.nonce },
+            spender: UNIVERSAL_ROUTER,
+            sigDeadline: expiration
+        };
+        const domain = { name: 'Permit2', chainId: 137, verifyingContract: PERMIT2 };
+        const types = {
+            PermitSingle: [{ name: 'details', type: 'PermitDetails' }, { name: 'spender', type: 'address' }, { name: 'sigDeadline', type: 'uint256' }],
+            PermitDetails: [{ name: 'token', type: 'address' }, { name: 'amount', type: 'uint160' }, { name: 'expiration', type: 'uint48' }, { name: 'nonce', type: 'uint48' }]
+        };
+        const signature = await window.appSigner._signTypedData(domain, types, permitSingle);
+        flow.permit = { permitSingle, signature, amount: flow.quote.amountIn };
     } else if (step.key === 'swap') {
         // Fresh quote right before sending (the minimum output follows the current price)
         const fresh = await findBestQuote(pay, receiveToken(), flow.quote.amountIn);
@@ -1060,13 +1239,27 @@ async function runStep(step, flow) {
             flow.quote = fresh;
         }
         if (flow.quote.impact !== null && flow.quote.impact >= IMPACT_BLOCK) throw new Error('The price impact is now too high. Try a smaller amount.');
-        const txData = buildSwapTx(flow.quote, state.address);
+        const permit = flow.quote.route.venue === 'v4' && flow.permit && flow.permit.permitSingle.sigDeadline > Math.floor(Date.now() / 1000) + 60 ? flow.permit : null;
+        const txData = buildSwapTx(flow.quote, state.address, permit);
+        const receive = receiveToken();
+        // POL output: measured as the balance change plus the swap's own gas
+        const polBefore = receive.native ? await read(p => p.getBalance(state.address)).catch(() => null) : null;
         const tx = await sendPolygonTx((signer, overrides) => signer.sendTransaction({ ...txData, ...overrides }));
         step.txHash = tx.hash;
         flow.sent = true;
+        upsertSwap({
+            txHash: tx.hash, createdAt: Date.now(), status: 'pending', route: routeLabel(flow.quote.route),
+            pay: { symbol: pay.symbol, amount: flow.quote.amountIn.toString() },
+            receive: { symbol: receive.symbol, amount: flow.quote.amountOut.toString(), estimated: true }
+        });
         renderProgress();
         const receipt = await tx.wait();
-        if (receipt.status !== 1) throw new Error('The swap failed on-chain.');
+        if (receipt.status !== 1) {
+            upsertSwap({ txHash: tx.hash, status: 'failed' });
+            throw new Error('The swap failed on-chain.');
+        }
+        flow.received = await receivedAmount(receipt, receive, polBefore);
+        upsertSwap({ txHash: tx.hash, status: 'done', receive: { symbol: receive.symbol, amount: (flow.received || flow.quote.amountOut).toString(), estimated: !flow.received } });
     }
 }
 
@@ -1091,7 +1284,6 @@ async function handleSubmit() {
             quote,
             router,
             sent: false,
-            balanceBefore: state.balances[receive.symbol] || null,
             steps: [
                 ...approvals,
                 { key: 'swap', label: `Swap ${amount} for ${receive.symbol}` }
@@ -1111,7 +1303,7 @@ async function handleSubmit() {
             if (step.status === 'done') continue;
             step.status = 'active';
             renderProgress();
-            setSubmitState('Confirm in wallet...', true);
+            setSubmitState(step.noTx ? 'Sign in wallet...' : 'Confirm in wallet...', true);
             await runStep(step, flow);
             step.status = 'done';
             renderProgress();
@@ -1119,11 +1311,9 @@ async function handleSubmit() {
         flow.finished = true;
         state.submitting = false;
         const receive = receiveToken();
-        await loadBalances();
-        const after = state.balances[receive.symbol];
-        const received = after && flow.balanceBefore && !receive.native && after.gt(flow.balanceBefore) ? after.sub(flow.balanceBefore) : null;
-        showSuccess(received
-            ? `Swapped: you received ${formatToken(received, receive)}.`
+        loadBalances();
+        showSuccess(flow.received
+            ? `Swapped: you received ${formatToken(flow.received, receive)}.`
             : `Swapped: at least ${formatToken(minOut(flow.quote.amountOut), receive)} are in your wallet.`);
         setSubmitState('New swap', false);
         UI.showToast({ type: 'success', title: 'Swap Complete', message: `${payToken().symbol} → ${receive.symbol}`, duration: 6000 });
@@ -1234,6 +1424,7 @@ function setupListeners() {
         loadLiquidity().catch(e => logger.warn('Swap: pool discovery failed', e));
     });
     $('swap-submit')?.addEventListener('click', handleSubmit);
+    $('swap-history-refresh')?.addEventListener('click', () => refreshHistory());
     window.addEventListener('app:routechange', (e) => {
         if (!e.detail?.path?.startsWith('/swap')) SwapLogic.stop();
     });
@@ -1256,7 +1447,10 @@ export const SwapLogic = {
         if (address !== state.address) {
             state.address = address;
             state.balances = {};
+            state.history = address ? loadStoredHistory() : [];
         }
+        renderHistory();
+        refreshHistory().catch(e => logger.warn('Swap: history refresh failed', e));
         if (!state.flow) {
             $('swap-progress')?.classList.add('hidden');
             showSuccess('');
