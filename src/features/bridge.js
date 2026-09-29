@@ -66,6 +66,8 @@ const STATE_RECEIVER_ABI = ['function lastStateId() view returns (uint256)'];
 const DEPOSIT_GAS_FALLBACK = 180000;   // depositFor can't be estimated before the approval
 const EXIT_GAS_ESTIMATE = 400000;      // typical RootChainManager.exit of an ERC-20
 const POLL_INTERVAL_MS = 30 * 1000;
+const RECEIPT_POLL_MS = 6 * 1000;       // Ethereum receipt polling while a transaction of this page is mined
+const LOST_TX_AFTER_MS = 10 * 60 * 1000; // a claim transaction the RPC does not know after this long left the mempool
 const HISTORY_LIMIT = 10;              // explorer transfers recovered per direction
 const STORED_LIMIT = 50;
 const AMOUNT_REGEX = /^\d+(\.\d{1,18})?$/;
@@ -249,6 +251,68 @@ async function checkWalletAccount(signer) {
     if ((await signer.getAddress()).toLowerCase() !== state.address) {
         throw new Error('The wallet account changed. Reload the page.');
     }
+}
+
+// Ethereum transactions of this page go out one at a time (claims and the transfer form alike).
+// With a private key the nonce is also kept here: two claims asking the RPC at once got the same
+// nonce, and only one of the two transactions could ever be mined.
+let ethQueue = Promise.resolve();
+let ethQueued = 0;
+let nextEthNonce = null;   // { address, nonce, at } after the last transaction sent from this page
+const LOCAL_NONCE_MS = 60 * 1000;   // the RPC's pending count lags seconds, not minutes: a dropped transaction leaves no gap
+
+function inEthQueue(task) {
+    ethQueued++;
+    const run = ethQueue.then(task).finally(() => { ethQueued--; });
+    ethQueue = run.catch(() => {});
+    return run;
+}
+
+/** Sends one Ethereum transaction: send(signer, overrides) returns the transaction response */
+function sendEthTx(send) {
+    return inEthQueue(async () => {
+        const signer = await getEthereumSigner();
+        const overrides = {};
+        if (usesPrivateKey()) {
+            const pending = await ethRead(p => p.getTransactionCount(state.address, 'pending'));
+            const recent = nextEthNonce?.address === state.address && Date.now() - nextEthNonce.at < LOCAL_NONCE_MS;
+            overrides.nonce = recent ? Math.max(pending, nextEthNonce.nonce) : pending;
+        }
+        const tx = await send(signer, overrides);
+        if (usesPrivateKey()) nextEthNonce = { address: state.address, nonce: tx.nonce + 1, at: Date.now() };
+        return tx;
+    });
+}
+
+/** Back to Polygon once no other Ethereum transaction of this page waits for the wallet */
+function restoreWhenIdle() {
+    return inEthQueue(() => (ethQueued > 1 ? null : restorePolygon()));
+}
+
+/** Receipt of an Ethereum transaction; null when its nonce went to another transaction (replaced or dropped) */
+async function waitForEthReceipt(hash, nonce) {
+    for (;;) {
+        const receipt = await ethRead(p => p.getTransactionReceipt(hash)).catch(() => null);
+        if (receipt) return receipt;
+        if (Number.isInteger(nonce)) {
+            const mined = await ethRead(p => p.getTransactionCount(state.address, 'latest')).catch(() => null);
+            // The nonce may have moved with this very transaction: one more receipt read decides
+            if (mined !== null && mined > nonce) return ethRead(p => p.getTransactionReceipt(hash)).catch(() => null);
+        }
+        await new Promise(resolve => setTimeout(resolve, RECEIPT_POLL_MS));
+    }
+}
+
+/** true when a claim transaction will never be mined: its nonce was used by another one, or it left the mempool */
+async function isClaimTxLost(t) {
+    if (!t.claimTxHash) return true;
+    const tx = await ethRead(p => p.getTransaction(t.claimTxHash)).catch(() => undefined);
+    if (tx === undefined) return false;   // RPC failure: decide on the next check
+    const nonce = Number.isInteger(t.claimNonce) ? t.claimNonce : tx?.nonce;
+    if (!Number.isInteger(nonce)) return !tx && Date.now() - (t.claimSentAt || 0) > LOST_TX_AFTER_MS;
+    const mined = await ethRead(p => p.getTransactionCount(state.address, 'latest'));
+    if (mined <= nonce) return false;
+    return !(await ethRead(p => p.getTransactionReceipt(t.claimTxHash)));
 }
 
 async function getEthereumSigner() {
@@ -496,8 +560,15 @@ async function refreshStatuses() {
                 }
             } else {
                 if (t.status === 'claiming') {
+                    if (state.claiming.has(t.txHash)) continue;   // followed by claim()
                     const receipt = t.claimTxHash ? await ethRead(p => p.getTransactionReceipt(t.claimTxHash)) : null;
-                    if (receipt) { t.status = receipt.status === 1 ? 'claimed' : 'ready'; changed = true; }
+                    if (receipt) {
+                        t.status = receipt.status === 1 ? 'claimed' : 'ready';
+                        changed = true;
+                    } else if (await isClaimTxLost(t)) {
+                        await settleLostClaim(t);
+                        changed = true;
+                    }
                     continue;
                 }
                 if (!t.block) {
@@ -833,24 +904,23 @@ async function updateEstimate() {
 async function runStep(step, flow) {
     const address = state.address;
     if (step.key === 'approve') {
-        const signer = await getEthereumSigner();
-        const tx = await new ethers.Contract(ETH_DATA, ERC20_ABI, signer).approve(ERC20_PREDICATE, flow.amountWei);
+        const tx = await sendEthTx((signer, overrides) => new ethers.Contract(ETH_DATA, ERC20_ABI, signer).approve(ERC20_PREDICATE, flow.amountWei, overrides));
         step.txHash = tx.hash;
         renderProgress();
-        const receipt = await ethRead(p => p.waitForTransaction(tx.hash));
+        const receipt = await waitForEthReceipt(tx.hash, tx.nonce);
+        if (!receipt) throw new Error('The approval was replaced or dropped. Try again.');
         if (receipt.status !== 1) throw new Error('The approval failed on-chain.');
     } else if (step.key === 'deposit') {
-        const signer = await getEthereumSigner();
         const depositData = ethers.utils.defaultAbiCoder.encode(['uint256'], [flow.amountWei]);
-        const tx = await new ethers.Contract(ROOT_CHAIN_MANAGER, ROOT_CHAIN_MANAGER_ABI, signer).depositFor(address, ETH_DATA, depositData);
+        const tx = await sendEthTx((signer, overrides) => new ethers.Contract(ROOT_CHAIN_MANAGER, ROOT_CHAIN_MANAGER_ABI, signer).depositFor(address, ETH_DATA, depositData, overrides));
         step.txHash = tx.hash;
         flow.sent = true;
         upsertTransfer({ kind: 'deposit', txHash: tx.hash, amountWei: flow.amountWei.toString(), createdAt: Date.now(), status: 'pending', local: true });
         renderProgress();
-        const receipt = await ethRead(p => p.waitForTransaction(tx.hash));
-        if (receipt.status !== 1) {
+        const receipt = await waitForEthReceipt(tx.hash, tx.nonce);
+        if (!receipt || receipt.status !== 1) {
             upsertTransfer({ txHash: tx.hash, status: 'failed' });
-            throw new Error('The deposit failed on-chain.');
+            throw new Error(receipt ? 'The deposit failed on-chain.' : 'The deposit was replaced or dropped. Check your wallet before trying again.');
         }
         upsertTransfer({ txHash: tx.hash, status: 'bridging', stateId: stateIdFromReceipt(receipt) });
     } else if (step.key === 'burn') {
@@ -921,7 +991,7 @@ async function handleSubmit() {
         }
         flow.finished = true;
         state.submitting = false;
-        await restorePolygon();
+        await restoreWhenIdle();
         showSuccess(flow.direction === 'deposit'
             ? 'Deposit sent. The DATA shows up on Polygon once Polygon picks it up: follow it under Your transfers.'
             : 'DATA burned on Polygon. Claim it on Ethereum under Your transfers once the checkpoint reaches Ethereum.');
@@ -940,7 +1010,7 @@ async function handleSubmit() {
         if (failed) failed.status = 'error';
         renderProgress();
         state.submitting = false;
-        await restorePolygon();
+        await restoreWhenIdle();
         showError(formatTxError(e));
         // A transaction is never sent twice: Retry continues from the step that failed
         const anyDone = flow.steps.some(s => s.status === 'done') || flow.sent;
@@ -970,6 +1040,18 @@ function resetFlow() {
     updateEstimate();
 }
 
+/** A claim transaction that will never be mined: claimed anyway (another transaction did it) or ready to claim again */
+async function settleLostClaim(t) {
+    const payload = await fetchExitPayload(t.txHash);
+    if (await isAlreadyClaimed(payload)) {
+        Object.assign(t, { status: 'claimed' });
+    } else {
+        Object.assign(t, { status: 'ready', claimTxHash: null, claimNonce: null, claimSentAt: null });
+    }
+    saveTransfers();
+    renderTransfers();
+}
+
 async function claim(burnTxHash) {
     const t = state.transfers.find(x => x.txHash === burnTxHash);
     if (!t || state.claiming.has(burnTxHash) || !state.address) return;
@@ -977,18 +1059,23 @@ async function claim(burnTxHash) {
     renderTransfers();
     try {
         const payload = await fetchExitPayload(burnTxHash);
-        const signer = await getEthereumSigner();
-        const tx = await new ethers.Contract(ROOT_CHAIN_MANAGER, ROOT_CHAIN_MANAGER_ABI, signer).exit(payload);
-        upsertTransfer({ txHash: burnTxHash, status: 'claiming', claimTxHash: tx.hash });
-        await restorePolygon();
-        const receipt = await ethRead(p => p.waitForTransaction(tx.hash));
-        if (receipt.status !== 1) throw new Error('The claim failed on-chain.');
-        upsertTransfer({ txHash: burnTxHash, status: 'claimed', claimedAt: Date.now() });
+        const tx = await sendEthTx((signer, overrides) => new ethers.Contract(ROOT_CHAIN_MANAGER, ROOT_CHAIN_MANAGER_ABI, signer).exit(payload, overrides));
+        upsertTransfer({ txHash: burnTxHash, status: 'claiming', claimTxHash: tx.hash, claimNonce: tx.nonce, claimSentAt: Date.now() });
+        restoreWhenIdle();
+        const receipt = await waitForEthReceipt(tx.hash, tx.nonce);
+        if (!receipt) {
+            await settleLostClaim(t);
+            if (t.status !== 'claimed') throw new Error('The claim transaction was replaced or dropped. Claim again.');
+        } else {
+            if (receipt.status !== 1) throw new Error('The claim failed on-chain.');
+            upsertTransfer({ txHash: burnTxHash, status: 'claimed', claimedAt: Date.now() });
+        }
         UI.showToast({ type: 'success', title: 'Withdrawal Claimed', message: `${formatData(t.amountWei)} DATA are in your Ethereum wallet.`, duration: 8000 });
         loadBalances();
     } catch (e) {
         logger.error('Bridge claim failed:', e);
-        await restorePolygon();
+        await restoreWhenIdle();
+        if (t.status === 'claiming') upsertTransfer({ txHash: burnTxHash, status: 'ready' });
         const message = formatTxError(e);
         if (/already claimed/.test(message)) upsertTransfer({ txHash: burnTxHash, status: 'claimed' });
         UI.showToast({ type: 'error', title: 'Claim Failed', message, duration: 8000 });
