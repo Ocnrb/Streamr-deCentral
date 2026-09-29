@@ -528,20 +528,20 @@ function formatDuration(ms) {
     return `${Math.floor(hours / 24)} d${hours % 24 ? ` ${hours % 24} h` : ''}`;
 }
 
-/** How long each stage took (or has been running) */
-function timeCell(t) {
-    const line = (label, value, approx = false) => `<div class="whitespace-nowrap"><span class="text-gray-500">${label}</span> <span class="text-gray-200">${approx && !value.startsWith('<') ? '~' : ''}${value}</span></div>`;
+/** How long each stage took (or has been running), for the status tooltip */
+function timeLines(t) {
+    const line = (label, value, approx = false) => `${label} ${approx && !value.startsWith('<') ? '~' : ''}${value}`;
     const since = formatDuration(Date.now() - t.createdAt);
-    if (t.status === 'failed') return '<span class="text-gray-500">—</span>';
+    if (t.status === 'failed') return [];
     if (t.kind === 'deposit') {
-        if (t.status === 'done') return t.arrivedAt ? line('Arrived in', formatDuration(t.arrivedAt - t.createdAt), !t.arrivedExact) : '';
-        return line('In progress ·', since);
+        if (t.status === 'done') return t.arrivedAt ? [line('Arrived in', formatDuration(t.arrivedAt - t.createdAt), !t.arrivedExact)] : [];
+        return [line('In progress for', since)];
     }
-    if (t.status === 'pending' || t.status === 'checkpoint') return line('Waiting ·', since);
-    const rows = t.checkpointAt ? [line('Checkpoint in', formatDuration(t.checkpointAt - t.createdAt))] : [];
-    if (t.claimedAt) rows.push(line('Claimed after', formatDuration(t.claimedAt - t.createdAt)));
-    else if (t.status === 'ready' && t.checkpointAt) rows.push(line('Claimable for', formatDuration(Date.now() - t.checkpointAt)));
-    return rows.join('');
+    if (t.status === 'pending' || t.status === 'checkpoint') return [line('Waiting for', since)];
+    const lines = t.checkpointAt ? [line('Checkpoint in', formatDuration(t.checkpointAt - t.createdAt))] : [];
+    if (t.claimedAt) lines.push(line('Claimed after', formatDuration(t.claimedAt - t.createdAt)));
+    else if (t.status === 'ready' && t.checkpointAt) lines.push(line('Claimable for', formatDuration(Date.now() - t.checkpointAt)));
+    return lines;
 }
 
 function transferHtml(t) {
@@ -568,6 +568,8 @@ function transferHtml(t) {
             class="ml-auto bg-blue-800 hover:bg-blue-900 text-white text-xs font-bold px-3 py-1.5 rounded-lg transition-colors inline-flex items-center gap-2 whitespace-nowrap disabled:opacity-50 disabled:pointer-events-none disabled:hover:bg-blue-800">
             ${claiming ? `${spinner}Claiming...` : waiting ? `${spinner}Claim` : 'Claim'}
         </button></span>` : '';
+    // Status tooltip: what the status means, then how long each stage took
+    const tooltip = [hint, ...timeLines(t)].filter(Boolean).map(text => Utils.escapeHtml(text)).join('<br>');
     const action = deposit
         ? '<span class="px-2 py-0.5 rounded-md text-[11px] font-semibold whitespace-nowrap bg-blue-500/15 text-blue-300">Deposit</span>'
         : '<span class="px-2 py-0.5 rounded-md text-[11px] font-semibold whitespace-nowrap bg-violet-500/15 text-violet-300">Withdraw</span>';
@@ -577,7 +579,7 @@ function transferHtml(t) {
             <td class="py-3 pr-3">${action}</td>
             <td class="py-3 pr-3"><span class="inline-flex items-center gap-2 whitespace-nowrap"><span class="text-white font-medium">${formatData(t.amountWei)}</span>${chip(DATA_ICON, 'DATA')}</span></td>
             <td class="py-3 pr-3"><span class="inline-flex items-center gap-1.5 whitespace-nowrap">${chip(from.icon, from.name)}<span class="text-gray-500">→</span>${chip(to.icon, to.name)}</span></td>
-            <td class="py-3 pr-3"><span class="px-2 py-0.5 rounded-full text-[11px] font-semibold whitespace-nowrap ${badgeClass} ${hint ? 'cursor-help' : ''}" ${hint ? `data-tooltip-content="${hint}"` : ''}>${label}</span><div class="text-xs mt-1 space-y-0.5">${timeCell(t)}</div></td>
+            <td class="py-3 pr-3"><span class="px-2 py-0.5 rounded-full text-[11px] font-semibold whitespace-nowrap ${badgeClass} ${tooltip ? 'cursor-help' : ''}" ${tooltip ? `data-tooltip-content="${tooltip}"` : ''}>${label}</span></td>
             <td class="py-3 pr-3 text-xs space-y-0.5">${links.join('')}</td>
             <td class="py-3 text-right">${claimButton}</td>
         </tr>`;
