@@ -446,10 +446,15 @@ function transferHtml(t) {
     const hint = t.status === 'checkpoint' ? 'Claimable on Ethereum once a Polygon checkpoint includes it.'
         : t.status === 'bridging' ? 'Shows up on Polygon once Polygon picks up the deposit.'
         : '';
-    const claimButton = t.status === 'ready' || claimBusy ? `
-        <button type="button" data-claim="${Utils.escapeHtml(t.txHash)}" ${claimBusy ? 'disabled' : ''}
-            class="ml-auto bg-blue-800 hover:bg-blue-900 text-white text-xs font-bold px-3 py-1.5 rounded-lg transition-colors flex items-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed">
-            ${claimBusy ? '<span class="w-3 h-3 border-2 border-white rounded-full border-t-transparent animate-spin"></span>Claiming...' : 'Claim on Ethereum'}
+    // Withdrawals always show the Claim button: disabled with a spinner until the checkpoint reaches Ethereum
+    const spinner = '<span class="w-3 h-3 border-2 border-white rounded-full border-t-transparent animate-spin"></span>';
+    const claiming = claimBusy || t.status === 'claiming';
+    const waiting = t.status === 'pending' || t.status === 'checkpoint';
+    const claimButton = !deposit && (claiming || waiting || t.status === 'ready') ? `
+        <button type="button" data-claim="${Utils.escapeHtml(t.txHash)}" ${claiming || waiting ? 'disabled' : ''}
+            ${waiting ? 'title="Available once a Polygon checkpoint includes the burn"' : ''}
+            class="ml-auto bg-blue-800 hover:bg-blue-900 text-white text-xs font-bold px-3 py-1.5 rounded-lg transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-blue-800">
+            ${claiming ? `${spinner}Claiming...` : waiting ? `${spinner}Claim on Ethereum` : 'Claim on Ethereum'}
         </button>` : '';
     return `
         <li class="p-3 bg-[#121212] border border-[#333] rounded-lg">
