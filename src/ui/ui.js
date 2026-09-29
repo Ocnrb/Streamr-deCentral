@@ -2573,11 +2573,24 @@ export function syncSavedOperatorProfile(operatorId, operatorName, operatorImage
     return true;
 }
 
+/**
+ * Whether the page open now is the detail page of this operator / delegator. Detail pages load
+ * asynchronously: a load that finishes after the user moved on must not show the star elsewhere.
+ */
+function isCurrentDetailPage(kind, id) {
+    const path = decodeURIComponent(window.location.pathname).replace(/\/+$/, '').toLowerCase();
+    return path === `/${kind}/${String(id).toLowerCase()}`;
+}
+
 export function updateProfileButton(operatorId, operatorName, operatorImageUrl) {
     syncSavedOperatorProfile(operatorId, operatorName, operatorImageUrl);
 
     const desktopBtn = document.getElementById('desktop-save-profile-btn');
     const mobileBtn = document.getElementById('mobile-save-profile-btn');
+    if (!isCurrentDetailPage('operator', operatorId)) {
+        [desktopBtn, mobileBtn].forEach(btn => btn?.classList.add('hidden'));
+        return;
+    }
     
     // Hide delegator profile buttons (only one type should be visible)
     const desktopDelegatorBtn = document.getElementById('desktop-save-delegator-profile-btn');
@@ -2683,6 +2696,10 @@ export function handleProfileButtonClick(clickedBtn) {
 export function updateDelegatorProfileButton(delegatorId, delegatorName, delegatorImageUrl) {
     const desktopBtn = document.getElementById('desktop-save-delegator-profile-btn');
     const mobileBtn = document.getElementById('mobile-save-delegator-profile-btn');
+    if (!isCurrentDetailPage('delegator', delegatorId)) {
+        [desktopBtn, mobileBtn].forEach(btn => btn?.classList.add('hidden'));
+        return;
+    }
     
     // Hide operator profile buttons (only one type should be visible)
     const desktopOperatorBtn = document.getElementById('desktop-save-profile-btn');

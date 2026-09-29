@@ -41,6 +41,8 @@ const ETHEREUM_RPCS = [
 const PROOF_API = 'https://proof-generator.polygon.technology/api/v1/matic/exit-payload/';
 const TRANSFER_TOPIC = ethers.utils.id('Transfer(address,address,uint256)');
 const STATE_SYNCED_TOPIC = ethers.utils.id('StateSynced(uint256,address,bytes)');
+const STATE_COMMITTED_TOPIC = ethers.utils.id('StateCommitted(uint256,bool)');   // emitted on Polygon when a deposit lands
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 const ERC20_ABI = [
     'function balanceOf(address) view returns (uint256)',
@@ -332,11 +334,15 @@ async function recoverFromExplorer() {
     const mints = polygonTransfers
         .filter(tx => tx.from === ethers.constants.AddressZero && tx.to?.toLowerCase() === state.address)
         .map(tx => ({ value: tx.value, at: Number(tx.timeStamp) * 1000 }));
+    // Any other DATA received on Polygon (fallback when the deposit does not show as a mint)
+    const incoming = polygonTransfers
+        .filter(tx => tx.from !== ethers.constants.AddressZero && tx.to?.toLowerCase() === state.address)
+        .map(tx => ({ value: tx.value, at: Number(tx.timeStamp) * 1000 }));
     // Claims of withdrawals: the DATA released on Ethereum by the ERC20 predicate
     const exits = ethTransfers
         .filter(tx => tx.from?.toLowerCase() === ERC20_PREDICATE.toLowerCase() && tx.to?.toLowerCase() === state.address)
         .map(tx => ({ value: tx.value, at: Number(tx.timeStamp) * 1000 }));
-    state.explorerEvents = { mints, exits };
+    state.explorerEvents = { mints, incoming, exits };
     const timed = applyExplorerTimes();
     if (added || timed) {
         state.transfers.sort((a, b) => b.createdAt - a.createdAt);
@@ -346,17 +352,57 @@ async function recoverFromExplorer() {
 
 /** Exact arrival (Polygon mint) and claim (Ethereum release) times from the last explorer read */
 function applyExplorerTimes() {
-    const { mints = [], exits = [] } = state.explorerEvents || {};
-    return matchTimes(state.transfers.filter(t => t.kind === 'deposit' && t.status !== 'failed' && !t.arrivedExact), mints, (t, at) => { t.arrivedAt = at; t.arrivedExact = true; })
+    const { mints = [], incoming = [], exits = [] } = state.explorerEvents || {};
+    const arrived = (t, at) => { t.arrivedAt = at; t.arrivedExact = true; };
+    const openDeposits = () => state.transfers.filter(t => t.kind === 'deposit' && t.status !== 'failed' && !t.arrivedExact);
+    return matchTimes(openDeposits(), mints, arrived)
+        + matchTimes(openDeposits(), incoming, arrived, DAY_MS)
         + matchTimes(state.transfers.filter(t => t.kind === 'withdraw' && t.status === 'claimed' && !t.claimedAt), exits, (t, at) => { t.claimedAt = at; });
 }
 
-/** Pairs transfers with later events of the same amount, oldest first, each event used once */
-function matchTimes(transfers, events, apply) {
+/**
+ * Arrival of deposits the explorer transfers could not date: the StateCommitted event of the deposit's
+ * state sync id on Polygon (a few per refresh, once per session each)
+ */
+async function fillArrivalTimes() {
+    const pending = state.transfers
+        .filter(t => t.kind === 'deposit' && t.status === 'done' && !t.arrivedExact && !state.timeChecked.has(t.txHash))
+        .slice(0, 5);
+    let changed = false;
+    for (const t of pending) {
+        state.timeChecked.add(t.txHash);
+        try {
+            if (!t.stateId) {
+                const receipt = await ethRead(p => p.getTransactionReceipt(t.txHash));
+                t.stateId = receipt ? stateIdFromReceipt(receipt) : null;
+            }
+            if (!t.stateId) continue;
+            const url = `${POLYGONSCAN_NETWORK.apiUrl}?chainid=${POLYGON_CHAIN_ID}&module=logs&action=getLogs&address=${STATE_RECEIVER}`
+                + `&topic0=${STATE_COMMITTED_TOPIC}&topic0_1_opr=and&topic1=${ethers.utils.hexZeroPad(ethers.BigNumber.from(t.stateId).toHexString(), 32)}`
+                + `&fromBlock=0&toBlock=latest&apikey=${getEtherscanApiKey()}`;
+            const json = await fetch(url).then(r => r.json());
+            const log = Array.isArray(json?.result) ? json.result[0] : null;
+            if (log?.timeStamp) {
+                t.arrivedAt = parseInt(log.timeStamp, 16) * 1000;
+                t.arrivedExact = true;
+                changed = true;
+            }
+        } catch (e) {
+            logger.warn(`Bridge: arrival time not found for ${t.txHash}`, e);
+        }
+    }
+    if (changed) {
+        saveTransfers();
+        renderTransfers();
+    }
+}
+
+/** Pairs transfers with later events of the same amount (within maxDelayMs), oldest first, each event used once */
+function matchTimes(transfers, events, apply, maxDelayMs = Infinity) {
     const pool = [...events].sort((a, b) => a.at - b.at);
     let count = 0;
     for (const t of [...transfers].sort((a, b) => a.createdAt - b.createdAt)) {
-        const i = pool.findIndex(e => e.value === String(t.amountWei) && e.at >= t.createdAt - 60000);
+        const i = pool.findIndex(e => e.value === String(t.amountWei) && e.at >= t.createdAt - 60000 && e.at - t.createdAt <= maxDelayMs);
         if (i === -1) continue;
         apply(t, pool[i].at);
         pool.splice(i, 1);
@@ -528,20 +574,20 @@ function formatDuration(ms) {
     return `${Math.floor(hours / 24)} d${hours % 24 ? ` ${hours % 24} h` : ''}`;
 }
 
-/** How long each stage took (or has been running) */
-function timeCell(t) {
-    const line = (label, value, approx = false) => `<div class="whitespace-nowrap"><span class="text-gray-500">${label}</span> <span class="text-gray-200">${approx && !value.startsWith('<') ? '~' : ''}${value}</span></div>`;
+/** How long each stage took (or has been running), for the status tooltip */
+function timeLines(t) {
+    const line = (label, value, approx = false) => `${label} ${approx && !value.startsWith('<') ? '~' : ''}${value}`;
     const since = formatDuration(Date.now() - t.createdAt);
-    if (t.status === 'failed') return '<span class="text-gray-500">—</span>';
+    if (t.status === 'failed') return [];
     if (t.kind === 'deposit') {
-        if (t.status === 'done') return t.arrivedAt ? line('Arrived in', formatDuration(t.arrivedAt - t.createdAt), !t.arrivedExact) : '';
-        return line('In progress ·', since);
+        if (t.status === 'done') return t.arrivedAt ? [line('Arrived in', formatDuration(t.arrivedAt - t.createdAt), !t.arrivedExact)] : [];
+        return [line('In progress for', since)];
     }
-    if (t.status === 'pending' || t.status === 'checkpoint') return line('Waiting ·', since);
-    const rows = t.checkpointAt ? [line('Checkpoint in', formatDuration(t.checkpointAt - t.createdAt))] : [];
-    if (t.claimedAt) rows.push(line('Claimed after', formatDuration(t.claimedAt - t.createdAt)));
-    else if (t.status === 'ready' && t.checkpointAt) rows.push(line('Claimable for', formatDuration(Date.now() - t.checkpointAt)));
-    return rows.join('');
+    if (t.status === 'pending' || t.status === 'checkpoint') return [line('Waiting for', since)];
+    const lines = t.checkpointAt ? [line('Checkpoint in', formatDuration(t.checkpointAt - t.createdAt))] : [];
+    if (t.claimedAt) lines.push(line('Claimed after', formatDuration(t.claimedAt - t.createdAt)));
+    else if (t.status === 'ready' && t.checkpointAt) lines.push(line('Claimable for', formatDuration(Date.now() - t.checkpointAt)));
+    return lines;
 }
 
 function transferHtml(t) {
@@ -568,6 +614,8 @@ function transferHtml(t) {
             class="ml-auto bg-blue-800 hover:bg-blue-900 text-white text-xs font-bold px-3 py-1.5 rounded-lg transition-colors inline-flex items-center gap-2 whitespace-nowrap disabled:opacity-50 disabled:pointer-events-none disabled:hover:bg-blue-800">
             ${claiming ? `${spinner}Claiming...` : waiting ? `${spinner}Claim` : 'Claim'}
         </button></span>` : '';
+    // Status tooltip: what the status means, then how long each stage took
+    const tooltip = [hint, ...timeLines(t)].filter(Boolean).map(text => Utils.escapeHtml(text)).join('<br>');
     const action = deposit
         ? '<span class="px-2 py-0.5 rounded-md text-[11px] font-semibold whitespace-nowrap bg-blue-500/15 text-blue-300">Deposit</span>'
         : '<span class="px-2 py-0.5 rounded-md text-[11px] font-semibold whitespace-nowrap bg-violet-500/15 text-violet-300">Withdraw</span>';
@@ -577,7 +625,7 @@ function transferHtml(t) {
             <td class="py-3 pr-3">${action}</td>
             <td class="py-3 pr-3"><span class="inline-flex items-center gap-2 whitespace-nowrap"><span class="text-white font-medium">${formatData(t.amountWei)}</span>${chip(DATA_ICON, 'DATA')}</span></td>
             <td class="py-3 pr-3"><span class="inline-flex items-center gap-1.5 whitespace-nowrap">${chip(from.icon, from.name)}<span class="text-gray-500">→</span>${chip(to.icon, to.name)}</span></td>
-            <td class="py-3 pr-3"><span class="px-2 py-0.5 rounded-full text-[11px] font-semibold whitespace-nowrap ${badgeClass} ${hint ? 'cursor-help' : ''}" ${hint ? `data-tooltip-content="${hint}"` : ''}>${label}</span><div class="text-xs mt-1 space-y-0.5">${timeCell(t)}</div></td>
+            <td class="py-3 pr-3"><span class="px-2 py-0.5 rounded-full text-[11px] font-semibold whitespace-nowrap ${badgeClass} ${tooltip ? 'cursor-help' : ''}" ${tooltip ? `data-tooltip-content="${tooltip}"` : ''}>${label}</span></td>
             <td class="py-3 pr-3 text-xs space-y-0.5">${links.join('')}</td>
             <td class="py-3 text-right">${claimButton}</td>
         </tr>`;
@@ -979,6 +1027,7 @@ async function refreshAll() {
             renderTransfers();
         }
         await fillCheckpointTimes();
+        await fillArrivalTimes();
     } finally {
         // Spin for at least half a second, so the refresh is noticed
         await new Promise(resolve => setTimeout(resolve, Math.max(0, 500 - (Date.now() - started))));
