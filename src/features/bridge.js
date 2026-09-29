@@ -170,33 +170,17 @@ function setStatus(elementId, text, tone) {
 // Providers and wallet
 // ============================================
 
-let ethRpcIndex = 0;
 let ethProvider = null;
 
+/** Ethereum RPCs with failover (Services.FailoverRpcProvider) */
 function getEthProvider() {
-    if (!ethProvider) ethProvider = new ethers.providers.StaticJsonRpcProvider(ETHEREUM_RPCS[ethRpcIndex], ETH_CHAIN_ID);
+    if (!ethProvider) ethProvider = new Services.FailoverRpcProvider(ETHEREUM_RPCS, ETH_CHAIN_ID, 'ethereum_rpc_index');
     return ethProvider;
 }
 
-function isRpcFailure(error) {
-    if (['SERVER_ERROR', 'TIMEOUT', 'NETWORK_ERROR'].includes(error?.code)) return true;
-    return Services.isRateLimitError(error) || /failed to fetch|missing response|bad response|could not detect network/i.test(error?.message || '');
-}
-
-/** Ethereum read with RPC fallback (reverts are answers, not RPC failures) */
+/** Ethereum read (the provider moves to the next RPC on its own when one fails) */
 async function ethRead(readFn) {
-    let lastError = null;
-    for (let attempt = 0; attempt < ETHEREUM_RPCS.length; attempt++) {
-        try {
-            return await readFn(getEthProvider());
-        } catch (e) {
-            lastError = e;
-            if (!isRpcFailure(e)) throw e;
-            ethRpcIndex = (ethRpcIndex + 1) % ETHEREUM_RPCS.length;
-            ethProvider = null;
-        }
-    }
-    throw lastError;
+    return readFn(getEthProvider());
 }
 
 const polygonRead = (readFn) => Services.readWithFallback(() => readFn(Services.getReadOnlyProvider()));
