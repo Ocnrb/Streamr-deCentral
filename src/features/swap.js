@@ -767,7 +767,7 @@ function tokenSlotHtml(symbol, selectable) {
         return `${token.icon}<span class="text-lg font-semibold text-white">${token.symbol}</span>`;
     }
     const options = COUNTER_TOKENS.map(s => `<option value="${s}" ${s === symbol ? 'selected' : ''}>${Utils.escapeHtml(s)}</option>`).join('');
-    return `${token.icon}<select data-token-select aria-label="Token" title="USDC is native USDC; USDC.e is the older bridged USDC" class="w-[6.5rem] bg-[#2C2C2C] hover:bg-[#3C3C3C] text-white text-sm font-semibold rounded-lg pl-2 pr-7 py-1.5 border border-[#444] focus:outline-none focus:ring-2 focus:ring-blue-500/50 disabled:opacity-50">${options}</select>`;
+    return `${token.icon}<select data-token-select aria-label="Token" data-tooltip-content="USDC is the native USDC. USDC.e is the older bridged USDC." class="w-[6.5rem] bg-[#2C2C2C] hover:bg-[#3C3C3C] text-white text-sm font-semibold rounded-lg pl-2 pr-7 py-1.5 border border-[#444] focus:outline-none focus:ring-2 focus:ring-blue-500/50 disabled:opacity-50">${options}</select>`;
 }
 
 function renderTokens() {
@@ -871,7 +871,7 @@ function renderCheckedRoutes(checked) {
     const row = (item) => `
         <li class="flex items-start justify-between gap-3 py-1 border-b border-[#2a2a2a] last:border-0">
             <span class="${item.out ? 'text-gray-300' : 'text-gray-500'}">${Utils.escapeHtml(routeLabel(item.route))}</span>
-            <span class="text-right whitespace-nowrap ${item.out ? 'text-gray-200' : 'text-gray-500'}" ${item.error ? `title="${Utils.escapeHtml(item.error)}"` : ''}>${item.out ? `${item.error ? '≈ ' : ''}${formatToken(item.out, receive)}` : 'failed'}</span>
+            <span class="text-right whitespace-nowrap ${item.out ? 'text-gray-200' : 'text-gray-500'}" ${item.error ? `data-tooltip-content="${Utils.escapeHtml(item.error)}"` : ''}>${item.out ? `${item.error ? '≈ ' : ''}${formatToken(item.out, receive)}` : 'failed'}</span>
         </li>`;
     list.innerHTML = working.map(row).join('')
         + (failed.length ? `<li class="pt-1"><details><summary class="cursor-pointer text-gray-500 hover:text-gray-300">${failed.length} route${failed.length > 1 ? 's' : ''} failed</summary><ul>${failed.map(row).join('')}</ul></details></li>` : '');
