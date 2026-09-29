@@ -1239,16 +1239,25 @@ function renderHistory() {
     }).join('');
 }
 
+/** Spins a refresh button's icon while the work runs (at least half a second, so it is noticed) */
+async function withSpinner(buttonId, work) {
+    const btn = $(buttonId);
+    const icon = btn?.querySelector('svg');
+    if (btn) btn.disabled = true;
+    icon?.classList.add('animate-spin');
+    try {
+        const [result] = await Promise.all([work, new Promise(resolve => setTimeout(resolve, 500))]);
+        return result;
+    } finally {
+        icon?.classList.remove('animate-spin');
+        if (btn && !state.flow) btn.disabled = false;   // a swap in progress keeps the form locked
+    }
+}
+
 async function refreshHistory() {
     if (!state.address) return;
-    const btn = $('swap-history-refresh');
-    btn?.classList.add('animate-spin');
-    try {
-        await Promise.all([recoverSwapsFromExplorer(), settlePendingSwaps()]);
-        renderHistory();
-    } finally {
-        btn?.classList.remove('animate-spin');
-    }
+    await withSpinner('swap-history-refresh', Promise.all([recoverSwapsFromExplorer(), settlePendingSwaps()]));
+    renderHistory();
 }
 
 async function sendPolygonTx(buildTx) {
@@ -1485,9 +1494,8 @@ function setupListeners() {
     });
     $('swap-refresh')?.addEventListener('click', () => {
         if (state.flow) return;
-        loadBalances();
-        updateQuote();
         loadLiquidity().catch(e => logger.warn('Swap: pool discovery failed', e));
+        withSpinner('swap-refresh', Promise.all([loadBalances(), updateQuote()]));
     });
     $('swap-submit')?.addEventListener('click', handleSubmit);
     $('swap-history-refresh')?.addEventListener('click', () => refreshHistory());
