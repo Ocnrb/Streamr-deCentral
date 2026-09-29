@@ -1090,6 +1090,24 @@ function upsertSwap(entry) {
     renderHistory();
 }
 
+// Contracts a swap transaction can be sent to (labels for swaps recovered from the explorer)
+const KNOWN_ROUTERS = {
+    [UNIVERSAL_ROUTER.toLowerCase()]: 'Uniswap (Universal Router)',
+    '0x4c60051384bd2d3c01bfc845cf5f4b44bcbe9de5': 'Uniswap (Universal Router)',
+    [UNISWAP_V3_ROUTER.toLowerCase()]: 'Uniswap v3',
+    '0xe592427a0aece92de3edee1f18e0157c05861564': 'Uniswap v3',
+    [QUICKSWAP_V2_ROUTER.toLowerCase()]: 'QuickSwap V2',
+    [QUICKSWAP_V3_ROUTER.toLowerCase()]: 'QuickSwap V3',
+    [SUSHI_V2_ROUTER.toLowerCase()]: 'SushiSwap V2',
+    '0x1111111254eeb25477b68fb85ed929f73a960582': '1inch',
+    '0x111111125421ca6dc452d289314280a0f8842a65': '1inch',
+    '0xdef1c0ded9bec7f1a1670819833240f027b25eff': '0x',
+    '0x1a1ec25dc08e98e5e93f1104b5e5cdd298707d31': 'MetaMask Swaps',
+    '0x6131b5fae19ea4f9d964eac0408e4408b66337b5': 'KyberSwap',
+    '0xdef171fe48cf0115b1d80b88dc8eab59176fee57': 'ParaSwap',
+    '0x6a000f20005980200259b80c5102003040001068': 'ParaSwap'
+};
+
 /** DATA swaps of this wallet from the explorer (also those made in other apps): token legs in and out of one transaction */
 async function recoverSwapsFromExplorer() {
     const base = `${POLYGONSCAN_NETWORK.apiUrl}?chainid=137&module=account&address=${state.address}&page=1&offset=200&sort=desc&apikey=${getEtherscanApiKey()}`;
@@ -1111,6 +1129,8 @@ async function recoverSwapsFromExplorer() {
     for (const t of internalTx) {
         if (lower(t.to) === me && t.value !== '0' && t.isError !== '1') tx(t.hash, t.timeStamp).in.push({ symbol: 'POL', amount: t.value });
     }
+    // The contract each transaction of this wallet was sent to (router / aggregator)
+    const sentTo = new Map(normalTx.filter(t => lower(t.from) === me && t.to).map(t => [t.hash, lower(t.to)]));
     for (const t of normalTx) {
         if (lower(t.from) === me && t.value !== '0' && t.isError === '0' && txs.has(t.hash)) tx(t.hash, t.timeStamp).out.push({ symbol: 'POL', amount: t.value });
     }
@@ -1126,9 +1146,13 @@ async function recoverSwapsFromExplorer() {
                 existing.status = 'done';
                 changed = true;
             }
+            if (!existing.route && !existing.via && sentTo.has(t.hash)) {
+                existing.via = sentTo.get(t.hash);
+                changed = true;
+            }
             continue;
         }
-        state.history.push({ txHash: t.hash, createdAt: t.time, status: 'done', pay, receive: { symbol: receive.symbol, amount: receive.amount } });
+        state.history.push({ txHash: t.hash, createdAt: t.time, status: 'done', pay, receive: { symbol: receive.symbol, amount: receive.amount }, via: sentTo.get(t.hash) || null });
         changed = true;
     }
     if (changed) {
@@ -1172,6 +1196,16 @@ function formatDateTime(ms) {
     return date.toLocaleString(undefined, { ...(sameYear ? {} : { year: 'numeric' }), month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 
+/** Route column: the route of swaps made here, else the router / aggregator the transaction went to */
+function routeCell(entry) {
+    if (entry.route) return Utils.escapeHtml(entry.route);
+    if (!entry.via) return '<span class="text-gray-500">Unknown</span>';
+    const known = KNOWN_ROUTERS[lower(entry.via)];
+    if (known) return Utils.escapeHtml(known);
+    const via = Utils.escapeHtml(entry.via);
+    return `via <a href="https://polygonscan.com/address/${via}" target="_blank" rel="noopener noreferrer" class="font-mono text-blue-400 hover:text-blue-300">${via.slice(0, 6)}…${via.slice(-4)}</a>`;
+}
+
 function renderHistory() {
     const body = $('swap-history');
     if (!body) return;
@@ -1198,7 +1232,7 @@ function renderHistory() {
                 <td class="py-3 pr-3">${action}</td>
                 <td class="py-3 pr-3">${amount(entry.pay)}</td>
                 <td class="py-3 pr-3">${amount(entry.receive)}</td>
-                <td class="py-3 pr-3 text-xs text-gray-400">${entry.route ? Utils.escapeHtml(entry.route) : '<span class="text-gray-500">Other app</span>'}</td>
+                <td class="py-3 pr-3 text-xs text-gray-400">${routeCell(entry)}</td>
                 <td class="py-3 pr-3"><span class="px-2 py-0.5 rounded-full text-[11px] font-semibold whitespace-nowrap ${badge}">${label}</span></td>
                 <td class="py-3 text-right whitespace-nowrap"><a href="https://polygonscan.com/tx/${hash}" target="_blank" rel="noopener noreferrer" class="font-mono text-xs text-blue-400 hover:text-blue-300">${hash.slice(0, 6)}…${hash.slice(-4)} ↗</a></td>
             </tr>`;
