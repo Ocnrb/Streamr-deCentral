@@ -582,6 +582,8 @@ function setupWalletListeners() {
             window.location.reload();
         });
         window.ethereum.on('chainChanged', () => {
+            // The Bridge switches to Ethereum and back on purpose
+            if (window.appNetworkSwitchInProgress) return;
             logger.log('Wallet network changed, reloading page.');
             window.location.reload();
         });
@@ -1809,6 +1811,30 @@ function setupRouter() {
         } catch (error) {
             console.error('Failed to load swap module:', error);
             UI.showToast({ type: 'error', title: 'Failed to load Swap', message: error.message, duration: 5000 });
+        }
+    });
+
+    // Bridge: DATA between Ethereum and Polygon (stops itself when the route changes)
+    router.addRoute('/bridge', async () => {
+        OperatorLogic.stop();
+        Services.unsubscribeFromCoordinationStream();
+        if (RaceLogic) RaceLogic.stop();
+        if (VisualLogic) VisualLogic.stop();
+        if (DelegatorsLogic) DelegatorsLogic.deactivate();
+        if (StreamsLogic) StreamsLogic.stop();
+        if (GovernanceLogic) GovernanceLogic.stop();
+        if (SubgraphLogic) SubgraphLogic.stop();
+
+        UI.displayView('bridge');
+        UI.hideProfileButtons();
+        navigationController.updateActiveState('bridge');
+
+        try {
+            const { BridgeLogic } = await import('./src/features/bridge.js');
+            BridgeLogic.show();
+        } catch (error) {
+            console.error('Failed to load bridge module:', error);
+            UI.showToast({ type: 'error', title: 'Failed to load Bridge', message: error.message, duration: 5000 });
         }
     });
 }
