@@ -2605,30 +2605,30 @@
                     <!-- Query Configuration (own scroll from xl) -->
                     <div class="xl:col-span-5 space-y-6 xl:h-full xl:overflow-y-auto xl:overscroll-contain xl:pr-1">
                         <section class="detail-section p-4 sm:p-6">
-                            <p id="sg-entity-description" class="text-xs text-gray-500"></p>
+                            <p id="sg-entity-description" class="text-xs text-gray-400"></p>
 
                             <div class="space-y-4 mt-3">
                                 <!-- Entity Selector (mobile/tablet; the right panel replaces it on desktop) -->
                                 <div class="lg:hidden">
-                                    <label for="sg-entity-select" class="block text-xs font-medium text-gray-500 mb-1.5">Entity</label>
+                                    <label for="sg-entity-select" class="block text-xs font-medium text-gray-400 mb-1.5">Entity</label>
                                     <select id="sg-entity-select" class="w-full p-3 bg-[#121212] border border-[#333333] rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all"></select>
                                 </div>
 
                                 <!-- Pagination & Sorting (list queries only) -->
                                 <div id="sg-list-options" class="grid grid-cols-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_5.5rem] xl:grid-cols-2 2xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_5.5rem] gap-3">
                                     <div class="col-span-2 sm:col-span-1 xl:col-span-2 2xl:col-span-1">
-                                        <label for="sg-order-by" class="block text-xs font-medium text-gray-500 mb-1.5">Order by</label>
+                                        <label for="sg-order-by" class="block text-xs font-medium text-gray-400 mb-1.5">Order by</label>
                                         <select id="sg-order-by" class="w-full p-2.5 bg-[#121212] border border-[#333333] rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all"></select>
                                     </div>
                                     <div>
-                                        <label for="sg-order-direction" class="block text-xs font-medium text-gray-500 mb-1.5">Direction</label>
+                                        <label for="sg-order-direction" class="block text-xs font-medium text-gray-400 mb-1.5">Direction</label>
                                         <select id="sg-order-direction" class="w-full p-2.5 bg-[#121212] border border-[#333333] rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all">
                                             <option value="desc">Descending</option>
                                             <option value="asc">Ascending</option>
                                         </select>
                                     </div>
                                     <div>
-                                        <label for="sg-limit" class="block text-xs font-medium text-gray-500 mb-1.5" title="Results per page (max 1000)">Limit</label>
+                                        <label for="sg-limit" class="block text-xs font-medium text-gray-400 mb-1.5" title="Results per page (max 1000)">Limit</label>
                                         <input type="number" id="sg-limit" value="10" min="1" max="1000" title="Results per page (max 1000)" class="w-full p-2.5 bg-[#121212] border border-[#333333] rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all">
                                     </div>
                                 </div>
@@ -2690,13 +2690,13 @@
                                 </button>
                             </div>
                             <div id="sg-output" class="bg-[#121212] border border-[#333333] rounded-lg p-4 text-sm text-gray-300 overflow-auto overscroll-contain min-h-[300px] max-h-[70vh] xl:flex-1 xl:min-h-0 xl:max-h-none">
-                                <p class="text-gray-500">Waiting for query execution...</p>
+                                <p class="text-gray-400">Waiting for query execution...</p>
                             </div>
                             <p id="sg-error" class="mt-4 p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-sm text-red-400 font-mono whitespace-pre-wrap break-all max-h-40 overflow-auto flex-shrink-0 hidden"></p>
 
                             <!-- Footer: result count + pagination -->
                             <div class="flex items-center justify-between mt-3 flex-shrink-0">
-                                <span id="sg-result-meta" class="text-xs text-gray-500"></span>
+                                <span id="sg-result-meta" class="text-xs text-gray-400"></span>
                                 <div id="sg-pager" class="flex items-center gap-1">
                                     <button id="sg-prev" title="Previous page" aria-label="Previous page" class="p-2 rounded-lg text-gray-400 hover:text-white hover:bg-white/5 disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-gray-400 disabled:cursor-not-allowed transition-colors" disabled>
                                         <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5"/><path d="m12 19-7-7 7-7"/></svg>

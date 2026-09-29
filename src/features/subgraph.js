@@ -195,7 +195,7 @@ function generateFilterInput(filter) {
 
     return `
         <div class="w-full">
-            <label for="${filter.id}" class="block text-xs font-medium text-gray-500 mb-1.5">${filter.label}</label>
+            <label for="${filter.id}" class="block text-xs font-medium text-gray-400 mb-1.5">${filter.label}</label>
             ${inputHtml}
         </div>`;
 }
@@ -231,13 +231,13 @@ function renderActiveFilters() {
             <div data-filter-row="${id}" class="flex items-end gap-2">
                 <div class="flex-1 min-w-0">${generateFilterInput(filter)}</div>
                 ${removable ? `<button type="button" data-remove-filter="${id}" title="Remove filter"
-                        class="p-2.5 rounded-lg text-gray-500 hover:text-red-400 hover:bg-red-500/10 transition-colors flex-shrink-0">${REMOVE_ICON}</button>` : ''}
+                        class="p-2.5 rounded-lg text-gray-400 hover:text-red-400 hover:bg-red-500/10 transition-colors flex-shrink-0">${REMOVE_ICON}</button>` : ''}
             </div>`);
         if (filter.defaultValue) el(id).value = filter.defaultValue;
     });
 
     if (!state.activeFilters.length) {
-        container.insertAdjacentHTML('beforeend', '<p data-filters-empty class="text-sm text-gray-500">No filters applied.</p>');
+        container.insertAdjacentHTML('beforeend', '<p data-filters-empty class="text-sm text-gray-400">No filters applied.</p>');
     }
 
     const remaining = removable ? config.filters.filter(f => !state.activeFilters.includes(f.id)).length : 0;
@@ -281,12 +281,12 @@ function renderAddFilterMenu() {
     FILTER_GROUPS.forEach(group => {
         const items = available.filter(f => group.types.includes(f.type));
         if (!items.length) return;
-        html += `<div class="px-3 pt-2 pb-1 text-[10px] font-semibold text-gray-600 uppercase tracking-widest">${group.label}</div>`;
+        html += `<div class="px-3 pt-2 pb-1 text-[10px] font-semibold text-gray-500 uppercase tracking-widest">${group.label}</div>`;
         html += items.map(f => `
             <button type="button" data-add-filter="${f.id}"
                     class="w-full text-left px-3 py-2 text-sm text-gray-300 hover:bg-[#2a2a2a] hover:text-white focus:bg-[#2a2a2a] focus:outline-none transition-colors">${f.label}</button>`).join('');
     });
-    el('sg-add-filter-list').innerHTML = html || '<p class="px-3 py-3 text-sm text-gray-500">No matching filters.</p>';
+    el('sg-add-filter-list').innerHTML = html || '<p class="px-3 py-3 text-sm text-gray-400">No matching filters.</p>';
 }
 
 function setAddFilterMenuOpen(open) {
@@ -466,11 +466,11 @@ function renderEntityNavigation() {
             <div class="px-2">
                 <button type="button" data-category-toggle="${category}" aria-expanded="${expanded}"
                         class="group w-full flex items-center gap-2 px-3 py-2 rounded-md hover:bg-white/[0.03] transition-colors">
-                    <svg class="w-4 h-4 flex-shrink-0 text-gray-500 group-hover:text-gray-300 transition-colors" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${CATEGORY_ICONS[category] || ''}</svg>
-                    <span data-category-label class="text-[11px] font-semibold text-gray-500 group-hover:text-gray-300 uppercase tracking-widest transition-colors">${category}</span>
+                    <svg class="w-4 h-4 flex-shrink-0 text-gray-400 group-hover:text-gray-300 transition-colors" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${CATEGORY_ICONS[category] || ''}</svg>
+                    <span data-category-label class="text-[11px] font-semibold text-gray-400 group-hover:text-gray-300 uppercase tracking-widest transition-colors">${category}</span>
                     <span data-category-active class="hidden w-1.5 h-1.5 rounded-full bg-blue-500" title="Contains the selected entity"></span>
-                    <span class="ml-auto text-[10px] text-gray-600">${categories[category].length}</span>
-                    <svg data-category-chevron class="w-3.5 h-3.5 text-gray-600 transition-transform duration-200 ${expanded ? 'rotate-90' : ''}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+                    <span class="ml-auto text-[10px] text-gray-500">${categories[category].length}</span>
+                    <svg data-category-chevron class="w-3.5 h-3.5 text-gray-500 transition-transform duration-200 ${expanded ? 'rotate-90' : ''}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
                 </button>
                 <div data-category-items="${category}" class="${expanded ? '' : 'hidden'} space-y-0.5 pb-1">${itemsHtml}</div>
             </div>`);
@@ -478,7 +478,7 @@ function renderEntityNavigation() {
         // Collapsed panel: one icon per category
         rail.insertAdjacentHTML('beforeend', `
             <button type="button" data-rail-category="${category}" title="${category}"
-                    class="relative p-2.5 rounded-md text-gray-500 hover:text-white hover:bg-white/[0.05] transition-colors">
+                    class="relative p-2.5 rounded-md text-gray-400 hover:text-white hover:bg-white/[0.05] transition-colors">
                 <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${CATEGORY_ICONS[category] || ''}</svg>
                 <span data-category-active class="hidden absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full bg-blue-500"></span>
             </button>`);
@@ -580,9 +580,9 @@ function renderEntity() {
     if (config.queryType === 'meta') {
         container.innerHTML = `
             <p class="text-sm text-gray-400">This query returns subgraph metadata.</p>
-            <p class="text-xs text-gray-500 mt-1">No filters needed: returns the current indexing status and block information.</p>`;
+            <p class="text-xs text-gray-400 mt-1">No filters needed: returns the current indexing status and block information.</p>`;
     } else if (!config.filters?.length) {
-        container.innerHTML = '<p class="text-sm text-gray-500">No filters available for this entity.</p>';
+        container.innerHTML = '<p class="text-sm text-gray-400">No filters available for this entity.</p>';
     } else {
         container.innerHTML = '';
         if (config.queryType === 'single') {
