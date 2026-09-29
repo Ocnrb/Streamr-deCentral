@@ -35,7 +35,6 @@ const STATE_RECEIVER = '0x0000000000000000000000000000000000001001';
 const ETHEREUM_RPCS = [
     'https://ethereum-rpc.publicnode.com',
     'https://eth.drpc.org',
-    'https://eth.llamarpc.com',
     'https://1rpc.io/eth'
 ];
 const PROOF_API = 'https://proof-generator.polygon.technology/api/v1/matic/exit-payload/';
