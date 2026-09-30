@@ -168,8 +168,8 @@ const SLIPPAGE_KEY = 'swapSlippage';
 const state = {
     active: false,
     address: null,
-    counter: 'POL',          // the token traded against DATA
-    sellData: true,          // true: pay DATA, receive counter; false: the reverse
+    counter: 'USDC',         // the token traded against DATA
+    sellData: false,         // true: pay DATA, receive counter; false: the reverse (default: pay USDC, buy DATA)
     slippage: 0.5,
     balances: {},            // symbol -> BigNumber
     pools: new Map(),        // pairKey -> { qv2, sushi, qv3: pool address | null, uni: Map(fee -> pool) } (session cache)
@@ -833,6 +833,41 @@ function setWarning(text, tone) {
     el.textContent = text;
 }
 
+// POL/USD for the quote's DATA/USD (Chainlink, read again after a minute)
+const POL_USD_MAX_AGE_MS = 60 * 1000;
+let polUsdNow = null;   // { price, at }
+let polUsdLoading = false;
+
+function loadPolUsdNow() {
+    if (polUsdLoading) return;
+    polUsdLoading = true;
+    polUsdAt([Math.floor(Date.now() / 1000)])
+        .then(([price]) => { if (price) polUsdNow = { price, at: Date.now() }; })
+        .catch(e => logger.warn('Swap: POL/USD not read', e))
+        .finally(() => {
+            polUsdLoading = false;
+            if (polUsdNow) renderQuote();
+        });
+}
+
+/** Price per DATA of the quote in USD: straight from a USDC side, through POL/USD for a POL side */
+function quoteDataUsd(q, pay, receive) {
+    const payIsData = pay.symbol === 'DATA';
+    const data = parseFloat(ethers.utils.formatUnits(payIsData ? q.amountIn : q.amountOut, 18));
+    const other = payIsData ? receive : pay;
+    const otherAmount = parseFloat(ethers.utils.formatUnits(payIsData ? q.amountOut : q.amountIn, other.decimals));
+    let usd = null;
+    if (USD_STABLES.includes(other.symbol)) {
+        usd = otherAmount;
+    } else if (other.symbol === 'POL') {
+        if (!polUsdNow || Date.now() - polUsdNow.at > POL_USD_MAX_AGE_MS) loadPolUsdNow();
+        if (polUsdNow) usd = otherAmount * polUsdNow.price;
+    }
+    if (!(data > 0) || !(usd > 0)) return '--';
+    const value = usd / data;
+    return `1 DATA = $${value >= 1 ? value.toFixed(2) : Number(value.toPrecision(4))}`;
+}
+
 function renderQuote() {
     const pay = payToken();
     const receive = receiveToken();
@@ -845,6 +880,7 @@ function renderQuote() {
     if (valid) {
         const rate = parseFloat(ethers.utils.formatUnits(q.amountOut, receive.decimals)) / parseFloat(ethers.utils.formatUnits(q.amountIn, pay.decimals));
         $('swap-rate').textContent = `1 ${pay.symbol} = ${rate < 0.0001 ? rate.toExponential(3) : Number(rate.toPrecision(5))} ${receive.symbol}`;
+        $('swap-rate-usd').textContent = quoteDataUsd(q, pay, receive);
         $('swap-route').textContent = routeLabel(q.route);
         $('swap-min').textContent = formatToken(minOut(q.amountOut), receive);
         const impactEl = $('swap-impact');
@@ -853,7 +889,7 @@ function renderQuote() {
         impactEl.classList.toggle('text-yellow-300', q.impact !== null && q.impact >= IMPACT_WARN && q.impact < IMPACT_BLOCK);
         impactEl.classList.toggle('text-gray-200', q.impact === null || q.impact < IMPACT_WARN);
     } else {
-        ['swap-rate', 'swap-route', 'swap-impact', 'swap-min'].forEach(id => { $(id).textContent = '--'; });
+        ['swap-rate', 'swap-rate-usd', 'swap-route', 'swap-impact', 'swap-min'].forEach(id => { $(id).textContent = '--'; });
     }
 
     renderCheckedRoutes(valid ? q.checked : state.quoteChecked);
