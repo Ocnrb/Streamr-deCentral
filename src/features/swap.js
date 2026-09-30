@@ -643,7 +643,7 @@ function renderLiquidity() {
         return `
             <li class="flex items-center justify-between gap-3 py-1.5 border-b border-[#2a2a2a] last:border-0">
                 <span class="text-gray-300">Uniswap v4 ${pool.fee / 10000}% · DATA / ${counter.symbol}</span>
-                <span class="text-right text-gray-400 whitespace-nowrap">1 DATA = ${price < 0.0001 ? price.toExponential(3) : Number(price.toPrecision(5))} ${counter.symbol}</span>
+                <span class="text-right text-gray-300 whitespace-nowrap">1 DATA = ${price < 0.0001 ? price.toExponential(3) : Number(price.toPrecision(5))} ${counter.symbol}</span>
             </li>`;
     });
     const rows = pools.map(pool => {
@@ -652,10 +652,10 @@ function renderLiquidity() {
         return `
             <li class="flex items-center justify-between gap-3 py-1.5 border-b border-[#2a2a2a] last:border-0">
                 <a href="https://polygonscan.com/address/${Utils.escapeHtml(pool.address)}" target="_blank" rel="noopener noreferrer" class="text-gray-300 hover:text-white">${venue} · DATA / ${partner.symbol}</a>
-                <span class="text-right text-gray-400 whitespace-nowrap">${formatAmount(pool.data, 18)} DATA · ${formatAmount(pool.other, partner.decimals)} ${partner.symbol}</span>
+                <span class="text-right text-gray-300 whitespace-nowrap">${formatAmount(pool.data, 18)} DATA · ${formatAmount(pool.other, partner.decimals)} ${partner.symbol}</span>
             </li>`;
     });
-    list.innerHTML = ([...v4Rows, ...rows].join('') || '<li class="py-1.5 text-gray-400">No DATA pool found on these DEXes.</li>')
+    list.innerHTML = ([...v4Rows, ...rows].join('') || '<li class="py-1.5 text-gray-300">No DATA pool found on these DEXes.</li>')
         + (complete ? '' : '<li class="py-1.5 text-yellow-300">Some pools could not be checked (RPC). Refresh to try again.</li>');
 }
 
@@ -804,7 +804,7 @@ function renderSlippage() {
         const active = Number(btn.dataset.slippage) === state.slippage;
         btn.classList.toggle('bg-blue-800', active);
         btn.classList.toggle('text-white', active);
-        btn.classList.toggle('text-gray-400', !active);
+        btn.classList.toggle('text-gray-300', !active);
     });
 }
 
@@ -876,7 +876,7 @@ function renderQuote() {
     const valid = q && wei && q.amountIn.eq(wei) && !error;
     $('swap-receive').textContent = state.quoting && !valid ? '...' : valid ? formatAmount(q.amountOut, receive.decimals) : '0';
     $('swap-receive').classList.toggle('text-white', Boolean(valid));
-    $('swap-receive').classList.toggle('text-gray-400', !valid);
+    $('swap-receive').classList.toggle('text-gray-300', !valid);
     if (valid) {
         const rate = parseFloat(ethers.utils.formatUnits(q.amountOut, receive.decimals)) / parseFloat(ethers.utils.formatUnits(q.amountIn, pay.decimals));
         $('swap-rate').textContent = `1 ${pay.symbol} = ${rate < 0.0001 ? rate.toExponential(3) : Number(rate.toPrecision(5))} ${receive.symbol}`;
@@ -916,11 +916,11 @@ function renderCheckedRoutes(checked) {
     const failed = checked.filter(item => !item.out);
     const row = (item) => `
         <li class="flex items-start justify-between gap-3 py-1 border-b border-[#2a2a2a] last:border-0">
-            <span class="${item.out ? 'text-gray-300' : 'text-gray-500'}">${Utils.escapeHtml(routeLabel(item.route))}</span>
-            <span class="text-right whitespace-nowrap ${item.out ? 'text-gray-200' : 'text-gray-500'}" ${item.error ? `data-tooltip-content="${Utils.escapeHtml(item.error)}"` : ''}>${item.out ? `${item.error ? '≈ ' : ''}${formatToken(item.out, receive)}` : 'failed'}</span>
+            <span class="${item.out ? 'text-gray-300' : 'text-gray-400'}">${Utils.escapeHtml(routeLabel(item.route))}</span>
+            <span class="text-right whitespace-nowrap ${item.out ? 'text-gray-200' : 'text-gray-400'}" ${item.error ? `data-tooltip-content="${Utils.escapeHtml(item.error)}"` : ''}>${item.out ? `${item.error ? '≈ ' : ''}${formatToken(item.out, receive)}` : 'failed'}</span>
         </li>`;
     list.innerHTML = working.map(row).join('')
-        + (failed.length ? `<li class="pt-1"><details><summary class="cursor-pointer text-gray-500 hover:text-gray-300">${failed.length} route${failed.length > 1 ? 's' : ''} failed</summary><ul>${failed.map(row).join('')}</ul></details></li>` : '');
+        + (failed.length ? `<li class="pt-1"><details><summary class="cursor-pointer text-gray-400 hover:text-gray-300">${failed.length} route${failed.length > 1 ? 's' : ''} failed</summary><ul>${failed.map(row).join('')}</ul></details></li>` : '');
 }
 
 function canSubmit() {
@@ -967,7 +967,7 @@ function renderProgress() {
         done: '<svg class="w-4 h-4 text-green-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg>',
         error: '<svg class="w-4 h-4 text-red-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M6 18L18 6M6 6l12 12"/></svg>'
     };
-    const textClass = { pending: 'text-gray-400', active: 'text-white', done: 'text-gray-300', error: 'text-red-400' };
+    const textClass = { pending: 'text-gray-300', active: 'text-white', done: 'text-gray-300', error: 'text-red-400' };
     list.innerHTML = state.flow.steps.map(step => `
         <li class="flex items-center gap-2">
             ${icons[step.status]}
@@ -1287,7 +1287,7 @@ async function fillPolPrices() {
 
 /** DATA/USD column: the price paid or got per DATA in the swap */
 function dataUsdCell(entry) {
-    const none = (tip) => `<span class="text-gray-500"${tip ? ` data-tooltip-content="${tip}"` : ''}>—</span>`;
+    const none = (tip) => `<span class="text-gray-400"${tip ? ` data-tooltip-content="${tip}"` : ''}>—</span>`;
     if (entry.status === 'failed') return none();
     const dataLeg = entry.pay?.symbol === 'DATA' ? entry.pay : entry.receive;
     const otherLeg = dataLeg === entry.pay ? entry.receive : entry.pay;
@@ -1301,7 +1301,7 @@ function dataUsdCell(entry) {
         tip = `Price per DATA in this swap, with 1 ${otherLeg.symbol} = 1 USD`;
     } else if (otherLeg.symbol === 'POL' || otherLeg.symbol === 'WPOL') {
         if (entry.polUsd === undefined) {
-            return pricingSwaps || entry.status === 'pending' ? '<span class="text-gray-500">…</span>' : none('POL/USD price not available');
+            return pricingSwaps || entry.status === 'pending' ? '<span class="text-gray-400">…</span>' : none('POL/USD price not available');
         }
         usd = other * entry.polUsd;
         tip = `Price per DATA in this swap, with POL at ${entry.polUsd.toFixed(4)} USD`;
@@ -1477,9 +1477,9 @@ function routeCell(entry) {
     if (entry.route) {
         // Swaps made through an aggregator or wallet: which one, under the route
         const app = entry.via && !DEX_ROUTERS.has(lower(entry.via)) ? KNOWN_ROUTERS[lower(entry.via)] : null;
-        return Utils.escapeHtml(entry.route) + (app ? `<div class="text-gray-500">via ${Utils.escapeHtml(app)}</div>` : '');
+        return Utils.escapeHtml(entry.route) + (app ? `<div class="text-gray-400">via ${Utils.escapeHtml(app)}</div>` : '');
     }
-    if (!entry.via) return '<span class="text-gray-500">Unknown</span>';
+    if (!entry.via) return '<span class="text-gray-400">Unknown</span>';
     const known = KNOWN_ROUTERS[lower(entry.via)];
     if (known) return Utils.escapeHtml(known);
     const via = Utils.escapeHtml(entry.via);
@@ -1489,7 +1489,7 @@ function routeCell(entry) {
 function renderHistory() {
     const body = $('swap-history');
     if (!body) return;
-    const empty = (text) => `<tr><td colspan="8" class="py-4 text-sm text-gray-400">${text}</td></tr>`;
+    const empty = (text) => `<tr><td colspan="8" class="py-4 text-sm text-gray-300">${text}</td></tr>`;
     if (!state.address || !state.history.length) {
         $('swap-history-more')?.classList.add('hidden');
         body.innerHTML = empty(state.address ? 'No DATA swaps yet.' : 'Connect a wallet to see your swaps.');
@@ -1507,12 +1507,12 @@ function renderHistory() {
         const hash = Utils.escapeHtml(entry.txHash);
         return `
             <tr class="border-b border-[#2a2a2a] last:border-0 align-middle">
-                <td class="py-3 pr-3 whitespace-nowrap"><div class="text-gray-200">${formatDateTime(entry.createdAt)}</div>${Date.now() - entry.createdAt < 86400000 ? `<div class="text-xs text-gray-500">${timeAgo(entry.createdAt)}</div>` : ''}</td>
+                <td class="py-3 pr-3 whitespace-nowrap"><div class="text-gray-200">${formatDateTime(entry.createdAt)}</div>${Date.now() - entry.createdAt < 86400000 ? `<div class="text-xs text-gray-400">${timeAgo(entry.createdAt)}</div>` : ''}</td>
                 <td class="py-3 pr-3">${action}</td>
                 <td class="py-3 pr-3">${amount(entry.pay)}</td>
                 <td class="py-3 pr-3">${amount(entry.receive)}</td>
                 <td class="py-3 pr-3">${dataUsdCell(entry)}</td>
-                <td class="py-3 pr-3 text-xs text-gray-400">${routeCell(entry)}</td>
+                <td class="py-3 pr-3 text-xs text-gray-300">${routeCell(entry)}</td>
                 <td class="py-3 pr-3"><span class="px-2 py-0.5 rounded-full text-[11px] font-semibold whitespace-nowrap ${badge}">${label}</span></td>
                 <td class="py-3 text-right whitespace-nowrap"><a href="https://polygonscan.com/tx/${hash}" target="_blank" rel="noopener noreferrer" class="font-mono text-xs text-blue-400 hover:text-blue-300">${hash.slice(0, 6)}…${hash.slice(-4)}</a></td>
             </tr>`;

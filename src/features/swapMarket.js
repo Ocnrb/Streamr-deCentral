@@ -240,7 +240,7 @@ function renderStats() {
         const pct = (now / before - 1) * 100;
         const sign = pct > 0 ? '+' : pct < 0 ? '−' : '';
         change.textContent = `${sign}${Math.abs(pct).toFixed(2)}% 24h`;
-        change.className = `text-sm font-semibold ${pct > 0 ? 'text-green-400' : pct < 0 ? 'text-red-400' : 'text-gray-400'}`;
+        change.className = `text-sm font-semibold ${pct > 0 ? 'text-green-400' : pct < 0 ? 'text-red-400' : 'text-gray-300'}`;
     } else {
         change.textContent = '';
     }
@@ -258,7 +258,7 @@ function renderStats() {
 function renderTrades() {
     const body = $('swap-trades');
     if (!body) return;
-    const row = (text) => `<tr><td colspan="5" class="py-4 text-sm text-gray-400">${text}</td></tr>`;
+    const row = (text) => `<tr><td colspan="5" class="py-4 text-sm text-gray-300">${text}</td></tr>`;
     if (!state.loaded) {
         const spinner = '<span class="w-4 h-4 flex-shrink-0 border-2 border-gray-500 border-t-transparent rounded-full animate-spin" aria-hidden="true"></span>';
         body.innerHTML = row(`<span class="inline-flex items-center gap-2">${spinner}${state.error ? 'The explorer is busy, trying again...' : 'Loading market trades...'}</span>`);
@@ -349,7 +349,7 @@ function renderChart() {
     if (points.length < 2) {
         state.chart?.destroy();
         state.chart = null;
-        container.innerHTML = `<div class="flex items-center justify-center h-full text-sm text-gray-400">${state.loaded || state.history.length ? 'Not enough price data for this range.' : 'Loading prices...'}</div>`;
+        container.innerHTML = `<div class="flex items-center justify-center h-full text-sm text-gray-300">${state.loaded || state.history.length ? 'Not enough price data for this range.' : 'Loading prices...'}</div>`;
         return;
     }
     if (!container.querySelector('canvas')) {
@@ -401,7 +401,7 @@ function renderChart() {
                 tooltip: {
                     backgroundColor: 'rgba(30, 30, 30, 0.9)',
                     titleColor: '#ffffff',
-                    bodyColor: '#9ca3af',
+                    bodyColor: '#d1d5db',
                     borderColor: '#333333',
                     borderWidth: 1,
                     padding: 10,
@@ -424,12 +424,12 @@ function renderChart() {
                 x: {
                     type: 'linear',
                     ...bounds,
-                    ticks: { color: '#6b7280', font, maxTicksLimit: 6, maxRotation: 0, callback: (value) => tickLabel(value) },
+                    ticks: { color: '#9ca3af', font, maxTicksLimit: 6, maxRotation: 0, callback: (value) => tickLabel(value) },
                     grid: { display: false }
                 },
                 y: {
                     position: 'right',
-                    ticks: { color: '#6b7280', font, maxTicksLimit: 6, callback: (value) => formatPrice(value) },
+                    ticks: { color: '#9ca3af', font, maxTicksLimit: 6, callback: (value) => formatPrice(value) },
                     grid: { color: '#2a2a2a', drawBorder: false }
                 }
             }
@@ -442,7 +442,7 @@ function renderRange() {
         const active = btn.dataset.range === state.range;
         btn.classList.toggle('bg-blue-800', active);
         btn.classList.toggle('text-white', active);
-        btn.classList.toggle('text-gray-400', !active);
+        btn.classList.toggle('text-gray-300', !active);
     });
 }
 
