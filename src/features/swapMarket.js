@@ -44,6 +44,7 @@ const state = {
     error: false,
     history: [],           // daily { t, p }, oldest first
     ownHashes: new Set(),
+    failures: 0,           // failed loads in a row (before the first success: asked again sooner)
     chart: null,
     timer: null,
     listening: false
@@ -82,14 +83,29 @@ function formatTime(ms, withYear = false) {
 // Trades (Swap events of the pool)
 // ============================================
 
+const EXPLORER_BUSY = /rate limit|max calls|too many|timeout|temporarily|busy/i;
+
+/** Swap logs of the pool from a block on; a busy explorer (rate limit: the app's default key is shared) is asked again shortly */
 async function fetchLogs(fromBlock) {
     const url = `${POLYGONSCAN_NETWORK.apiUrl}?chainid=137&module=logs&action=getLogs&address=${POOL_MANAGER}`
         + `&topic0=${SWAP_TOPIC}&topic0_1_opr=and&topic1=${POOL_ID}&fromBlock=${fromBlock}&toBlock=latest`
         + `&page=1&offset=${MAX_LOGS}&apikey=${getEtherscanApiKey()}`;
-    const json = await fetch(url).then(r => r.json());
-    if (Array.isArray(json?.result)) return json.result;
-    if (/no records/i.test(json?.message || '')) return [];
-    throw new Error(json?.result || json?.message || 'Explorer logs unavailable');
+    let lastError = null;
+    for (let attempt = 0; attempt < 4; attempt++) {
+        if (attempt) await new Promise(resolve => setTimeout(resolve, 1000 * 2 ** (attempt - 1)));
+        let json;
+        try {
+            json = await fetch(url).then(r => r.json());
+        } catch (e) {
+            lastError = e;   // network failure: asked again
+            continue;
+        }
+        if (Array.isArray(json?.result)) return json.result;
+        if (/no records/i.test(json?.message || '')) return [];
+        lastError = new Error(`${json?.message || 'Explorer error'}: ${json?.result || ''}`);
+        if (!EXPLORER_BUSY.test(`${json?.message} ${json?.result}`)) break;   // e.g. an invalid API key: no point asking again
+    }
+    throw lastError;
 }
 
 /** USDC per DATA from the pool's sqrtPriceX96 */
@@ -224,14 +240,15 @@ function renderStats() {
         const pct = (now / before - 1) * 100;
         const sign = pct > 0 ? '+' : pct < 0 ? '−' : '';
         change.textContent = `${sign}${Math.abs(pct).toFixed(2)}% 24h`;
-        change.className = `text-sm font-semibold ${pct > 0 ? 'text-green-400' : pct < 0 ? 'text-red-400' : 'text-gray-400'}`;
+        change.className = `text-sm font-semibold ${pct > 0 ? 'text-green-400' : pct < 0 ? 'text-red-400' : 'text-gray-300'}`;
     } else {
         change.textContent = '';
     }
     const day = state.trades.filter(t => t.time >= Date.now() - DAY);
+    // Volume and trades come from the trades list: empty until it loads
     $('swap-market-stats').textContent = state.loaded
         ? `24h volume ${formatUsd(day.reduce((sum, t) => sum + t.usd, 0))} · ${day.length} ${day.length === 1 ? 'trade' : 'trades'} in 24h`
-        : state.error ? 'Trades not available right now' : 'Loading trades...';
+        : '';
 }
 
 // ============================================
@@ -241,9 +258,10 @@ function renderStats() {
 function renderTrades() {
     const body = $('swap-trades');
     if (!body) return;
-    const row = (text) => `<tr><td colspan="5" class="py-4 text-sm text-gray-400">${text}</td></tr>`;
+    const row = (text) => `<tr><td colspan="5" class="py-4 text-sm text-gray-300">${text}</td></tr>`;
     if (!state.loaded) {
-        body.innerHTML = row(state.error ? 'Trades could not be loaded. They are asked again in a moment.' : 'Loading trades...');
+        const spinner = '<span class="w-4 h-4 flex-shrink-0 border-2 border-gray-500 border-t-transparent rounded-full animate-spin" aria-hidden="true"></span>';
+        body.innerHTML = row(`<span class="inline-flex items-center gap-2">${spinner}${state.error ? 'The explorer is busy, trying again...' : 'Loading market trades...'}</span>`);
         return;
     }
     const recent = state.trades.slice(-TRADES_SHOWN).reverse();
@@ -331,7 +349,7 @@ function renderChart() {
     if (points.length < 2) {
         state.chart?.destroy();
         state.chart = null;
-        container.innerHTML = `<div class="flex items-center justify-center h-full text-sm text-gray-400">${state.loaded || state.history.length ? 'Not enough price data for this range.' : 'Loading prices...'}</div>`;
+        container.innerHTML = `<div class="flex items-center justify-center h-full text-sm text-gray-300">${state.loaded || state.history.length ? 'Not enough price data for this range.' : 'Loading prices...'}</div>`;
         return;
     }
     if (!container.querySelector('canvas')) {
@@ -383,7 +401,7 @@ function renderChart() {
                 tooltip: {
                     backgroundColor: 'rgba(30, 30, 30, 0.9)',
                     titleColor: '#ffffff',
-                    bodyColor: '#9ca3af',
+                    bodyColor: '#d1d5db',
                     borderColor: '#333333',
                     borderWidth: 1,
                     padding: 10,
@@ -406,12 +424,12 @@ function renderChart() {
                 x: {
                     type: 'linear',
                     ...bounds,
-                    ticks: { color: '#6b7280', font, maxTicksLimit: 6, maxRotation: 0, callback: (value) => tickLabel(value) },
+                    ticks: { color: '#9ca3af', font, maxTicksLimit: 6, maxRotation: 0, callback: (value) => tickLabel(value) },
                     grid: { display: false }
                 },
                 y: {
                     position: 'right',
-                    ticks: { color: '#6b7280', font, maxTicksLimit: 6, callback: (value) => formatPrice(value) },
+                    ticks: { color: '#9ca3af', font, maxTicksLimit: 6, callback: (value) => formatPrice(value) },
                     grid: { color: '#2a2a2a', drawBorder: false }
                 }
             }
@@ -424,7 +442,7 @@ function renderRange() {
         const active = btn.dataset.range === state.range;
         btn.classList.toggle('bg-blue-800', active);
         btn.classList.toggle('text-white', active);
-        btn.classList.toggle('text-gray-400', !active);
+        btn.classList.toggle('text-gray-300', !active);
     });
 }
 
@@ -441,22 +459,26 @@ function renderAll() {
 async function refresh() {
     try {
         const added = await loadTrades();
+        state.failures = 0;
         if (!state.active) return;
         if (added || !state.chart) renderAll(); else renderStats();
     } catch (e) {
         logger.warn('Swap market: trades not loaded', e);
+        state.failures++;
         if (!state.loaded) state.error = true;
         if (state.active) renderAll();
     }
 }
 
+/** Next load: every 30 s, sooner (5 s, 10 s, 20 s) while the trades never loaded */
 function schedule() {
     clearTimeout(state.timer);
+    const delay = !state.loaded && state.failures ? Math.min(5000 * 2 ** (state.failures - 1), REFRESH_MS) : REFRESH_MS;
     state.timer = setTimeout(async () => {
         if (!state.active) return;
         if (!document.hidden) await refresh();
         schedule();
-    }, REFRESH_MS);
+    }, delay);
 }
 
 function setupListeners() {

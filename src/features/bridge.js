@@ -154,7 +154,7 @@ function formatTxError(error) {
 function setStatus(elementId, text, tone) {
     const el = $(elementId);
     if (!el) return;
-    const tones = { ok: 'text-green-400', warn: 'text-yellow-400', error: 'text-red-400', info: 'text-gray-400' };
+    const tones = { ok: 'text-green-400', warn: 'text-yellow-400', error: 'text-red-400', info: 'text-gray-300' };
     el.classList.remove('hidden', ...Object.values(tones));
     if (!text) {
         el.classList.add('hidden');
@@ -651,7 +651,7 @@ function transferHtml(t) {
     const to = CHAINS[deposit ? POLYGON_CHAIN_ID : ETH_CHAIN_ID];
     const claimBusy = state.claiming.has(t.txHash);
     const hash = Utils.escapeHtml(t.txHash);
-    const txRow = (chainId, txHash, name) => `<div class="whitespace-nowrap"><span class="text-gray-500">${name}</span> <a href="${CHAINS[chainId].explorer}${Utils.escapeHtml(txHash)}" target="_blank" rel="noopener noreferrer" class="font-mono text-blue-400 hover:text-blue-300">${shortHash(Utils.escapeHtml(txHash))}</a></div>`;
+    const txRow = (chainId, txHash, name) => `<div class="whitespace-nowrap"><span class="text-gray-400">${name}</span> <a href="${CHAINS[chainId].explorer}${Utils.escapeHtml(txHash)}" target="_blank" rel="noopener noreferrer" class="font-mono text-blue-400 hover:text-blue-300">${shortHash(Utils.escapeHtml(txHash))}</a></div>`;
     const links = [txRow(deposit ? ETH_CHAIN_ID : POLYGON_CHAIN_ID, t.txHash, deposit ? 'Deposit' : 'Burn')];
     if (t.claimTxHash) links.push(txRow(ETH_CHAIN_ID, t.claimTxHash, 'Claim'));
     const hint = t.status === 'checkpoint' ? 'Claimable once a Polygon checkpoint includes it'
@@ -675,10 +675,10 @@ function transferHtml(t) {
         : '<span class="px-2 py-0.5 rounded-md text-[11px] font-semibold whitespace-nowrap bg-violet-500/15 text-violet-300">Withdraw</span>';
     return `
         <tr class="border-b border-[#2a2a2a] last:border-0 align-middle">
-            <td class="py-3 pr-3 whitespace-nowrap"><div class="text-gray-200">${formatDateTime(t.createdAt)}</div>${Date.now() - t.createdAt < 86400000 ? `<div class="text-xs text-gray-500">${timeAgo(t.createdAt)}</div>` : ''}</td>
+            <td class="py-3 pr-3 whitespace-nowrap"><div class="text-gray-200">${formatDateTime(t.createdAt)}</div>${Date.now() - t.createdAt < 86400000 ? `<div class="text-xs text-gray-400">${timeAgo(t.createdAt)}</div>` : ''}</td>
             <td class="py-3 pr-3">${action}</td>
             <td class="py-3 pr-3"><span class="inline-flex items-center gap-2 whitespace-nowrap"><span class="text-white font-medium">${formatData(t.amountWei)}</span>${chip(DATA_ICON, 'DATA')}</span></td>
-            <td class="py-3 pr-3"><span class="inline-flex items-center gap-1.5 whitespace-nowrap">${chip(from.icon, from.name)}<span class="text-gray-500">→</span>${chip(to.icon, to.name)}</span></td>
+            <td class="py-3 pr-3"><span class="inline-flex items-center gap-1.5 whitespace-nowrap">${chip(from.icon, from.name)}<span class="text-gray-400">→</span>${chip(to.icon, to.name)}</span></td>
             <td class="py-3 pr-3"><span class="px-2 py-0.5 rounded-full text-[11px] font-semibold whitespace-nowrap ${badgeClass} ${tooltip ? 'cursor-help' : ''}" ${tooltip ? `data-tooltip-content="${tooltip}"` : ''}>${label}</span></td>
             <td class="py-3 pr-3 text-xs space-y-0.5">${links.join('')}</td>
             <td class="py-3 text-right">${claimButton}</td>
@@ -688,7 +688,7 @@ function transferHtml(t) {
 function renderTransfers() {
     const body = $('bridge-transfers');
     if (!body) return;
-    const empty = (text) => `<tr><td colspan="7" class="py-4 text-sm text-gray-400">${text}</td></tr>`;
+    const empty = (text) => `<tr><td colspan="7" class="py-4 text-sm text-gray-300">${text}</td></tr>`;
     if (!state.address) {
         body.innerHTML = empty('Connect a wallet to see your transfers.');
         return;
@@ -772,7 +772,7 @@ function renderProgress() {
         done: '<svg class="w-4 h-4 text-green-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg>',
         error: '<svg class="w-4 h-4 text-red-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M6 18L18 6M6 6l12 12"/></svg>'
     };
-    const textClass = { pending: 'text-gray-400', active: 'text-white', done: 'text-gray-300', error: 'text-red-400' };
+    const textClass = { pending: 'text-gray-300', active: 'text-white', done: 'text-gray-300', error: 'text-red-400' };
     list.innerHTML = state.flow.steps.map(step => `
         <li class="flex items-center gap-2">
             ${icons[step.status]}
