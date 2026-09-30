@@ -2040,11 +2040,7 @@ export async function confirmUndelegation(signer, myRealAddress, currentOperator
             ])
         );
 
-        // Calculate real-time exchange rate: DATA per Operator Token
-        // exchangeRate = valueWithoutEarnings / totalSupply
-        // To convert DATA to Operator Tokens: tokens = amountData * totalSupply / valueWithoutEarnings
-        
-        // Calculate user's current DATA balance using real-time exchange rate
+        // The user's current DATA balance: operator tokens at the real-time exchange rate
         let userBalanceDataWei;
         if (totalSupplyWei.isZero()) {
             userBalanceDataWei = ethers.BigNumber.from(0);
@@ -2058,27 +2054,10 @@ export async function confirmUndelegation(signer, myRealAddress, currentOperator
             return null;
         }
 
-        let amountOperatorTokensWei;
+        // undelegate() takes the amount in DATA: the contract converts it to operator tokens when it pays out.
+        // Full withdrawal: the whole current balance (an amount typed from a rounded balance leaves no dust)
         const fullWithdrawalThreshold = userBalanceDataWei.mul(9999).div(10000);
-        
-        if (amountDataWei.gte(fullWithdrawalThreshold)) {
-            // Full withdrawal - use all user's tokens
-            amountOperatorTokensWei = userBalanceTokensWei;
-        } else {
-            // Partial withdrawal - calculate operator tokens using real-time exchange rate
-            // operatorTokens = amountData * totalSupply / valueWithoutEarnings
-            if (valueWithoutEarningsWei.isZero()) {
-                throw new Error("Operator has no DATA value, cannot calculate conversion");
-            }
-            amountOperatorTokensWei = amountDataWei
-                .mul(totalSupplyWei)
-                .div(valueWithoutEarningsWei);
-            
-            // Safety check: never exceed user's token balance
-            if (amountOperatorTokensWei.gt(userBalanceTokensWei)) {
-                amountOperatorTokensWei = userBalanceTokensWei;
-            }
-        }
+        const undelegateDataWei = amountDataWei.gte(fullWithdrawalThreshold) ? userBalanceDataWei : amountDataWei;
 
         // Check gas price before proceeding
         if (!await checkGasPriceAndWarn(signer.provider)) {
@@ -2088,7 +2067,7 @@ export async function confirmUndelegation(signer, myRealAddress, currentOperator
 
         setModalState('tx-modal', 'loading');
         const gasOverrides = await getGasOverrides(signer.provider);
-        const tx = await operatorContract.undelegate(amountOperatorTokensWei, gasOverrides);
+        const tx = await operatorContract.undelegate(undelegateDataWei, gasOverrides);
         setModalState('tx-modal', 'loading', { 
             text: 'Processing Transaction...', 
             subtext: 'Waiting for confirmation.' 
