@@ -168,8 +168,8 @@ const SLIPPAGE_KEY = 'swapSlippage';
 const state = {
     active: false,
     address: null,
-    counter: 'POL',          // the token traded against DATA
-    sellData: true,          // true: pay DATA, receive counter; false: the reverse
+    counter: 'USDC',         // the token traded against DATA
+    sellData: false,         // true: pay DATA, receive counter; false: the reverse (default: pay USDC, buy DATA)
     slippage: 0.5,
     balances: {},            // symbol -> BigNumber
     pools: new Map(),        // pairKey -> { qv2, sushi, qv3: pool address | null, uni: Map(fee -> pool) } (session cache)
