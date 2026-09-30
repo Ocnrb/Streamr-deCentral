@@ -155,6 +155,7 @@ const KNOWN_TOKENS = {
 
 const DEADLINE_SECONDS = 20 * 60;
 const QUOTE_REFRESH_MS = 30 * 1000;
+const HISTORY_REFRESH_TICKS = 4;    // the wallet's swaps every 4 refreshes (2 min): explorer calls are rate limited
 const IMPACT_WARN = 2;     // %
 const IMPACT_BLOCK = 15;   // %
 const POL_GAS_RESERVE = ethers.utils.parseEther('0.2');   // kept by MAX when paying with POL
@@ -1705,13 +1706,36 @@ function resetFlow() {
 // Lifecycle
 // ============================================
 
+/** While the page stays open: the quote and balances every 30 s, the wallet's swaps every 2 min */
 function scheduleRefresh() {
     clearTimeout(state.refreshTimer);
     if (!state.active) return;
     state.refreshTimer = setTimeout(() => {
-        if (!document.hidden && !state.flow && state.quote) updateQuote();
+        state.refreshTicks = (state.refreshTicks || 0) + 1;
+        if (!document.hidden) {
+            if (!state.flow && state.quote) updateQuote();
+            loadBalances();
+            if (state.refreshTicks % HISTORY_REFRESH_TICKS === 0) refreshHistoryQuietly();
+        }
         scheduleRefresh();
     }, QUOTE_REFRESH_MS);
+}
+
+/** The wallet's swaps again, without the refresh button's spinner */
+function refreshHistoryQuietly() {
+    if (!state.address) return;
+    Promise.all([recoverSwapsFromExplorer(), settlePendingSwaps()])
+        .then(() => renderHistory())
+        .catch(e => logger.warn('Swap: history refresh failed', e));
+}
+
+/** Back on the tab after a while: everything at once instead of at the next tick */
+function refreshOnReturn() {
+    if (document.hidden || !state.active) return;
+    if (!state.flow && state.quote) updateQuote();
+    loadBalances();
+    refreshHistoryQuietly();
+    SwapMarket.refresh();
 }
 
 function openPoolsModal() {
@@ -1729,6 +1753,7 @@ function closePoolsModal() {
 function setupListeners() {
     if (state.listenersSetup) return;
     state.listenersSetup = true;
+    document.addEventListener('visibilitychange', refreshOnReturn);
     $('swap-amount')?.addEventListener('input', () => {
         if (state.flow) return;
         showError('');

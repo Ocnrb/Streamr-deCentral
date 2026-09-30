@@ -47,6 +47,10 @@ const state = {
     history: [],           // daily { t, p }, oldest first
     ownHashes: new Set(),
     shown: TRADES_PAGE,    // rows of the trades list
+    oldestBlock: null,     // first block of the loaded trades range
+    firstTradeBlock: undefined,  // block of the pool's first trade (null: none)
+    reachedStart: false,   // every trade since the pool's first one is loaded
+    loadingOlder: false,
     failures: 0,           // failed loads in a row (before the first success: asked again sooner)
     chart: null,
     timer: null,
@@ -90,10 +94,10 @@ function formatTime(ms, withYear = false) {
 const EXPLORER_BUSY = /rate limit|max calls|too many|timeout|temporarily|busy/i;
 
 /** Swap logs of the pool from a block on; a busy explorer (rate limit: the app's default key is shared) is asked again shortly */
-async function fetchLogs(fromBlock, page = 1) {
+async function fetchLogs(fromBlock, page = 1, toBlock = 'latest', offset = MAX_LOGS) {
     const url = `${POLYGONSCAN_NETWORK.apiUrl}?chainid=137&module=logs&action=getLogs&address=${POOL_MANAGER}`
-        + `&topic0=${SWAP_TOPIC}&topic0_1_opr=and&topic1=${POOL_ID}&fromBlock=${fromBlock}&toBlock=latest`
-        + `&page=${page}&offset=${MAX_LOGS}&apikey=${getEtherscanApiKey()}`;
+        + `&topic0=${SWAP_TOPIC}&topic0_1_opr=and&topic1=${POOL_ID}&fromBlock=${fromBlock}&toBlock=${toBlock}`
+        + `&page=${page}&offset=${offset}&apikey=${getEtherscanApiKey()}`;
     let lastError = null;
     for (let attempt = 0; attempt < 4; attempt++) {
         if (attempt) await new Promise(resolve => setTimeout(resolve, 1000 * 2 ** (attempt - 1)));
@@ -160,30 +164,31 @@ function setSides(trades) {
     }
 }
 
-async function loadTrades() {
-    const latest = await Services.readWithFallback(() => Services.getReadOnlyProvider().getBlockNumber());
-    let logs;
-    if (state.nextFromBlock === null) {
-        // The explorer returns the oldest logs first, 1000 a page: the 7 days page by page; a pool busier
-        // than MAX_PAGES pages narrows the window, so the latest trades are always there
-        let days = TRADE_DAYS;
-        for (;;) {
-            const fromBlock = latest - Math.round(days * BLOCKS_PER_DAY);
-            let complete = false;
-            logs = [];
-            for (let page = 1; page <= MAX_PAGES; page++) {
-                if (page > 1) await new Promise(resolve => setTimeout(resolve, PAGE_PAUSE_MS));
-                const pageLogs = await fetchLogs(fromBlock, page);
-                logs.push(...pageLogs);
-                if (pageLogs.length < MAX_LOGS) { complete = true; break; }
-            }
-            if (complete || days <= 0.25) break;
-            days /= 4;
-        }
-        state.windowStart = Date.now() - days * DAY;
-    } else {
-        logs = await fetchLogs(state.nextFromBlock);
+const pause = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+/** Every log of a block range, page by page (oldest first); complete: false when it holds more than MAX_PAGES pages */
+async function fetchRange(fromBlock, toBlock) {
+    const logs = [];
+    for (let page = 1; page <= MAX_PAGES; page++) {
+        if (page > 1) await pause(PAGE_PAUSE_MS);
+        const pageLogs = await fetchLogs(fromBlock, page, toBlock);
+        logs.push(...pageLogs);
+        if (pageLogs.length < MAX_LOGS) return { logs, complete: true };
     }
+    return { logs, complete: false };
+}
+
+/** The trades of up to `days` before toBlock; a range too busy for MAX_PAGES pages is narrowed, so the newest are there */
+async function fetchNewest(toBlock, days, floorBlock = 0) {
+    for (;;) {
+        const fromBlock = Math.max(floorBlock, toBlock - Math.round(days * BLOCKS_PER_DAY));
+        const { logs, complete } = await fetchRange(fromBlock, toBlock);
+        if (complete || days <= 0.25) return { logs, fromBlock };
+        days /= 4;
+    }
+}
+
+function addTrades(logs) {
     let added = 0;
     for (const log of logs) {
         const trade = parseLog(log);
@@ -194,11 +199,51 @@ async function loadTrades() {
     }
     state.trades.sort((a, b) => a.block - b.block || a.logIndex - b.logIndex);
     setSides(state.trades);
+    return added;
+}
+
+async function loadTrades() {
+    const latest = await Services.readWithFallback(() => Services.getReadOnlyProvider().getBlockNumber());
+    let added;
+    if (state.nextFromBlock === null) {
+        const { logs, fromBlock } = await fetchNewest(latest, TRADE_DAYS);
+        state.oldestBlock = fromBlock;
+        state.windowStart = Date.now() - (latest - fromBlock) * (DAY / BLOCKS_PER_DAY);
+        added = addTrades(logs);
+    } else {
+        added = addTrades(await fetchLogs(state.nextFromBlock));
+    }
     const lastLogBlock = state.trades.length ? state.trades[state.trades.length - 1].block : 0;
     // From the last trade seen (the explorer may be a few blocks behind the RPC); duplicates are skipped
     state.nextFromBlock = Math.max(lastLogBlock, latest - 150);
     state.loaded = true;
     state.error = false;
+    return added;
+}
+
+/** Trades before the oldest loaded: 7 days back, further (a doubling window) over quiet weeks, until the pool's first trade */
+async function loadOlder() {
+    if (state.reachedStart || state.oldestBlock === null) return 0;
+    if (state.firstTradeBlock === undefined) {
+        const first = await fetchLogs(0, 1, 'latest', 1);
+        state.firstTradeBlock = first.length ? parseInt(first[0].blockNumber, 16) : null;
+    }
+    let added = 0;
+    let days = TRADE_DAYS;
+    while (!added) {
+        if (state.firstTradeBlock === null || state.oldestBlock <= state.firstTradeBlock) {
+            state.reachedStart = true;
+            break;
+        }
+        const { logs, fromBlock } = await fetchNewest(state.oldestBlock - 1, days, state.firstTradeBlock);
+        state.oldestBlock = fromBlock;
+        added = addTrades(logs);
+        days *= 2;
+        if (!added) await pause(PAGE_PAUSE_MS);
+    }
+    // The trades are complete from the oldest one loaded on
+    if (state.trades.length) state.windowStart = Math.min(state.windowStart, state.trades[0].time);
+    if (state.oldestBlock <= state.firstTradeBlock) state.reachedStart = true;
     return added;
 }
 
@@ -278,10 +323,11 @@ function renderTrades() {
         body.innerHTML = row(`<span class="inline-flex items-center gap-2">${spinner}${state.error ? 'The explorer is busy, trying again...' : 'Loading market trades...'}</span>`);
         return;
     }
-    $('swap-trades-more')?.classList.toggle('hidden', state.trades.length <= state.shown);
+    // Load More stays until every trade since the pool's first one is shown
+    $('swap-trades-more')?.classList.toggle('hidden', state.trades.length <= state.shown && state.reachedStart);
     const recent = state.trades.slice(-state.shown).reverse();
     if (!recent.length) {
-        body.innerHTML = row(`No trades in the last ${TRADE_DAYS} days.`);
+        body.innerHTML = row(state.reachedStart ? 'No trades on this pool yet.' : `No trades in the last ${TRADE_DAYS} days.`);
         return;
     }
     body.innerHTML = recent.map(trade => {
@@ -472,11 +518,15 @@ function renderAll() {
 }
 
 async function refresh() {
+    const wasLoaded = state.loaded;
     try {
         const added = await loadTrades();
         state.failures = 0;
         if (!state.active) return;
-        if (added || !state.chart) renderAll(); else renderStats();
+        // Stats and chart every time (the 24h window and the "now" point move on); the list only with new trades
+        renderStats();
+        renderChart();
+        if (added || !wasLoaded) renderTrades();
     } catch (e) {
         logger.warn('Swap market: trades not loaded', e);
         state.failures++;
@@ -496,13 +546,38 @@ function schedule() {
     }, delay);
 }
 
+/** Next 50 rows: from the loaded trades, else older ones from the explorer */
+async function loadMore() {
+    const btn = $('swap-trades-more');
+    if (state.shown < state.trades.length) {
+        state.shown += TRADES_PAGE;
+        renderTrades();
+        return;
+    }
+    if (state.loadingOlder || !btn) return;
+    state.loadingOlder = true;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="inline-flex items-center gap-2"><span class="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" aria-hidden="true"></span>Loading...</span>';
+    try {
+        await loadOlder();
+        state.shown += TRADES_PAGE;
+    } catch (e) {
+        logger.warn('Swap market: older trades not loaded', e);
+    } finally {
+        state.loadingOlder = false;
+        btn.disabled = false;
+        btn.textContent = 'Load More';
+        if (state.active) {
+            renderTrades();
+            renderChart();
+        }
+    }
+}
+
 function setupListeners() {
     if (state.listening) return;
     state.listening = true;
-    $('swap-trades-more')?.addEventListener('click', () => {
-        state.shown += TRADES_PAGE;
-        renderTrades();
-    });
+    $('swap-trades-more')?.addEventListener('click', loadMore);
     $('swap-chart-range')?.addEventListener('click', (e) => {
         const btn = e.target.closest('button[data-range]');
         if (!btn || btn.dataset.range === state.range) return;

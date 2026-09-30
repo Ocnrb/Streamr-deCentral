@@ -380,7 +380,16 @@ export function hidePrivateKeyModal() {
     }
 }
 
+let lastDisplayedView = null;
+
 export function displayView(view) {
+    // Another page opens at the top (the window keeps the scroll of the page before otherwise);
+    // the same page shown again (a data refresh) stays where it is
+    if (view !== lastDisplayedView) {
+        lastDisplayedView = view;
+        window.scrollTo(0, 0);
+    }
+
     // Hide all views first
     operatorListView.style.display = 'none';
     operatorDetailView.style.display = 'none';
