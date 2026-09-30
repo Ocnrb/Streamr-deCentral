@@ -4069,9 +4069,9 @@
       grid-template-columns: repeat(4, minmax(0, 1fr));
     }
   }
-  .lg\:grid-cols-\[minmax\(0\,1fr\)_24rem\] {
+  .lg\:grid-cols-\[24rem_minmax\(0\,1fr\)\] {
     @media (width >= 64rem) {
-      grid-template-columns: minmax(0,1fr) 24rem;
+      grid-template-columns: 24rem minmax(0,1fr);
     }
   }
   .lg\:flex-col {
@@ -4171,9 +4171,9 @@
       grid-template-columns: repeat(12, minmax(0, 1fr));
     }
   }
-  .xl\:grid-cols-\[minmax\(0\,1fr\)_28rem\] {
+  .xl\:grid-cols-\[28rem_minmax\(0\,1fr\)\] {
     @media (width >= 80rem) {
-      grid-template-columns: minmax(0,1fr) 28rem;
+      grid-template-columns: 28rem minmax(0,1fr);
     }
   }
   .xl\:grid-rows-\[minmax\(0\,1fr\)\] {
