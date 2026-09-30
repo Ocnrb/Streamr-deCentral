@@ -2875,9 +2875,8 @@
         <!-- Swap: DATA against POL / USDC on Polygon, through QuickSwap and Uniswap pools -->
         <div id="swap-view" class="hidden p-4 md:p-6">
             <div class="space-y-5">
-                <!-- Market: DATA/USD and the latest trades beside the swap form (exchange layout) -->
-                <div class="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_24rem] xl:grid-cols-[minmax(0,1fr)_28rem] gap-5 lg:items-start">
-                <section class="detail-section p-4 sm:p-5 lg:col-start-1 lg:row-start-1">
+                <!-- Market: DATA/USD on top, then the market trades beside the swap form (exchange layout) -->
+                <section class="detail-section p-4 sm:p-5">
                     <div class="flex flex-wrap items-start justify-between gap-3 mb-3">
                         <div class="min-w-0">
                             <p class="text-xs font-medium text-gray-400">DATA / USD</p>
@@ -2897,10 +2896,10 @@
                         </div>
                     </div>
                     <div id="swap-chart" class="relative h-64 sm:h-80"></div>
-                    <p id="swap-chart-note" class="mt-2 text-[11px] text-gray-500"></p>
                 </section>
 
-                <section class="detail-section p-4 sm:p-5 space-y-4 w-full lg:col-start-2 lg:row-start-1 lg:row-span-2">
+                <div class="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_24rem] xl:grid-cols-[minmax(0,1fr)_28rem] gap-5">
+                <section class="detail-section p-4 sm:p-5 space-y-4 w-full lg:col-start-2 lg:row-start-1">
                     <div class="flex items-start justify-between gap-3">
                         <div>
                             <h2 class="text-lg font-semibold text-white">Swap DATA</h2>
@@ -2996,12 +2995,14 @@
                 </section>
 
                 <!-- Latest trades of the main DATA pool -->
-                <section class="detail-section p-4 sm:p-5 lg:col-start-1 lg:row-start-2">
+                <section class="detail-section p-4 sm:p-5 flex flex-col lg:col-start-1 lg:row-start-1">
                     <div class="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 mb-3">
                         <h3 class="text-lg font-semibold text-white">Market trades</h3>
                         <span class="text-xs text-gray-400">Uniswap v4 · DATA/USDC 0.3%</span>
                     </div>
-                    <div class="overflow-auto max-h-[26rem]">
+                    <!-- As tall as the swap form beside it (lg): the table scrolls inside -->
+                    <div class="relative flex-1 lg:min-h-[16rem]">
+                    <div class="overflow-auto max-h-[26rem] lg:max-h-none lg:absolute lg:inset-0">
                         <table class="w-full min-w-[360px] text-sm">
                             <thead class="sticky top-0 bg-[#1E1E1E] text-xs text-gray-400 border-b border-[#333]">
                                 <tr>
@@ -3014,6 +3015,7 @@
                             </thead>
                             <tbody id="swap-trades"></tbody>
                         </table>
+                    </div>
                     </div>
                 </section>
                 </div>

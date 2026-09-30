@@ -22,7 +22,6 @@ const POOL_ID = ethers.utils.keccak256(ethers.utils.defaultAbiCoder.encode(
     ['address', 'address', 'uint24', 'int24', 'address'],
     [...(DATA_IS_CURRENCY0 ? [DATA, USDC] : [USDC, DATA]), 3000, 60, ethers.constants.AddressZero]
 ));
-const POOL_LABEL = 'Uniswap v4 · DATA/USDC 0.3%';
 
 const BLOCKS_PER_DAY = 43200;        // Polygon: about 2 s per block
 const TRADE_DAYS = 7;
@@ -329,12 +328,6 @@ function renderChart() {
     const container = $('swap-chart');
     if (!container || typeof Chart === 'undefined') return;
     const { points, stepped } = chartPoints();
-    const note = $('swap-chart-note');
-    if (note) {
-        note.textContent = TRADE_RANGES.includes(state.range)
-            ? `Pool price after each trade on ${POOL_LABEL}`
-            : `Daily DATA/USD, then the pool price after each trade on ${POOL_LABEL}`;
-    }
     if (points.length < 2) {
         state.chart?.destroy();
         state.chart = null;
