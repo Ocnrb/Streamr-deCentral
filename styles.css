@@ -809,8 +809,8 @@
   .w-64 {
     width: calc(var(--spacing) * 64);
   }
-  .w-\[6\.5rem\] {
-    width: 6.5rem;
+  .w-\[7\.5rem\] {
+    width: 7.5rem;
   }
   .w-\[22px\] {
     width: 22px;

@@ -777,7 +777,7 @@ function tokenSlotHtml(symbol, selectable) {
         return `${token.icon}<span class="text-lg font-semibold text-white">${token.symbol}</span>`;
     }
     const options = COUNTER_TOKENS.map(s => `<option value="${s}" ${s === symbol ? 'selected' : ''}>${Utils.escapeHtml(s)}</option>`).join('');
-    return `${token.icon}<select data-token-select aria-label="Token" data-tooltip-content="USDC is the native USDC. USDC.e is the older bridged USDC." class="w-[6.5rem] bg-[#2C2C2C] hover:bg-[#3C3C3C] text-white text-sm font-semibold rounded-lg pl-2 pr-7 py-1.5 border border-[#444] focus:outline-none focus:ring-2 focus:ring-blue-500/50 disabled:opacity-50">${options}</select>`;
+    return `${token.icon}<select data-token-select aria-label="Token" class="w-[7.5rem] bg-[#2C2C2C] hover:bg-[#3C3C3C] text-white text-sm font-semibold rounded-lg pl-2 pr-7 py-1.5 border border-[#444] focus:outline-none focus:ring-2 focus:ring-blue-500/50 disabled:opacity-50">${options}</select>`;
 }
 
 function renderTokens() {
