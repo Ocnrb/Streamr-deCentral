@@ -1071,7 +1071,10 @@ async function receivedAmount(receipt, token, polBefore) {
 
 // ---------- Swap history (per wallet) ----------
 
-const HISTORY_LIMIT = 30;
+const HISTORY_LIMIT = 100;          // swaps kept per wallet
+const HISTORY_PAGE = 20;            // rows shown at first, and added by Show more
+const EXPLORER_RECORDS = 1000;      // latest token transfers / transactions of the wallet read from the explorer
+let historyShown = HISTORY_PAGE;
 const historyKey = () => `swapHistory:${state.address}`;
 const SYMBOL_DECIMALS = { DATA: 18, POL: 18, WPOL: 18, USDC: 6, 'USDC.e': 6, USDT: 6, WETH: 18, DAI: 18 };
 
@@ -1117,9 +1120,13 @@ const KNOWN_ROUTERS = {
     '0x6a000f20005980200259b80c5102003040001068': 'ParaSwap'
 };
 
+// Routers of the DEXes themselves (the route says it all); the other known routers are aggregators or wallets
+const DEX_ROUTERS = new Set([UNIVERSAL_ROUTER, '0x4c60051384bd2d3c01bfc845cf5f4b44bcbe9de5', UNISWAP_V3_ROUTER, '0xe592427a0aece92de3edee1f18e0157c05861564',
+    QUICKSWAP_V2_ROUTER, QUICKSWAP_V3_ROUTER, SUSHI_V2_ROUTER].map(lower));
+
 /** DATA swaps of this wallet from the explorer (also those made in other apps): token legs in and out of one transaction */
 async function recoverSwapsFromExplorer() {
-    const base = `${POLYGONSCAN_NETWORK.apiUrl}?chainid=137&module=account&address=${state.address}&page=1&offset=200&sort=desc&apikey=${getEtherscanApiKey()}`;
+    const base = `${POLYGONSCAN_NETWORK.apiUrl}?chainid=137&module=account&address=${state.address}&page=1&offset=${EXPLORER_RECORDS}&sort=desc&apikey=${getEtherscanApiKey()}`;
     const get = (action) => fetch(`${base}&action=${action}`).then(r => r.json()).then(j => (Array.isArray(j?.result) ? j.result : [])).catch(() => []);
     const [tokenTx, internalTx, normalTx] = await Promise.all([get('tokentx'), get('txlistinternal'), get('txlist')]);
     const me = state.address;
@@ -1271,6 +1278,136 @@ function dataUsdCell(entry) {
     return `<span class="text-white font-medium whitespace-nowrap" data-tooltip-content="${tip}${estimated ? '<br>Estimated until the swap is confirmed' : ''}">${estimated ? '≈ ' : ''}$${text}</span>`;
 }
 
+// ---------- Route of a swap, read from its transaction ----------
+// Every pool a swap goes through logs a Swap event: the pools (and so the DEX, fee and tokens) give the
+// route of any swap, also one made in another app or whose local record is gone.
+
+const SWAP_TOPICS = {
+    v4: ethers.utils.id('Swap(bytes32,address,int128,int128,uint160,uint128,int24,uint24)'),
+    v3: ethers.utils.id('Swap(address,address,int256,int256,uint160,uint128,int24)'),   // Uniswap v3 and QuickSwap V3 (Algebra)
+    v2: ethers.utils.id('Swap(address,uint256,uint256,uint256,uint256,address)')
+};
+const POOL_INFO_IFACE = new ethers.utils.Interface([
+    'function token0() view returns (address)',
+    'function token1() view returns (address)',
+    'function factory() view returns (address)',
+    'function fee() view returns (uint24)'
+]);
+const FACTORY_VENUES = {
+    [QUICKSWAP_V2_FACTORY.toLowerCase()]: 'qv2',
+    [SUSHI_V2_FACTORY.toLowerCase()]: 'sushi',
+    [QUICKSWAP_V3_FACTORY.toLowerCase()]: 'qv3',
+    [UNISWAP_V3_FACTORY.toLowerCase()]: 'uni'
+};
+const poolInfoCache = new Map();   // pool address -> { venue, token0, token1, fee } | null
+let v4KeysById = null;
+
+/** Hookless v4 pools between the known tokens, by pool id */
+function knownV4Keys() {
+    if (!v4KeysById) {
+        v4KeysById = new Map();
+        const tokens = Object.keys(KNOWN_TOKENS);
+        for (let i = 0; i < tokens.length; i++) {
+            for (let j = i + 1; j < tokens.length; j++) {
+                for (const [fee, tickSpacing] of V4_TIERS) {
+                    const key = v4PoolKey(tokens[i], tokens[j], fee, tickSpacing);
+                    v4KeysById.set(v4PoolId(key), key);
+                }
+            }
+        }
+    }
+    return v4KeysById;
+}
+
+/** DEX, tokens and fee of v2 / v3 pools (read once per pool) */
+async function loadPoolInfo(addresses) {
+    const missing = [...new Set(addresses.map(lower))].filter(a => !poolInfoCache.has(a));
+    if (!missing.length) return;
+    const calls = missing.flatMap(target => ['token0', 'token1', 'factory', 'fee'].map(fn => ({ target, iface: POOL_INFO_IFACE, fn, args: [] })));
+    const results = await multicall(calls);
+    missing.forEach((address, i) => {
+        const [token0, token1, factory, fee] = results.slice(i * 4, i * 4 + 4).map(r => r?.[0]);
+        const venue = factory ? FACTORY_VENUES[lower(factory)] : null;
+        poolInfoCache.set(address, token0 && token1 ? { venue, token0: lower(token0), token1: lower(token1), fee: venue === 'uni' && fee ? Number(fee) : null } : null);
+    });
+}
+
+// POL and WPOL are one token for the path (v4 pools hold native POL, the others WPOL)
+const sameToken = (a, b) => a === b || ([a, b].every(t => t === NATIVE || t === lower(WPOL)));
+
+/** Route label of a swap from its receipt (null when no known pool took part) */
+async function routeFromReceipt(receipt, entry) {
+    const logs = receipt.logs.filter(l => Object.values(SWAP_TOPICS).includes(l.topics[0]));
+    await loadPoolInfo(logs.filter(l => l.topics[0] !== SWAP_TOPICS.v4).map(l => l.address));
+    const hops = [];
+    for (const log of logs) {
+        if (log.topics[0] === SWAP_TOPICS.v4) {
+            if (lower(log.address) !== lower(UNISWAP_V4_POOL_MANAGER)) continue;
+            const key = knownV4Keys().get(log.topics[1]);
+            hops.push(key ? { venue: 'v4', tokens: [lower(key.currency0), lower(key.currency1)], fee: key.fee } : { venue: 'v4', tokens: null });
+        } else {
+            const info = poolInfoCache.get(lower(log.address));
+            hops.push(info?.venue ? { venue: info.venue, tokens: [info.token0, info.token1], fee: info.fee } : { venue: null, tokens: null });
+        }
+    }
+    if (!hops.length || hops.some(h => !h.venue)) return null;
+    const venueName = (venue) => VENUES[venue].name;
+    const venues = [...new Set(hops.map(h => h.venue))];
+    // Chain the pools from the paid token: a straight route gives the whole token path
+    const payToken = entry.pay?.symbol === 'POL' ? NATIVE : Object.keys(KNOWN_TOKENS).find(a => KNOWN_TOKENS[a].symbol === entry.pay?.symbol);
+    const path = payToken ? [payToken] : null;
+    for (const hop of hops) {
+        if (!path || !hop.tokens) break;
+        const current = path[path.length - 1];
+        const from = hop.tokens.findIndex(t => sameToken(t, current));
+        if (from === -1) { path.length = 0; break; }
+        path.push(hop.tokens[1 - from]);
+    }
+    const symbol = (address, i, all) => {
+        const known = KNOWN_TOKENS[address]?.symbol || Utils.shortAddress(address);
+        // The ends show what was paid and received (POL, not WPOL)
+        if (i === 0 && entry.pay?.symbol === 'POL' && known === 'WPOL') return 'POL';
+        if (i === all.length - 1 && entry.receive?.symbol === 'POL' && known === 'WPOL') return 'POL';
+        return known;
+    };
+    const straight = path && path.length === hops.length + 1;
+    if (venues.length === 1 && straight) {
+        const fees = hops.every(h => h.fee) ? ` (${hops.map(h => `${h.fee / 10000}%`).join(' / ')})` : '';
+        return `${venueName(venues[0])}${fees} · ${path.map(symbol).join(' → ')}`;
+    }
+    // Split or mixed routes (aggregators): the DEXes, from what was paid to what was received
+    return `${venues.map(venueName).join(' + ')} · ${entry.pay?.symbol} → ${entry.receive?.symbol}`;
+}
+
+const routeTried = new Set();
+let inferringRoutes = false;
+
+/** Route of each swap without one (recovered from the explorer, or its local record lost), kept with the swap */
+async function fillRoutes() {
+    const missing = state.history.filter(h => h.status === 'done' && !h.route && !routeTried.has(lower(h.txHash)));
+    if (inferringRoutes || !missing.length) return;
+    inferringRoutes = true;
+    let changed = false;
+    try {
+        for (const entry of missing) {
+            routeTried.add(lower(entry.txHash));
+            try {
+                const receipt = await read(p => p.getTransactionReceipt(entry.txHash));
+                const route = receipt ? await routeFromReceipt(receipt, entry) : null;
+                if (route) { entry.route = route; changed = true; }
+            } catch (e) {
+                logger.warn(`Swap: route of ${entry.txHash} not read`, e);
+            }
+        }
+    } finally {
+        inferringRoutes = false;
+        if (changed) {
+            saveHistory();
+            renderHistory();
+        }
+    }
+}
+
 function timeAgo(ms) {
     const seconds = Math.max(0, Math.floor((Date.now() - ms) / 1000));
     if (seconds < 60) return 'just now';
@@ -1300,7 +1437,11 @@ function formatDateTime(ms) {
 
 /** Route column: the route of swaps made here, else the router / aggregator the transaction went to */
 function routeCell(entry) {
-    if (entry.route) return Utils.escapeHtml(entry.route);
+    if (entry.route) {
+        // Swaps made through an aggregator or wallet: which one, under the route
+        const app = entry.via && !DEX_ROUTERS.has(lower(entry.via)) ? KNOWN_ROUTERS[lower(entry.via)] : null;
+        return Utils.escapeHtml(entry.route) + (app ? `<div class="text-gray-500">via ${Utils.escapeHtml(app)}</div>` : '');
+    }
     if (!entry.via) return '<span class="text-gray-500">Unknown</span>';
     const known = KNOWN_ROUTERS[lower(entry.via)];
     if (known) return Utils.escapeHtml(known);
@@ -1312,16 +1453,15 @@ function renderHistory() {
     const body = $('swap-history');
     if (!body) return;
     const empty = (text) => `<tr><td colspan="8" class="py-4 text-sm text-gray-400">${text}</td></tr>`;
-    if (!state.address) {
-        body.innerHTML = empty('Connect a wallet to see your swaps.');
-        return;
-    }
-    if (!state.history.length) {
-        body.innerHTML = empty('No DATA swaps yet.');
+    if (!state.address || !state.history.length) {
+        $('swap-history-more')?.classList.add('hidden');
+        body.innerHTML = empty(state.address ? 'No DATA swaps yet.' : 'Connect a wallet to see your swaps.');
         return;
     }
     const amount = (leg) => `<span class="inline-flex items-center gap-2 whitespace-nowrap"><span class="text-white font-medium">${leg.estimated ? '≈ ' : ''}${formatAmount(leg.amount, SYMBOL_DECIMALS[leg.symbol] ?? 18)}</span>${tokenChip(leg.symbol)}</span>`;
-    body.innerHTML = state.history.slice(0, HISTORY_LIMIT).map(entry => {
+    const more = $('swap-history-more');
+    more?.classList.toggle('hidden', state.history.length <= historyShown);
+    body.innerHTML = state.history.slice(0, historyShown).map(entry => {
         const [label, badge] = HISTORY_BADGES[entry.status] || HISTORY_BADGES.pending;
         const selling = entry.pay?.symbol === 'DATA';
         const action = selling
@@ -1337,10 +1477,11 @@ function renderHistory() {
                 <td class="py-3 pr-3">${dataUsdCell(entry)}</td>
                 <td class="py-3 pr-3 text-xs text-gray-400">${routeCell(entry)}</td>
                 <td class="py-3 pr-3"><span class="px-2 py-0.5 rounded-full text-[11px] font-semibold whitespace-nowrap ${badge}">${label}</span></td>
-                <td class="py-3 text-right whitespace-nowrap"><a href="https://polygonscan.com/tx/${hash}" target="_blank" rel="noopener noreferrer" class="font-mono text-xs text-blue-400 hover:text-blue-300">${hash.slice(0, 6)}…${hash.slice(-4)} ↗</a></td>
+                <td class="py-3 text-right whitespace-nowrap"><a href="https://polygonscan.com/tx/${hash}" target="_blank" rel="noopener noreferrer" class="font-mono text-xs text-blue-400 hover:text-blue-300">${hash.slice(0, 6)}…${hash.slice(-4)}</a></td>
             </tr>`;
     }).join('');
     fillPolPrices();
+    fillRoutes();
 }
 
 /** Spins a refresh button's icon while the work runs (at least half a second, so it is noticed) */
@@ -1603,6 +1744,10 @@ function setupListeners() {
     });
     $('swap-submit')?.addEventListener('click', handleSubmit);
     $('swap-history-refresh')?.addEventListener('click', () => refreshHistory());
+    $('swap-history-more')?.addEventListener('click', () => {
+        historyShown += HISTORY_PAGE;
+        renderHistory();
+    });
     $('swap-pools-btn')?.addEventListener('click', openPoolsModal);
     $('swap-pools-close')?.addEventListener('click', closePoolsModal);
     $('swapPoolsModal')?.addEventListener('click', (e) => {
@@ -1637,6 +1782,7 @@ export const SwapLogic = {
             state.address = address;
             state.balances = {};
             state.history = address ? loadStoredHistory() : [];
+            historyShown = HISTORY_PAGE;
         }
         renderHistory();
         refreshHistory().catch(e => logger.warn('Swap: history refresh failed', e));

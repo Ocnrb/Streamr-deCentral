@@ -2757,8 +2757,8 @@
         <!-- ===== GOVERNANCE VIEW ===== -->
         <!-- Flagging & voting explorer: KPIs, live flags, activity, process, flag list, leaderboards -->
         <!-- Bridge: DATA between Ethereum and Polygon over the official Polygon PoS bridge -->
-        <div id="bridge-view" class="hidden p-4 md:p-5">
-            <div class="max-w-6xl mx-auto space-y-5">
+        <div id="bridge-view" class="hidden p-4 md:p-6">
+            <div class="space-y-5">
             <!-- Usual bridge times (Polygon docs: state sync ~7-8 min; checkpoints every ~10-30 min) -->
             <div class="flex items-center gap-3 px-4 py-3 bg-yellow-500/10 border border-yellow-500/30 rounded-lg text-sm text-yellow-200" role="note">
                 <svg class="w-6 h-6 flex-shrink-0 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v3.75m0 3.75h.008M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/></svg>
@@ -2873,8 +2873,8 @@
         </div>
 
         <!-- Swap: DATA against POL / USDC on Polygon, through QuickSwap and Uniswap pools -->
-        <div id="swap-view" class="hidden p-4 md:p-5">
-            <div class="max-w-6xl mx-auto space-y-5">
+        <div id="swap-view" class="hidden p-4 md:p-6">
+            <div class="space-y-5">
                 <section class="detail-section p-4 sm:p-5 space-y-4 w-full max-w-2xl mx-auto">
                     <div class="flex items-start justify-between gap-3">
                         <div>
@@ -2994,6 +2994,9 @@
                             </thead>
                             <tbody id="swap-history"></tbody>
                         </table>
+                    </div>
+                    <div class="mt-3 text-center">
+                        <button id="swap-history-more" type="button" class="hidden px-4 py-2 rounded-lg bg-[#1E1E1E] border border-[#333] text-sm font-medium text-gray-300 hover:text-white hover:border-[#444] transition-colors">Show more</button>
                     </div>
                 </section>
             </div>
