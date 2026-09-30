@@ -651,7 +651,7 @@ function transferHtml(t) {
     const to = CHAINS[deposit ? POLYGON_CHAIN_ID : ETH_CHAIN_ID];
     const claimBusy = state.claiming.has(t.txHash);
     const hash = Utils.escapeHtml(t.txHash);
-    const txRow = (chainId, txHash, name) => `<div class="whitespace-nowrap"><span class="text-gray-500">${name}</span> <a href="${CHAINS[chainId].explorer}${Utils.escapeHtml(txHash)}" target="_blank" rel="noopener noreferrer" class="font-mono text-blue-400 hover:text-blue-300">${shortHash(Utils.escapeHtml(txHash))} ↗</a></div>`;
+    const txRow = (chainId, txHash, name) => `<div class="whitespace-nowrap"><span class="text-gray-500">${name}</span> <a href="${CHAINS[chainId].explorer}${Utils.escapeHtml(txHash)}" target="_blank" rel="noopener noreferrer" class="font-mono text-blue-400 hover:text-blue-300">${shortHash(Utils.escapeHtml(txHash))}</a></div>`;
     const links = [txRow(deposit ? ETH_CHAIN_ID : POLYGON_CHAIN_ID, t.txHash, deposit ? 'Deposit' : 'Burn')];
     if (t.claimTxHash) links.push(txRow(ETH_CHAIN_ID, t.claimTxHash, 'Claim'));
     const hint = t.status === 'checkpoint' ? 'Claimable once a Polygon checkpoint includes it'

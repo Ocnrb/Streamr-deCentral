@@ -1477,7 +1477,7 @@ function renderHistory() {
                 <td class="py-3 pr-3">${dataUsdCell(entry)}</td>
                 <td class="py-3 pr-3 text-xs text-gray-400">${routeCell(entry)}</td>
                 <td class="py-3 pr-3"><span class="px-2 py-0.5 rounded-full text-[11px] font-semibold whitespace-nowrap ${badge}">${label}</span></td>
-                <td class="py-3 text-right whitespace-nowrap"><a href="https://polygonscan.com/tx/${hash}" target="_blank" rel="noopener noreferrer" class="font-mono text-xs text-blue-400 hover:text-blue-300">${hash.slice(0, 6)}…${hash.slice(-4)} ↗</a></td>
+                <td class="py-3 text-right whitespace-nowrap"><a href="https://polygonscan.com/tx/${hash}" target="_blank" rel="noopener noreferrer" class="font-mono text-xs text-blue-400 hover:text-blue-300">${hash.slice(0, 6)}…${hash.slice(-4)}</a></td>
             </tr>`;
     }).join('');
     fillPolPrices();
