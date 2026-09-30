@@ -68,7 +68,7 @@ export const OPERATOR_CONTRACT_ABI = [
         "type": "function"
     },
     {
-        "inputs": [ { "internalType": "uint256", "name": "operatorTokenAmount", "type": "uint256" } ],
+        "inputs": [ { "internalType": "uint256", "name": "amountDataWei", "type": "uint256" } ],
         "name": "undelegate",
         "outputs": [],
         "stateMutability": "nonpayable",
