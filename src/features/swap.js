@@ -14,6 +14,7 @@ import * as Utils from '../core/utils.js';
 import * as UI from '../ui/ui.js';
 import * as Services from '../core/services.js';
 import { DATA_TOKEN_ADDRESS_POLYGON, POLYGONSCAN_NETWORK, getEtherscanApiKey } from '../core/constants.js';
+import { SwapMarket } from './swapMarket.js';
 
 const { logger } = Utils;
 
@@ -776,7 +777,7 @@ function tokenSlotHtml(symbol, selectable) {
         return `${token.icon}<span class="text-lg font-semibold text-white">${token.symbol}</span>`;
     }
     const options = COUNTER_TOKENS.map(s => `<option value="${s}" ${s === symbol ? 'selected' : ''}>${Utils.escapeHtml(s)}</option>`).join('');
-    return `${token.icon}<select data-token-select aria-label="Token" data-tooltip-content="USDC is the native USDC. USDC.e is the older bridged USDC." class="w-[6.5rem] bg-[#2C2C2C] hover:bg-[#3C3C3C] text-white text-sm font-semibold rounded-lg pl-2 pr-7 py-1.5 border border-[#444] focus:outline-none focus:ring-2 focus:ring-blue-500/50 disabled:opacity-50">${options}</select>`;
+    return `${token.icon}<select data-token-select aria-label="Token" class="w-[7.5rem] bg-[#2C2C2C] hover:bg-[#3C3C3C] text-white text-sm font-semibold rounded-lg pl-2 pr-7 py-1.5 border border-[#444] focus:outline-none focus:ring-2 focus:ring-blue-500/50 disabled:opacity-50">${options}</select>`;
 }
 
 function renderTokens() {
@@ -1482,6 +1483,7 @@ function renderHistory() {
     }).join('');
     fillPolPrices();
     fillRoutes();
+    SwapMarket.setOwnTxHashes(state.history.map(h => h.txHash));
 }
 
 /** Spins a refresh button's icon while the work runs (at least half a second, so it is noticed) */
@@ -1568,6 +1570,7 @@ async function runStep(step, flow) {
         }
         flow.received = await receivedAmount(receipt, receive, polBefore);
         upsertSwap({ txHash: tx.hash, status: 'done', receive: { symbol: receive.symbol, amount: (flow.received || flow.quote.amountOut).toString(), estimated: !flow.received } });
+        SwapMarket.refresh();
     }
 }
 
@@ -1786,6 +1789,7 @@ export const SwapLogic = {
         }
         renderHistory();
         refreshHistory().catch(e => logger.warn('Swap: history refresh failed', e));
+        SwapMarket.show();
         if (!state.flow) {
             $('swap-progress')?.classList.add('hidden');
             showSuccess('');
@@ -1805,5 +1809,6 @@ export const SwapLogic = {
         state.active = false;
         clearTimeout(state.refreshTimer);
         state.refreshTimer = null;
+        SwapMarket.stop();
     }
 };

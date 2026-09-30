@@ -2875,7 +2875,31 @@
         <!-- Swap: DATA against POL / USDC on Polygon, through QuickSwap and Uniswap pools -->
         <div id="swap-view" class="hidden p-4 md:p-6">
             <div class="space-y-5">
-                <section class="detail-section p-4 sm:p-5 space-y-4 w-full max-w-2xl mx-auto">
+                <!-- Market: DATA/USD on top, then the market trades beside the swap form (exchange layout) -->
+                <section class="detail-section p-4 sm:p-5">
+                    <div class="flex flex-wrap items-start justify-between gap-3 mb-3">
+                        <div class="min-w-0">
+                            <p class="text-xs font-medium text-gray-400">DATA / USD</p>
+                            <div class="flex flex-wrap items-baseline gap-x-2">
+                                <span id="swap-market-price" class="text-2xl font-semibold text-white">--</span>
+                                <span id="swap-market-change" class="text-sm font-semibold"></span>
+                            </div>
+                            <p id="swap-market-stats" class="text-xs text-gray-400 mt-0.5">Loading trades...</p>
+                        </div>
+                        <div id="swap-chart-range" class="flex bg-[#2C2C2C] p-0.5 rounded-md" role="group" aria-label="Chart range">
+                            <button type="button" data-range="24H" class="px-2 py-0.5 rounded text-[11px] font-semibold text-gray-400 hover:text-white transition-colors">24H</button>
+                            <button type="button" data-range="7D" class="px-2 py-0.5 rounded text-[11px] font-semibold text-gray-400 hover:text-white transition-colors">7D</button>
+                            <button type="button" data-range="1M" class="px-2 py-0.5 rounded text-[11px] font-semibold text-gray-400 hover:text-white transition-colors">1M</button>
+                            <button type="button" data-range="3M" class="px-2 py-0.5 rounded text-[11px] font-semibold text-gray-400 hover:text-white transition-colors">3M</button>
+                            <button type="button" data-range="1Y" class="px-2 py-0.5 rounded text-[11px] font-semibold text-gray-400 hover:text-white transition-colors">1Y</button>
+                            <button type="button" data-range="All" class="px-2 py-0.5 rounded text-[11px] font-semibold text-gray-400 hover:text-white transition-colors">All</button>
+                        </div>
+                    </div>
+                    <div id="swap-chart" class="relative h-64 sm:h-80"></div>
+                </section>
+
+                <div class="grid grid-cols-1 lg:grid-cols-[24rem_minmax(0,1fr)] xl:grid-cols-[28rem_minmax(0,1fr)] gap-5">
+                <section class="detail-section p-4 sm:p-5 space-y-4 w-full lg:col-start-1 lg:row-start-1">
                     <div class="flex items-start justify-between gap-3">
                         <div>
                             <h2 class="text-lg font-semibold text-white">Swap DATA</h2>
@@ -2969,6 +2993,32 @@
 
                     <button id="swap-submit" type="button" class="w-full sm:w-auto sm:min-w-[280px] sm:mx-auto sm:px-8 bg-blue-800 hover:bg-blue-900 text-white font-bold py-3 px-4 rounded-lg transition-colors flex justify-center items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-blue-800">Swap</button>
                 </section>
+
+                <!-- Latest trades of the main DATA pool -->
+                <section class="detail-section p-4 sm:p-5 flex flex-col lg:col-start-2 lg:row-start-1">
+                    <div class="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 mb-3">
+                        <h3 class="text-lg font-semibold text-white">Market trades</h3>
+                        <span class="text-xs text-gray-400">Uniswap v4 · DATA/USDC 0.3%</span>
+                    </div>
+                    <!-- As tall as the swap form beside it (lg): the table scrolls inside -->
+                    <div class="relative flex-1 lg:min-h-[16rem]">
+                    <div class="overflow-auto max-h-[26rem] lg:max-h-none lg:absolute lg:inset-0">
+                        <table class="w-full min-w-[360px] text-sm">
+                            <thead class="sticky top-0 bg-[#1E1E1E] text-xs text-gray-400 border-b border-[#333]">
+                                <tr>
+                                    <th class="text-left font-medium py-2 pr-2 whitespace-nowrap">Time</th>
+                                    <th class="text-left font-medium py-2 pr-2 whitespace-nowrap">Side</th>
+                                    <th class="text-right font-medium py-2 pr-2 whitespace-nowrap">Price</th>
+                                    <th class="text-right font-medium py-2 pr-2 whitespace-nowrap">Amount (DATA)</th>
+                                    <th class="text-right font-medium py-2 whitespace-nowrap">Value</th>
+                                </tr>
+                            </thead>
+                            <tbody id="swap-trades"></tbody>
+                        </table>
+                    </div>
+                    </div>
+                </section>
+                </div>
 
                 <!-- Swaps of this wallet -->
                 <section class="detail-section p-4 sm:p-5">
