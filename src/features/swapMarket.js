@@ -26,7 +26,9 @@ const POOL_ID = ethers.utils.keccak256(ethers.utils.defaultAbiCoder.encode(
 const BLOCKS_PER_DAY = 43200;        // Polygon: about 2 s per block
 const TRADE_DAYS = 7;
 const MAX_LOGS = 1000;               // the explorer returns at most 1000 logs (the oldest first)
-const TRADES_SHOWN = 50;
+const TRADES_PAGE = 50;              // rows shown at first, and added by Load More
+const MAX_PAGES = 5;                 // explorer pages of 1000 logs for the 7 days (5000 trades)
+const PAGE_PAUSE_MS = 400;           // between pages (explorer rate limit)
 const REFRESH_MS = 30 * 1000;
 const HOUR = 3600 * 1000;
 const DAY = 24 * HOUR;
@@ -44,6 +46,7 @@ const state = {
     error: false,
     history: [],           // daily { t, p }, oldest first
     ownHashes: new Set(),
+    shown: TRADES_PAGE,    // rows of the trades list
     failures: 0,           // failed loads in a row (before the first success: asked again sooner)
     chart: null,
     timer: null,
@@ -58,7 +61,8 @@ const $ = (id) => document.getElementById(id);
 
 function formatPrice(value) {
     if (!(value > 0)) return '--';
-    return `$${value >= 1 ? value.toFixed(2) : Number(value.toPrecision(4)).toString()}`;
+    // Always 4 significant digits (0.0003750, not 0.000375): the prices line up in the trades list
+    return `$${value >= 1 ? value.toFixed(2) : value.toPrecision(4)}`;
 }
 
 function formatUsd(value) {
@@ -86,10 +90,10 @@ function formatTime(ms, withYear = false) {
 const EXPLORER_BUSY = /rate limit|max calls|too many|timeout|temporarily|busy/i;
 
 /** Swap logs of the pool from a block on; a busy explorer (rate limit: the app's default key is shared) is asked again shortly */
-async function fetchLogs(fromBlock) {
+async function fetchLogs(fromBlock, page = 1) {
     const url = `${POLYGONSCAN_NETWORK.apiUrl}?chainid=137&module=logs&action=getLogs&address=${POOL_MANAGER}`
         + `&topic0=${SWAP_TOPIC}&topic0_1_opr=and&topic1=${POOL_ID}&fromBlock=${fromBlock}&toBlock=latest`
-        + `&page=1&offset=${MAX_LOGS}&apikey=${getEtherscanApiKey()}`;
+        + `&page=${page}&offset=${MAX_LOGS}&apikey=${getEtherscanApiKey()}`;
     let lastError = null;
     for (let attempt = 0; attempt < 4; attempt++) {
         if (attempt) await new Promise(resolve => setTimeout(resolve, 1000 * 2 ** (attempt - 1)));
@@ -160,11 +164,20 @@ async function loadTrades() {
     const latest = await Services.readWithFallback(() => Services.getReadOnlyProvider().getBlockNumber());
     let logs;
     if (state.nextFromBlock === null) {
-        // The explorer returns the oldest logs first: narrow the window until it holds all of them
+        // The explorer returns the oldest logs first, 1000 a page: the 7 days page by page; a pool busier
+        // than MAX_PAGES pages narrows the window, so the latest trades are always there
         let days = TRADE_DAYS;
         for (;;) {
-            logs = await fetchLogs(latest - Math.round(days * BLOCKS_PER_DAY));
-            if (logs.length < MAX_LOGS || days <= 0.25) break;
+            const fromBlock = latest - Math.round(days * BLOCKS_PER_DAY);
+            let complete = false;
+            logs = [];
+            for (let page = 1; page <= MAX_PAGES; page++) {
+                if (page > 1) await new Promise(resolve => setTimeout(resolve, PAGE_PAUSE_MS));
+                const pageLogs = await fetchLogs(fromBlock, page);
+                logs.push(...pageLogs);
+                if (pageLogs.length < MAX_LOGS) { complete = true; break; }
+            }
+            if (complete || days <= 0.25) break;
             days /= 4;
         }
         state.windowStart = Date.now() - days * DAY;
@@ -260,11 +273,13 @@ function renderTrades() {
     if (!body) return;
     const row = (text) => `<tr><td colspan="5" class="py-4 text-sm text-gray-300">${text}</td></tr>`;
     if (!state.loaded) {
+        $('swap-trades-more')?.classList.add('hidden');
         const spinner = '<span class="w-4 h-4 flex-shrink-0 border-2 border-gray-500 border-t-transparent rounded-full animate-spin" aria-hidden="true"></span>';
         body.innerHTML = row(`<span class="inline-flex items-center gap-2">${spinner}${state.error ? 'The explorer is busy, trying again...' : 'Loading market trades...'}</span>`);
         return;
     }
-    const recent = state.trades.slice(-TRADES_SHOWN).reverse();
+    $('swap-trades-more')?.classList.toggle('hidden', state.trades.length <= state.shown);
+    const recent = state.trades.slice(-state.shown).reverse();
     if (!recent.length) {
         body.innerHTML = row(`No trades in the last ${TRADE_DAYS} days.`);
         return;
@@ -484,6 +499,10 @@ function schedule() {
 function setupListeners() {
     if (state.listening) return;
     state.listening = true;
+    $('swap-trades-more')?.addEventListener('click', () => {
+        state.shown += TRADES_PAGE;
+        renderTrades();
+    });
     $('swap-chart-range')?.addEventListener('click', (e) => {
         const btn = e.target.closest('button[data-range]');
         if (!btn || btn.dataset.range === state.range) return;
