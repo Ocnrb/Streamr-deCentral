@@ -585,8 +585,9 @@ async function fetchWindows(cfg, windows) {
 
 /**
  * Daily buckets over a range: each sponsorship / operator keeps its last bucket until the next one.
- * The ones without a bucket in the range kept what they have now; the others start from their last
- * bucket before the range.
+ * After its last bucket of all, it takes what it has now: a change the buckets did not record (an operator
+ * that left every sponsorship, a sponsorship whose funds ran out) shows right after it, and the line ends
+ * at today's value. The ones without a bucket in the range kept what they have now.
  */
 async function bucketHistory(source, rangeKey) {
     const cfg = BUCKETS[source];
@@ -598,15 +599,30 @@ async function bucketHistory(source, rangeKey) {
         fetchWindows(cfg, times.map((t, i) => ({ from: i ? times[i - 1] : first, to: t })))
     ]);
     const latest = new Map();
+    const lastDate = new Map();     // date of each one's last bucket
     // Oldest first, so each one ends on its newest bucket
+    for (const row of [...(beforeData.rows || []).reverse(), ...windows.flat()]) {
+        const id = row[cfg.key].id;
+        lastDate.set(id, Math.max(lastDate.get(id) || 0, Number(row.date)));
+    }
     for (const row of [...(beforeData.rows || [])].reverse()) latest.set(row[cfg.key].id, row);
-    const seen = new Set([...latest.keys(), ...windows.flat().map(row => row[cfg.key].id)]);
-    const unchanged = cfg.current().filter(row => !seen.has(row.id));
+    const current = new Map(cfg.current().map(row => [row.id, row]));
+    const unchanged = cfg.current().filter(row => !lastDate.has(row.id));
 
     const series = {};
     times.forEach((t, i) => {
         for (const row of windows[i]) latest.set(row[cfg.key].id, row);
-        const values = cfg.series([...latest.values(), ...unchanged]);
+        const previous = i ? times[i - 1] : first;
+        const rows = [];
+        for (const [id, row] of latest) {
+            // Its last bucket is behind this point's window: it has what it has now (gone: nothing)
+            if (lastDate.get(id) <= previous) {
+                if (current.has(id)) rows.push(current.get(id));
+            } else {
+                rows.push(row);
+            }
+        }
+        const values = cfg.series([...rows, ...unchanged]);
         for (const [name, value] of Object.entries(values)) {
             if (value === null) continue;
             (series[name] = series[name] || []).push({ x: t * 1000, y: value });
