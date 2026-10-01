@@ -100,7 +100,8 @@
             <h1>Streamr deCentral: Streamr Network Command Center</h1>
             <p>Control your operator and stake, follow sponsorships, and visualize the Streamr Network live. Advanced tools to create and manage streams.</p>
             <ul>
-                <li><a href="/">Operators</a>: stake, APY, nodes and earnings of every Streamr operator</li>
+                <li><a href="/">Overview</a>: stake, operators, sponsorships, APY and DATA price of the network</li>
+                <li><a href="/operators">Operators</a>: stake, APY, nodes and earnings of every Streamr operator</li>
                 <li><a href="/delegators">Delegators</a>: delegations and returns</li>
                 <li><a href="/streams">Streams and sponsorships</a>: sponsored streams, payouts and funding</li>
                 <li><a href="/governance">Governance</a>: flags, votes and kicks</li>
@@ -1211,6 +1212,15 @@
         <nav class="flex-1 py-2 lg:overflow-y-auto overflow-hidden">
             <div class="px-2 space-y-px">
                 
+                <!-- Overview (home) -->
+                <a href="/" data-nav="overview" class="nav-link group flex items-center gap-3 px-3 py-2 rounded-md text-gray-400 hover:text-white hover:bg-white/[0.03] transition-all duration-200">
+                    <svg class="w-6 h-6 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg>
+                    <span class="hidden lg:block text-sm font-medium">Overview</span>
+                </a>
+
+                <!-- Divider -->
+                <div class="my-2 mx-3 border-t border-white/[0.04]"></div>
+
                 <!-- Section: Explore -->
                 <div class="px-3 pt-1 pb-1">
                     <span class="hidden lg:block text-[10px] font-semibold text-gray-600 uppercase tracking-widest">Explore</span>
@@ -1223,7 +1233,7 @@
                 </a>
 
                 <!-- Operators -->
-                <a href="/" data-nav="operators" class="nav-link group flex items-center gap-3 px-3 py-2 rounded-md text-gray-400 hover:text-white hover:bg-white/[0.03] transition-all duration-200">
+                <a href="/operators" data-nav="operators" class="nav-link group flex items-center gap-3 px-3 py-2 rounded-md text-gray-400 hover:text-white hover:bg-white/[0.03] transition-all duration-200">
                     <span aria-hidden="true" class="icon-mask w-6 h-6" style="--icon: url(/assets/operator_icon.png)"></span>
                     <span class="hidden lg:block text-sm font-medium">Operators</span>
                 </a>
@@ -1454,26 +1464,32 @@
     <!-- ===== BOTTOM NAVIGATION (Mobile) - hidden until login ===== -->
     <nav id="bottom-nav" class="hidden fixed bottom-0 left-0 right-0 z-40 bg-[#1A1A1A]/95 backdrop-blur-md border-t border-[#2a2a2a] safe-area-bottom">
         <div class="flex justify-around items-center h-16 px-2">
+            <!-- Overview -->
+            <a href="/" data-nav="overview" class="bottom-nav-item flex flex-col items-center justify-center gap-1 px-1 py-2 min-w-[48px] text-gray-400 transition-colors">
+                <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg>
+                <span class="text-[10px] font-medium">Overview</span>
+            </a>
+
             <!-- Streams -->
-            <a href="/streams" data-nav="streams" class="bottom-nav-item flex flex-col items-center justify-center gap-1 p-2 min-w-[56px] text-gray-400 transition-colors">
+            <a href="/streams" data-nav="streams" class="bottom-nav-item flex flex-col items-center justify-center gap-1 px-1 py-2 min-w-[48px] text-gray-400 transition-colors">
                 <span aria-hidden="true" class="icon-mask w-6 h-6" style="--icon: url(/assets/stream_icon.png)"></span>
                 <span class="text-[10px] font-medium">Streams</span>
             </a>
 
             <!-- Operators -->
-            <a href="/" data-nav="operators" class="bottom-nav-item flex flex-col items-center justify-center gap-1 p-2 min-w-[56px] text-gray-400 transition-colors">
+            <a href="/operators" data-nav="operators" class="bottom-nav-item flex flex-col items-center justify-center gap-1 px-1 py-2 min-w-[48px] text-gray-400 transition-colors">
                 <span aria-hidden="true" class="icon-mask w-6 h-6" style="--icon: url(/assets/operator_icon.png)"></span>
                 <span class="text-[10px] font-medium">Operators</span>
             </a>
 
             <!-- Delegators --> 
-            <a href="/delegators" data-nav="delegators" class="bottom-nav-item flex flex-col items-center justify-center gap-1 p-2 min-w-[56px] text-gray-400 transition-colors">
+            <a href="/delegators" data-nav="delegators" class="bottom-nav-item flex flex-col items-center justify-center gap-1 px-1 py-2 min-w-[48px] text-gray-400 transition-colors">
                 <span aria-hidden="true" class="icon-mask w-6 h-6" style="--icon: url(/assets/delegator_icon.png)"></span>
                 <span class="text-[10px] font-medium">Delegators</span>
             </a>
 
             <!-- Autostaker -->
-            <button id="bottom-nav-autostaker" class="bottom-nav-item flex flex-col items-center justify-center gap-1 p-2 min-w-[56px] text-gray-400 transition-colors">
+            <button id="bottom-nav-autostaker" class="bottom-nav-item flex flex-col items-center justify-center gap-1 px-1 py-2 min-w-[48px] text-gray-400 transition-colors">
                 <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
                     <path d="M13 10V3L4 14h7v7l9-11h-7z"/>
                 </svg>
@@ -1482,7 +1498,7 @@
             
             <!-- More -->
             <div class="relative">
-                <button id="bottom-nav-more" class="bottom-nav-item flex flex-col items-center justify-center gap-1 p-2 min-w-[56px] text-gray-400 transition-colors">
+                <button id="bottom-nav-more" class="bottom-nav-item flex flex-col items-center justify-center gap-1 px-1 py-2 min-w-[48px] text-gray-400 transition-colors">
                     <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <circle cx="12" cy="12" r="1"/>
                         <circle cx="19" cy="12" r="1"/>
@@ -3078,6 +3094,161 @@
                     <p class="text-xs text-gray-400">Pools of DATA found on QuickSwap, SushiSwap and Uniswap (v3 with the tokens they hold, v4 with their price). Small pools give a high price impact.</p>
                     <ul id="swap-liquidity-list" class="mt-3 text-xs"><li class="py-1.5 text-gray-400">Looking for pools...</li></ul>
                 </div>
+            </div>
+        </div>
+
+        <!-- Overview: the network at a glance (home page) -->
+        <div id="overview-view" class="hidden p-4 md:p-6 space-y-4 md:space-y-6">
+
+            <!-- Intro: what Streamr is. It can be hidden for good (the text stays in the page for search engines) -->
+            <section id="overview-hero" class="detail-section relative overflow-hidden" aria-labelledby="overview-hero-title">
+                <canvas id="overview-hero-mesh" class="absolute inset-0 w-full h-full pointer-events-none" aria-hidden="true"></canvas>
+                <div class="absolute inset-0 pointer-events-none bg-gradient-to-r from-[#1E1E1E] via-[#1E1E1E]/80 to-[#1E1E1E]/10" aria-hidden="true"></div>
+                <div class="relative p-5 sm:p-8">
+                    <button id="overview-hero-close" type="button" class="absolute top-3 right-3 p-1.5 rounded-md text-gray-500 hover:text-white hover:bg-white/5 transition-colors" aria-label="Hide the introduction" data-tooltip-content="Hide the introduction">
+                        <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+                    </button>
+                    <p class="text-xs font-semibold uppercase tracking-wider text-blue-400"><a href="https://streamr.network/" target="_blank" rel="noopener noreferrer" class="hover:text-blue-300 transition-colors">The Streamr Network ↗</a></p>
+                    <h2 id="overview-hero-title" class="mt-2 pr-8 max-w-3xl text-xl leading-snug sm:text-4xl sm:leading-tight font-bold tracking-tight text-balance text-white">Serverless <span class="whitespace-nowrap">real-time</span> data and media broadcasts that scale automatically</h2>
+                    <p class="mt-3 max-w-2xl text-sm sm:text-base leading-relaxed text-gray-200">Streamr is pub/sub without a broker. Every stream forms its own constellation of publishers and subscribers, a self-organizing overlay linked directly peer to peer, and thousands of them share one global mesh. No servers, no trackers, no permission needed. Free and open source, and every node that joins, even a browser, adds capacity.</p>
+                    <p id="overview-hero-live" class="mt-4 flex items-center gap-2 text-sm text-gray-300 min-h-[1.25rem]"></p>
+                    <button id="overview-hero-more-toggle" type="button" aria-expanded="false" aria-controls="overview-hero-more" class="md:hidden group/more mt-4 inline-flex items-center gap-1 text-sm font-semibold text-gray-300 hover:text-white transition-colors">How it works <svg class="w-4 h-4 transition-transform group-aria-expanded/more:rotate-180" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>
+                    <!-- Phones: shown with How it works -->
+                    <div id="overview-hero-more" class="max-md:hidden">
+                    <div class="mt-4 md:mt-6 grid gap-3 md:grid-cols-3">
+                        <div class="rounded-lg border border-white/[0.06] bg-[#181818]/80 backdrop-blur-sm p-4">
+                            <p class="text-[11px] font-semibold uppercase tracking-wider text-blue-400">Layer 0 · Global DHT</p>
+                            <h3 class="mt-1.5 text-sm font-semibold text-white">A phone book for the whole network</h3>
+                            <p class="mt-1 text-xs sm:text-sm leading-relaxed text-gray-300">An r-Kademlia DHT spans every node. It brings new nodes in, keeps where each stream can be joined and routes messages to any node in a few hops, including the signaling that opens direct links through firewalls and NATs.</p>
+                        </div>
+                        <div class="rounded-lg border border-white/[0.06] bg-[#181818]/80 backdrop-blur-sm p-4">
+                            <p class="text-[11px] font-semibold uppercase tracking-wider text-blue-400">Layer 1 · Stream coordination</p>
+                            <h3 class="mt-1.5 text-sm font-semibold text-white">Every stream finds its peers</h3>
+                            <p class="mt-1 text-xs sm:text-sm leading-relaxed text-gray-300">Each stream has its own hybrid DHT, Kademlia for robustness and a locality-aware ring for closeness. It finds peers nearby for speed and farther away for resilience, with no connections of its own.</p>
+                        </div>
+                        <div class="flex flex-col rounded-lg border border-white/[0.06] bg-[#181818]/80 backdrop-blur-sm p-4">
+                            <p class="text-[11px] font-semibold uppercase tracking-wider text-blue-400">Layer 2 · Data delivery</p>
+                            <h3 class="mt-1.5 text-sm font-semibold text-white">A mesh that stays fast</h3>
+                            <p class="mt-1 text-xs sm:text-sm leading-relaxed text-gray-300">Subscribers link directly to at least four peers, mostly close by, over WebSocket where a node is reachable and WebRTC everywhere else, even in a browser. In tests with 2 000 nodes, messages reached everyone in under 120 ms on average.</p>
+                            <a href="https://blog.streamr.network/leveling-up-streamr-the-trackerless-network-results-part-2/" target="_blank" rel="noopener noreferrer" class="mt-auto self-end pt-3 text-xs font-medium text-gray-300 hover:text-white transition-colors" data-tooltip-content="Scaling tests in early 2025 with about 2 000 nodes in 17 regions">Tested across 17 regions ↗</a>
+                        </div>
+                    </div>
+                    <div class="mt-3 grid gap-3 md:grid-cols-2">
+                    <div class="flex gap-3 rounded-lg border border-white/[0.06] bg-[#181818]/80 backdrop-blur-sm p-4">
+                        <svg class="w-5 h-5 flex-shrink-0 mt-0.5 text-blue-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+                        <div>
+                            <h3 class="text-sm font-semibold text-white">On-chain where it counts</h3>
+                            <p class="mt-1 text-xs sm:text-sm leading-relaxed text-gray-300">Streams, their permissions and the incentives live in smart contracts on Polygon, and identities are Ethereum keys that sign every message. The data itself flows off-chain, so creating a stream is one transaction and publishing or subscribing costs nothing.</p>
+                        </div>
+                    </div>
+                    <div class="flex gap-3 rounded-lg border border-white/[0.06] bg-[#181818]/80 backdrop-blur-sm p-4">
+                        <svg class="w-5 h-5 flex-shrink-0 mt-0.5 text-blue-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22v-5"/><path d="M9 8V2"/><path d="M15 8V2"/><path d="M18 8v5a4 4 0 0 1-4 4h-4a4 4 0 0 1-4-4V8Z"/></svg>
+                        <div class="flex flex-1 flex-col">
+                            <h3 class="text-sm font-semibold text-white">Plugs into anything</h3>
+                            <p class="mt-1 text-xs sm:text-sm leading-relaxed text-gray-300"><a href="https://docs.streamr.network/" target="_blank" rel="noopener noreferrer" class="text-gray-100 underline decoration-gray-500 underline-offset-2 hover:text-white hover:decoration-gray-300 transition-colors">Build</a> with the TypeScript SDK in Node.js or the browser, or run a Streamr node and publish or subscribe through its MQTT, WebSocket and HTTP interfaces, from any language or device.</p>
+                            <a href="https://github.com/streamr-dev" target="_blank" rel="noopener noreferrer" class="mt-auto self-end pt-3 text-gray-400 hover:text-white transition-colors" aria-label="Streamr on GitHub" data-tooltip-content="Streamr on GitHub">
+                                    <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>
+                                </a>
+                        </div>
+                    </div>
+                    </div>
+                    <!-- Scaling tests of the trackerless network (early 2025, about 2 000 nodes in 17 regions) -->
+                    <div class="mt-5 flex flex-wrap items-end justify-between gap-x-8 gap-y-3">
+                        <dl class="grid grid-cols-2 sm:flex sm:flex-wrap gap-x-10 gap-y-3">
+                            <div><dt class="text-[11px] font-semibold uppercase tracking-wider text-gray-400">Time to data</dt><dd class="mt-0.5 text-lg sm:text-xl font-bold text-white">~1 s</dd></div>
+                            <div><dt class="text-[11px] font-semibold uppercase tracking-wider text-gray-400">Hops at 2 000 nodes</dt><dd class="mt-0.5 text-lg sm:text-xl font-bold text-white">&lt; 3</dd></div>
+                            <div><dt class="text-[11px] font-semibold uppercase tracking-wider text-gray-400">Delivery at 2 000 nodes</dt><dd class="mt-0.5 text-lg sm:text-xl font-bold text-white">&lt; 120 ms</dd></div>
+                            <div><dt class="text-[11px] font-semibold uppercase tracking-wider text-gray-400">Connections per node</dt><dd class="mt-0.5 text-lg sm:text-xl font-bold text-white">~4</dd></div>
+                        </dl>
+                    </div>
+                    </div>
+                    <details id="overview-hero-data" class="group/data mt-4">
+                        <summary class="inline-flex items-center gap-1 cursor-pointer list-none [&::-webkit-details-marker]:hidden text-sm font-semibold text-gray-300 hover:text-white transition-colors">Incentives and DATA <svg class="w-4 h-4 transition-transform group-open/data:rotate-180" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></summary>
+                        <div class="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                            <div class="rounded-lg border border-white/[0.06] bg-[#181818]/80 backdrop-blur-sm p-4">
+                                <h3 class="text-sm font-semibold text-white">Incentives are opt-in</h3>
+                                <p class="mt-1 text-xs sm:text-sm leading-relaxed text-gray-300">Using the network is free. Sponsored nodes are plug-and-play relays, like TURN servers for a stream, adding bandwidth for wide broadcasts, relaying for publishers behind NATs or on weak links and keeping the stream reachable 24/7.</p>
+                            </div>
+                            <div class="rounded-lg border border-white/[0.06] bg-[#181818]/80 backdrop-blur-sm p-4">
+                                <h3 class="text-sm font-semibold text-white">Paid in DATA</h3>
+                                <p class="mt-1 text-xs sm:text-sm leading-relaxed text-gray-300">DATA is the ERC-20 utility token of Streamr. Sponsors pay it into sponsorships, smart contracts that tie off-chain streaming to on-chain rewards. Operators stake it there and earn for relaying the data, and delegators back them. The result is a decentralized live CDN.</p>
+                            </div>
+                            <div class="rounded-lg border border-white/[0.06] bg-[#181818]/80 backdrop-blur-sm p-4">
+                                <h3 class="text-sm font-semibold text-white">Checked by the operators</h3>
+                                <p class="mt-1 text-xs sm:text-sm leading-relaxed text-gray-300">Inside each sponsorship, operators keep each other honest. A node that does not do its job can be flagged, operators picked as reviewers vote on it, and a kick slashes part of its stake.</p>
+                            </div>
+                            <div class="rounded-lg border border-white/[0.06] bg-[#181818]/80 backdrop-blur-sm p-4">
+                                <h3 class="text-sm font-semibold text-white">DAO governance</h3>
+                                <p class="mt-1 text-xs sm:text-sm leading-relaxed text-gray-300">Apart from that work, DATA is voting power in the Streamr DAO. Token holders <a href="https://snapshot.box/#/s:streamr.eth/" target="_blank" rel="noopener noreferrer" class="text-gray-100 underline decoration-gray-500 underline-offset-2 hover:text-white hover:decoration-gray-300 transition-colors">vote on proposals</a> that set the rules and economic parameters of the network.</p>
+                            </div>
+                        </div>
+                    </details>
+                </div>
+            </section>
+            <div id="overview-hero-reopen" class="hidden !mb-2 flex justify-end">
+                <button type="button" class="text-xs font-medium text-gray-500 hover:text-gray-300 transition-colors">What is Streamr</button>
+            </div>
+            <script>
+                // Hidden before it is drawn when the visitor closed it
+                try {
+                    if (localStorage.getItem('overview.hero.hidden')) {
+                        document.getElementById('overview-hero').classList.add('hidden');
+                        document.getElementById('overview-hero-reopen').classList.remove('hidden');
+                    }
+                } catch (e) { /* storage blocked: shown */ }
+            </script>
+
+            <!-- Network numbers: the selected one opens its chart below -->
+            <section class="detail-section overflow-hidden">
+                <div id="overview-stats" class="grid grid-cols-2 sm:grid-cols-3 2xl:grid-cols-9 gap-px bg-[#2a2a2a]"></div>
+                <div id="overview-chart-panel" class="border-t border-[#2a2a2a] p-4 sm:p-5">
+                    <div class="flex flex-wrap items-start justify-between gap-3 mb-3">
+                        <div class="min-w-0">
+                            <div class="flex items-center gap-2">
+                                <h2 id="overview-chart-title" class="text-sm font-semibold text-gray-200"></h2>
+                                <button id="overview-chart-info" type="button" class="inline-flex text-gray-300 hover:text-white cursor-help" aria-label="About this number">
+                                    <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+                                </button>
+                            </div>
+                            <span id="overview-chart-value" class="block text-xl sm:text-2xl font-semibold text-white"></span>
+                        </div>
+                        <div id="overview-range" class="flex bg-[#2C2C2C] p-0.5 rounded-md" role="group" aria-label="Chart range">
+                                <button type="button" data-range="30d" class="px-2.5 py-1 rounded text-xs font-semibold text-gray-300 hover:text-white transition-colors">30D</button>
+                                <button type="button" data-range="1y" class="px-2.5 py-1 rounded text-xs font-semibold text-gray-300 hover:text-white transition-colors">1Y</button>
+                                <button type="button" data-range="all" class="px-2.5 py-1 rounded text-xs font-semibold text-gray-300 hover:text-white transition-colors">All</button>
+                        </div>
+                    </div>
+                    <div id="overview-chart" class="h-64 sm:h-72"></div>
+                </div>
+            </section>
+
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
+                <section class="detail-section p-4 sm:p-5 flex flex-col min-w-0">
+                    <div class="flex items-center justify-between gap-3 mb-3">
+                        <h2 class="text-base font-semibold text-white">Network activity</h2>
+                    </div>
+                    <div id="overview-network-tabs" class="grid grid-cols-2 sm:flex sm:self-start bg-[#2C2C2C] mb-3 p-0.5 rounded-md" role="tablist" aria-label="Network activity"><button type="button" role="tab" data-tab="streams" class="px-2.5 py-1 rounded text-xs font-semibold text-gray-400 hover:text-white transition-colors">Streams</button><button type="button" role="tab" data-tab="sponsorships" class="px-2.5 py-1 rounded text-xs font-semibold text-gray-400 hover:text-white transition-colors">Sponsorships</button><button type="button" role="tab" data-tab="permissions" class="px-2.5 py-1 rounded text-xs font-semibold text-gray-400 hover:text-white transition-colors">Permissions</button><button type="button" role="tab" data-tab="storage" class="px-2.5 py-1 rounded text-xs font-semibold text-gray-400 hover:text-white transition-colors">Storage</button></div>
+                    <div id="overview-network" class="space-y-1 min-h-[296px]" role="tabpanel"></div>
+                </section>
+                <section class="detail-section p-4 sm:p-5 flex flex-col min-w-0">
+                    <div class="flex items-center justify-between gap-3 mb-3">
+                        <h2 class="text-base font-semibold text-white">Operator and delegator activity</h2>
+                    </div>
+                    <div id="overview-activity-tabs" class="grid grid-cols-2 sm:flex sm:self-start bg-[#2C2C2C] mb-3 p-0.5 rounded-md" role="tablist" aria-label="Operator and delegator activity"><button type="button" role="tab" data-tab="staking" class="px-2.5 py-1 rounded text-xs font-semibold text-gray-400 hover:text-white transition-colors">Staking</button><button type="button" role="tab" data-tab="earnings" class="px-2.5 py-1 rounded text-xs font-semibold text-gray-400 hover:text-white transition-colors">Earnings</button><button type="button" role="tab" data-tab="delegations" class="px-2.5 py-1 rounded text-xs font-semibold text-gray-400 hover:text-white transition-colors">Delegations</button><button type="button" role="tab" data-tab="governance" class="px-2.5 py-1 rounded text-xs font-semibold text-gray-400 hover:text-white transition-colors">Governance</button></div>
+                    <div id="overview-activity" class="space-y-1 min-h-[296px]" role="tabpanel"></div>
+                </section>
+                <section class="detail-section p-4 sm:p-5 flex flex-col min-w-0">
+                    <div class="flex items-center justify-between gap-3 mb-3">
+                        <h2 class="text-base font-semibold text-white"><a href="/streams?tab=sponsorships" class="group/title inline-flex items-center gap-1 hover:text-gray-300 transition-colors">Best sponsorships<svg class="w-4 h-4 text-gray-500 group-hover/title:text-gray-300 group-hover/title:translate-x-0.5 transition" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></a></h2>
+                    </div>
+                    <div id="overview-best" class="space-y-1 min-h-[296px]"></div>
+                </section>
+                <section class="detail-section p-4 sm:p-5 flex flex-col min-w-0">
+                    <div class="flex items-center justify-between gap-3 mb-3">
+                        <h2 class="text-base font-semibold text-white"><a href="/operators" class="group/title inline-flex items-center gap-1 hover:text-gray-300 transition-colors">Top operators<svg class="w-4 h-4 text-gray-500 group-hover/title:text-gray-300 group-hover/title:translate-x-0.5 transition" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></a></h2>
+                    </div>
+                    <div id="overview-operators" class="space-y-1 min-h-[296px]"></div>
+                </section>
             </div>
         </div>
 
