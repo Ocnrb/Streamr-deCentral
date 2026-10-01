@@ -189,7 +189,7 @@ function parseMarker(src) {
     const index = src.indexOf(MARKER);
     if (index === -1) return null;
     const [encodedId, partition] = src.slice(index + MARKER.length).split(':');
-    let streamId = '';
+    let streamId;
     try { streamId = decodeURIComponent(encodedId || ''); } catch (e) { return null; }
     if (!isValidProfileStreamId(streamId)) return null;
     return { key: `${streamId}:${Number(partition) || 0}`, streamId, partition: Number(partition) || 0, base: src.slice(0, index) };

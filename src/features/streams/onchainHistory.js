@@ -6,6 +6,7 @@ import { logger } from '../../core/utils.js';
 import { STREAMR_TREASURY_ADDRESS } from '../../core/constants.js';
 import { detailState } from './state.js';
 import { syncTileHeights } from './detail.js';
+import { ethers } from 'ethers';
 
 const ONCHAIN_HISTORY_PAGE_SIZE = 100;
 

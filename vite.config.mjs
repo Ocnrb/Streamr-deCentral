@@ -33,8 +33,9 @@ export default defineConfig({
         sourcemap: true,
         rollupOptions: {
             output: {
-                // The libraries in a file of their own: cached across deploys, loaded alongside the app
-                manualChunks: { vendor: ['ethers', 'chart.js', 'leaflet'] }
+                // The libraries in a file of their own: cached across deploys, loaded alongside the app. d3 and Lucide
+                // stay with the pages that use them (Visual, Race), loaded on demand.
+                manualChunks: (id) => (/node_modules\/(?!d3|internmap|delaunator|robust-predicates|lucide)/.test(id) ? 'vendor' : undefined)
             }
         }
     },

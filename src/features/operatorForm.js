@@ -25,6 +25,7 @@ import {
     STREAM_STORAGE_REGISTRY_ABI,
     PUBLIC_PERMISSION_ADDRESS
 } from '../core/constants.js';
+import { ethers } from 'ethers';
 
 const { logger } = Utils;
 

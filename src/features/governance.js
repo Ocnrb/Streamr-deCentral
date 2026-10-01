@@ -9,6 +9,7 @@ import * as Services from '../core/services.js';
 import * as UI from '../ui/ui.js';
 import { escapeHtml, convertWeiToData, formatBigNumber, parseOperatorMetadata, shortAddress, operatorAvatarHtml } from '../core/utils.js';
 import { navigationController } from '../ui/navigation.js';
+import Chart from 'chart.js/auto';
 
 // ============================================
 // Constants

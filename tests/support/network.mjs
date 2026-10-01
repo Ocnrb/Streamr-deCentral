@@ -164,8 +164,8 @@ function compare(a, b) {
 function valueOf(node, variables = {}) {
     switch (node.kind) {
         case 'IntValue': case 'StringValue': case 'BooleanValue': case 'EnumValue': return node.value;
-        case 'ListValue': return node.values.map(v => valueOf(v, variables));
-        case 'ObjectValue': return Object.fromEntries(node.fields.map(f => [f.name.value, valueOf(f.value, variables)]));
+        case 'ListValue': return (node.values || []).map(v => valueOf(v, variables));
+        case 'ObjectValue': return Object.fromEntries((node.fields || []).map(f => [f.name.value, valueOf(f.value, variables)]));
         case 'Variable': return variables[node.name.value] ?? null;
         default: return null;
     }
@@ -217,7 +217,7 @@ export async function mockNetwork(context) {
         const data = {};
         for (const f of doc.definitions[0].selectionSet.selections) {
             const name = f.name.value;
-            const args = Object.fromEntries(f.arguments.map(a => [a.name.value, valueOf(a.value, variables)]));
+            const args = Object.fromEntries((f.arguments || []).map(a => [a.name.value, valueOf(a.value, variables)]));
             stats.queries[name] = (stats.queries[name] || 0) + 1;
             if (name === '_meta') {
                 data[f.alias?.value || name] = { block: { number: LATEST_BLOCK, timestamp: NOW } };

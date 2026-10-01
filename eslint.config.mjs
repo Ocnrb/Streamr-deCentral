@@ -2,8 +2,8 @@
 import js from '@eslint/js';
 import globals from 'globals';
 
-// Libraries loaded by index.html as globals (see /libs)
-const LIBRARIES = { ethers: 'readonly', Chart: 'readonly', d3: 'readonly', L: 'readonly', lucide: 'readonly', StreamrClient: 'readonly', maplibregl: 'readonly' };
+// Libraries loaded outside the bundle as globals (public/libs); the npm ones are imported where they are used
+const LIBRARIES = { StreamrClient: 'readonly', maplibregl: 'readonly' };
 
 export default [
     { ignores: ['public/libs/**', 'dist/**', 'node_modules/**', 'test-results/**', 'playwright-report/**'] },

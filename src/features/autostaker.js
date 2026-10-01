@@ -8,6 +8,7 @@ import { showToast, updateToast } from '../ui/ui.js';
 import { runQuery, switchToFallbackRpc, getCurrentRpcUrl, readWithFallback, isRateLimitError as isRateLimitErrorService } from '../core/services.js';
 import { convertWeiToData, formatBigNumber } from '../core/utils.js';
 import { OPERATOR_CONTRACT_ABI, SPONSORSHIP_ABI, POLYGON_RPC_FALLBACKS } from '../core/constants.js';
+import { ethers } from 'ethers';
 
 // ethers is loaded globally from libs/ethers.umd.min.js
 
@@ -948,7 +949,7 @@ export async function executeActions(actions, operatorId, signer, onProgress, co
     // when stake actions are calculated before unstakes complete
     const ACTION_GAS_LIMIT = 800000;
     
-    let gasSettings = {};
+    let gasSettings;
     try {
         const feeData = await signer.provider.getFeeData();
         // Use higher gas prices for Polygon to avoid "gas price below minimum" errors

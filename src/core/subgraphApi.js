@@ -2,6 +2,7 @@
 import { OPERATOR_CONTRACT_ABI, DELEGATORS_PER_PAGE, OPERATORS_PER_PAGE, MIN_SEARCH_LENGTH, FULL_ADDRESS_LENGTH, getGraphUrl } from './constants.js';
 import { parseOperatorMetadata, logger } from './utils.js';
 import { getReadOnlyProvider, readWithFallback } from './rpc.js';
+import { ethers } from 'ethers';
 
 // --- API (The Graph) ---
 export async function runQuery(query) {

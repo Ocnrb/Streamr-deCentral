@@ -6,6 +6,7 @@ import * as Services from '../core/services.js';
 import * as Autostaker from '../features/autostaker.js';
 import { OperatorLogic } from '../features/operator.js';
 import { state } from './state.js';
+import { ethers } from 'ethers';
 
 let autostakerState = {
     config: null,
@@ -51,8 +52,8 @@ function renderAutostakerLogs() {
     
     logList.innerHTML = autostakerState.logs.map(log => {
         const timeStr = log.time.toLocaleTimeString();
-        let colorClass = 'text-gray-400';
-        let icon = '•';
+        let colorClass;
+        let icon;
         
         switch (log.type) {
             case 'success':

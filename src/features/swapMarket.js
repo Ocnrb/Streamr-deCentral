@@ -15,6 +15,8 @@
 import * as Utils from '../core/utils.js';
 import * as Services from '../core/services.js';
 import { DATA_TOKEN_ADDRESS_POLYGON, DATA_TOKEN_ADDRESS_ETHEREUM, ETHEREUM_RPC_URLS, POLYGONSCAN_NETWORK, getEtherscanApiKey, DEX_SUBGRAPH_IDS, getDexSubgraphUrl } from '../core/constants.js';
+import { ethers } from 'ethers';
+import Chart from 'chart.js/auto';
 
 const { logger } = Utils;
 

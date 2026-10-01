@@ -9,6 +9,7 @@ import * as UI from '../ui/ui.js';
 import { OperatorForm } from './operatorForm.js';
 import { OperatorWallets } from './operatorWallets.js';
 import * as Services from '../core/services.js';
+import { ethers } from 'ethers';
 
 const { logger } = Utils;
 

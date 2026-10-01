@@ -1,5 +1,6 @@
 // The private key saved in the browser, encrypted with the user's password (Keystore V3, as in ethers)
 import { logger } from '../core/utils.js';
+import { ethers } from 'ethers';
 
 const KEYSTORE_STORAGE_KEY = 'encrypted_wallet';
 

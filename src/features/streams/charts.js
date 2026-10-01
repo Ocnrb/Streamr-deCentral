@@ -1,6 +1,7 @@
 // A sponsorship's chart (APY, stake, payouts) and its controls
 import * as Utils from '../../core/utils.js';
 import { state, detailState } from './state.js';
+import Chart from 'chart.js/auto';
 
 export function renderSponsorshipCharts(dailyData) {
     if (!dailyData || dailyData.length === 0) {

@@ -15,6 +15,7 @@ import {
 import { formatBigNumber, shortAddress, parseOperatorMetadata, formatUsdForTooltip, avatarImgHtml, escapeHtml } from '../core/utils.js';
 import { loadOperatorAvatarImage } from '../core/streamAvatar.js';
 import { showToast, customTooltip, setTooltipContent, positionTooltip, updateDelegatorProfileButton, handleDelegatorProfileButtonClick, renderProfileShortcut } from '../ui/ui.js';
+import Chart from 'chart.js/auto';
 
 // ============================================
 // State Management

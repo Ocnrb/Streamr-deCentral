@@ -18,6 +18,7 @@ import {
     SPONSORSHIP_FACTORY_ADDRESS,
     SPONSORSHIP_POLICIES
 } from '../core/constants.js';
+import { ethers } from 'ethers';
 
 const { logger } = Utils;
 
