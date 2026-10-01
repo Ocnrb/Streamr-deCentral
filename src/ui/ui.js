@@ -178,7 +178,7 @@ export function showToast({ type = 'info', title, message = '', txHash = null, d
                     <p class="toast-message text-sm text-gray-400 mt-0.5 ${message ? '' : 'hidden'}">${escapeHtml(String(message ?? ''))}</p>
                     <div class="toast-link-container">${buildPolygonscanLink(txHash)}</div>
                 </div>
-                <button class="toast-close flex-shrink-0 ${type === 'loading' ? 'hidden' : ''}" onclick="document.getElementById('${toastId}').dispatchEvent(new CustomEvent('close'))">
+                <button type="button" class="toast-close flex-shrink-0 ${type === 'loading' ? 'hidden' : ''}" aria-label="Close">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
                     </svg>
@@ -219,6 +219,7 @@ export function showToast({ type = 'info', title, message = '', txHash = null, d
     
     // Listen for close event
     toastElement.addEventListener('close', removeToast);
+    toastElement.querySelector('.toast-close')?.addEventListener('click', () => toastElement.dispatchEvent(new CustomEvent('close')));
     
     // Auto-remove after duration
     if (duration > 0) {

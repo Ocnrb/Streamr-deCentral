@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <base href="/">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: https:; font-src 'self' https://fonts.gstatic.com; connect-src 'self' https://gateway.thegraph.com https://gateway-arbitrum.network.thegraph.com https://polygon-rpc.com https://polygon.drpc.org https://polygon-bor-rpc.publicnode.com https://1rpc.io https://ethereum-rpc.publicnode.com https://eth.drpc.org https://proof-generator.polygon.technology https://api.etherscan.io https://rpc-mainnet.matic.quiknode.pro wss: https://ipfs.io https://placehold.co https://*.pombo.cc https://tiles.openfreemap.org https://*.streamr.network https://*.streamr.network:* https://blob-storage-streamr.online https://*.blob-storage-streamr.online;">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: https:; font-src 'self' https://fonts.gstatic.com; connect-src 'self' https://gateway.thegraph.com https://gateway-arbitrum.network.thegraph.com https://polygon-rpc.com https://polygon.drpc.org https://polygon-bor-rpc.publicnode.com https://1rpc.io https://ethereum-rpc.publicnode.com https://eth.drpc.org https://proof-generator.polygon.technology https://api.etherscan.io https://rpc-mainnet.matic.quiknode.pro wss: https://ipfs.io https://placehold.co https://*.pombo.cc https://tiles.openfreemap.org https://*.streamr.network https://*.streamr.network:* https://blob-storage-streamr.online https://*.blob-storage-streamr.online;">
     <title>Streamr deCentral | Streamr Network Command Center</title>
     <meta name="description" content="Control your operator and stake, follow sponsorships, and visualize the Streamr Network live. Advanced tools to create and manage streams.">
     <meta name="keywords" content="Streamr, Streamr Network, DATA token, operators, delegators, sponsorships, staking, streams, Polygon">
@@ -67,20 +67,8 @@
     <link rel="dns-prefetch" href="https://api.etherscan.io">
 
     <link rel="stylesheet" href="/styles.css">
-    <!-- Compact sidebar chosen on this browser: set before the page is drawn -->
-    <script>try { if (localStorage.getItem('sidebar.compact') === '1') document.documentElement.classList.add('sidebar-compact'); } catch (e) { /* storage blocked */ }</script>
-    
-    <!-- PWA Install Prompt Capture (must be inline and early to catch the event) -->
-    <script>
-        window.deferredInstallPrompt = null;
-        window.addEventListener('beforeinstallprompt', function(e) {
-            e.preventDefault();
-            window.deferredInstallPrompt = e;
-        });
-        window.addEventListener('appinstalled', function() {
-            window.deferredInstallPrompt = null;
-        });
-    </script>
+    <!-- Before the first paint: saved layout choices, PWA install prompt, service worker -->
+    <script src="/src/early.js"></script>
     
     <script src="/libs/ethers.umd.min.js" defer></script>
     <script src="/libs/chart.js" defer></script>
@@ -1809,7 +1797,7 @@
 
                 <!-- Load More Button -->
                 <div id="delegators-load-more-container" class="hidden p-4 border-t border-[#333] bg-[#1a1a1a] text-center">
-                    <button id="delegators-load-more-btn" onclick="window.DelegatorsLogic?.loadMoreDelegators()" class="px-6 py-2 bg-[#2a2a2a] hover:bg-[#333] text-gray-300 hover:text-white rounded-lg text-sm font-medium transition-all flex items-center gap-2 mx-auto">
+                    <button id="delegators-load-more-btn" data-delegators-action="loadMoreDelegators" class="px-6 py-2 bg-[#2a2a2a] hover:bg-[#333] text-gray-300 hover:text-white rounded-lg text-sm font-medium transition-all flex items-center gap-2 mx-auto">
                         <span>Load More</span>
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
@@ -1835,7 +1823,7 @@
                 <div class="flex justify-between items-start mb-4 md:mb-6 flex-wrap gap-3 md:gap-4">
                     <!-- Identity -->
                     <div class="flex items-center gap-3 md:gap-5 min-w-0">
-                        <img id="delegator-detail-avatar" src="" onerror="this.src='https://placehold.co/80x80/1E1E1E/a3a3a3?text=?';" alt="Avatar" class="w-12 h-12 md:w-16 md:h-16 rounded-full border-2 border-[#333] shadow-lg flex-shrink-0">
+                        <img id="delegator-detail-avatar" src="" data-fallback-src="https://placehold.co/80x80/1E1E1E/a3a3a3?text=?" alt="Avatar" class="w-12 h-12 md:w-16 md:h-16 rounded-full border-2 border-[#333] shadow-lg flex-shrink-0">
                         <div class="min-w-0">
                             <h2 class="text-xl md:text-2xl font-bold text-white mb-1">Delegator</h2>
                             <a id="delegator-detail-link" href="#" target="_blank" rel="noopener noreferrer" class="font-mono text-sm md:text-base text-gray-400 hover:text-white transition-colors block truncate">
@@ -1957,7 +1945,7 @@
 
             <!-- Data Access Button -->
             <div class="w-full">
-                <button onclick="window.DelegatorsLogic?.openDataModal('history')" class="group w-full bg-[#1E1E1E] border border-[#333] rounded-xl p-4 md:p-6 hover:bg-[#252525] transition-colors flex items-center gap-3 md:gap-4 text-left border-l-4 border-l-transparent hover:border-l-blue-500">
+                <button data-delegators-action="openDataModal" data-delegators-arg="history" class="group w-full bg-[#1E1E1E] border border-[#333] rounded-xl p-4 md:p-6 hover:bg-[#252525] transition-colors flex items-center gap-3 md:gap-4 text-left border-l-4 border-l-transparent hover:border-l-blue-500">
                     <div class="h-10 w-10 md:h-12 md:w-12 bg-[#2C2C2C] rounded-lg flex items-center justify-center group-hover:bg-[#333] transition-colors flex-shrink-0">
                         <svg class="w-5 h-5 md:w-6 md:h-6 text-gray-400 group-hover:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
@@ -3193,15 +3181,6 @@
             <div id="overview-hero-reopen" class="hidden !mb-2 flex justify-end">
                 <button type="button" class="text-xs font-medium text-gray-500 hover:text-gray-300 transition-colors">What is Streamr</button>
             </div>
-            <script>
-                // Hidden before it is drawn when the visitor closed it
-                try {
-                    if (localStorage.getItem('overview.hero.hidden')) {
-                        document.getElementById('overview-hero').classList.add('hidden');
-                        document.getElementById('overview-hero-reopen').classList.remove('hidden');
-                    }
-                } catch (e) { /* storage blocked: shown */ }
-            </script>
 
             <!-- Network numbers: the selected one opens its chart below -->
             <section class="detail-section overflow-hidden">
@@ -3681,7 +3660,7 @@
                         <p class="text-xs text-gray-500">Detailed records</p>
                     </div>
                 </div>
-                <button onclick="window.DelegatorsLogic?.closeDataModal()" class="p-2 hover:bg-[#2a2a2a] rounded-lg text-gray-400 hover:text-white transition-colors">
+                <button data-delegators-action="closeDataModal" class="p-2 hover:bg-[#2a2a2a] rounded-lg text-gray-400 hover:text-white transition-colors">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
                     </svg>
@@ -3743,17 +3722,6 @@
     <script src="/libs/leaflet.js"></script>
     
     <script type="module" src="/main.js"></script>
-
-    <!-- Service Worker Registration -->
-    <script>
-        if ('serviceWorker' in navigator) {
-            window.addEventListener('load', () => {
-                navigator.serviceWorker.register('/sw.js').catch(error => {
-                    console.error('Service Worker registration failed:', error);
-                });
-            });
-        }
-    </script>
 
 </body>
 

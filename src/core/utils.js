@@ -262,7 +262,7 @@ export function ipfsAvatarUrl(cid, size = 160) {
  */
 export function avatarImgHtml(imageUrl, { className = 'w-8 h-8', alt = '', attrs = '' } = {}) {
     const src = typeof imageUrl === 'string' && imageUrl.startsWith('https://') ? imageUrl : OPERATOR_AVATAR_PLACEHOLDER;
-    return `<img src="${escapeHtml(src)}" alt="${escapeHtml(alt)}" loading="lazy" onerror="if (window.__avatarFallback) { window.__avatarFallback(this); } else { this.onerror = null; this.src = '${OPERATOR_AVATAR_PLACEHOLDER}'; }" class="rounded-full object-cover flex-shrink-0 bg-[#1E1E1E] ${className}" ${attrs}>`;
+    return `<img src="${escapeHtml(src)}" alt="${escapeHtml(alt)}" loading="lazy" data-avatar-fallback class="rounded-full object-cover flex-shrink-0 bg-[#1E1E1E] ${className}" ${attrs}>`;
 }
 
 /**

@@ -2530,6 +2530,10 @@
   .opacity-100 {
     opacity: 100%;
   }
+  .shadow {
+    --tw-shadow: 0 1px 3px 0 var(--tw-shadow-color, rgb(0 0 0 / 0.1)), 0 1px 2px -1px var(--tw-shadow-color, rgb(0 0 0 / 0.1));
+    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+  }
   .shadow-2xl {
     --tw-shadow: 0 25px 50px -12px var(--tw-shadow-color, rgb(0 0 0 / 0.25));
     box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
@@ -2570,6 +2574,10 @@
   }
   .ring-blue-800 {
     --tw-ring-color: var(--color-blue-800);
+  }
+  .outline {
+    outline-style: var(--tw-outline-style);
+    outline-width: 1px;
   }
   .blur {
     --tw-blur: blur(8px);
@@ -4938,6 +4946,12 @@
   .nav-link.active::before {
     transform: translateY(-50%) scaleY(1);
   }
+  html.hero-closed #overview-hero {
+    display: none !important;
+  }
+  html.hero-closed #overview-hero-reopen {
+    display: flex !important;
+  }
   #sidebar-tooltip {
     position: fixed;
     z-index: 100;
@@ -5374,6 +5388,11 @@ html:has(body [id$="Modal"].fixed.inset-0:not(.hidden)) {
   inherits: false;
   initial-value: 0 0 #0000;
 }
+@property --tw-outline-style {
+  syntax: "*";
+  inherits: false;
+  initial-value: solid;
+}
 @property --tw-blur {
   syntax: "*";
   inherits: false;
@@ -5540,6 +5559,7 @@ html:has(body [id$="Modal"].fixed.inset-0:not(.hidden)) {
       --tw-ring-offset-width: 0px;
       --tw-ring-offset-color: #fff;
       --tw-ring-offset-shadow: 0 0 #0000;
+      --tw-outline-style: solid;
       --tw-blur: initial;
       --tw-brightness: initial;
       --tw-contrast: initial;

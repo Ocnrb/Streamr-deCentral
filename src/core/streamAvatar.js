@@ -262,12 +262,13 @@ export function installAvatarHydrator() {
         }
     });
     observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['src'] });
-    // IPFS image failed without an onerror handler that switches to the placeholder
+    // A failed avatar (data-avatar-fallback, from avatarImgHtml) shows the placeholder, then its avatar stream if it has one
     document.addEventListener('error', (event) => {
         const img = event.target;
-        if (img?.tagName === 'IMG' && img.dataset.avatarStream) applyStreamAvatar(img);
+        if (img?.tagName !== 'IMG') return;
+        if (img.hasAttribute('data-avatar-fallback') && !isPlaceholder(img.getAttribute('src') || '')) avatarFallback(img);
+        if (img.dataset.avatarStream) applyStreamAvatar(img);
     }, true);
-    window.__avatarFallback = avatarFallback;
     window.__streamAvatarHydrator = observer;
     hydrateTree(document.body);
 }
