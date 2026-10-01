@@ -12,19 +12,19 @@ export default [
         files: ['main.js', 'src/**/*.js'],
         languageOptions: { ecmaVersion: 2022, sourceType: 'module', globals: { ...globals.browser, ...LIBRARIES } },
         rules: {
-            'no-unused-vars': ['warn', { args: 'none', caughtErrors: 'none' }],
+            'no-unused-vars': ['error', { args: 'none', caughtErrors: 'none' }],
             'no-empty': ['error', { allowEmptyCatch: true }]
         }
     },
     {
         files: ['public/early.js'],
         languageOptions: { sourceType: 'script', globals: globals.browser },
-        rules: { 'no-unused-vars': ['warn', { args: 'none', caughtErrors: 'none' }] }
+        rules: { 'no-unused-vars': ['error', { args: 'none', caughtErrors: 'none' }] }
     },
     {
         files: ['public/sw.js'],
         languageOptions: { sourceType: 'script', globals: globals.serviceworker },
-        rules: { 'no-unused-vars': ['warn', { args: 'none', caughtErrors: 'none' }] }
+        rules: { 'no-unused-vars': ['error', { args: 'none', caughtErrors: 'none' }] }
     },
     {
         files: ['public/workers/**/*.js'],

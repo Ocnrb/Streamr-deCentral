@@ -223,7 +223,6 @@ export async function fetchPolygonscanHistory(walletAddress, offset = 500, spons
             if (groupMethodId === "-") {
                 const directions = txGroup.map(t => t.from.toLowerCase() === walletAddress.toLowerCase() ? "OUT" : "IN");
                 const hasIn = directions.includes("IN");
-                const hasOut = directions.includes("OUT");
                 const hasOutToTreasury = txGroup.some(t => 
                     t.from.toLowerCase() === walletAddress.toLowerCase() && 
                     t.to.toLowerCase() === STREAMR_TREASURY_ADDRESS.toLowerCase()

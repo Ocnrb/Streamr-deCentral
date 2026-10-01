@@ -54,13 +54,12 @@ function updateUnifiedChart() {
     }
     
     // Prepare data based on chart type
-    let chartData, chartColor, chartLabel, chartType, isStepped;
+    let chartData, chartColor, chartType, isStepped;
     
     switch (detailState.currentChartType) {
         case 'apy':
             chartData = filteredData.map(d => parseFloat(d.spotAPY || 0) * 100);
             chartColor = '#22c55e';
-            chartLabel = 'APY (%)';
             chartType = 'line';
             isStepped = false;
             break;
@@ -70,14 +69,12 @@ function updateUnifiedChart() {
                 return useUsd ? val * dataPriceUSD : val;
             });
             chartColor = '#3b82f6';
-            chartLabel = useUsd ? 'Staked (USD)' : 'Staked (DATA)';
             chartType = 'bar';
             isStepped = false;
             break;
         case 'operators':
             chartData = filteredData.map(d => parseInt(d.operatorCount || 0));
             chartColor = '#8b5cf6';
-            chartLabel = 'Operators';
             chartType = 'line';
             isStepped = true;
             break;

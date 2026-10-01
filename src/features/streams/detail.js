@@ -427,8 +427,6 @@ function updateSponsorshipHeaderStats(sponsorship) {
  * Render sponsorship details
  */
 function renderSponsorshipDetails(sponsorship) {
-    const dataPriceUSD = state.dataPriceUSD || 0;
-    
     // Helper function to set value with tooltip (safe)
     const setValueWithTooltip = (elementId, value, displayText) => {
         const el = document.getElementById(elementId);

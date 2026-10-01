@@ -4,10 +4,9 @@
  * Allows operators to automatically manage stakes across sponsorships
  */
 
-import { showToast, updateToast } from '../ui/ui.js';
 import { runQuery, switchToFallbackRpc, getCurrentRpcUrl, readWithFallback, isRateLimitError as isRateLimitErrorService } from '../core/services.js';
 import { convertWeiToData, formatBigNumber } from '../core/utils.js';
-import { OPERATOR_CONTRACT_ABI, SPONSORSHIP_ABI, POLYGON_RPC_FALLBACKS } from '../core/constants.js';
+import { OPERATOR_CONTRACT_ABI, SPONSORSHIP_ABI } from '../core/constants.js';
 import { ethers } from 'ethers';
 
 // ethers is loaded globally from libs/ethers.umd.min.js
@@ -21,11 +20,6 @@ const DEFAULT_MIN_TRANSACTION_AMOUNT = 100; // DATA tokens
 const DEFAULT_MAX_ACCEPTABLE_MIN_OPERATOR_COUNT = 4;
 const DEFAULT_AUTO_COLLECT_INTERVAL_HOURS = 24; // Auto collect every 24 hours by default
 
-// Gas settings for Polygon
-const POLYGON_GAS_SETTINGS = {
-    maxPriorityFeePerGas: ethers.utils.parseUnits('400', 'gwei'), // 400 gwei tip
-    maxFeePerGas: ethers.utils.parseUnits('4000', 'gwei') // 4000 gwei max
-};
 
 // Storage keys
 const AUTOSTAKER_CONFIG_KEY = 'autostaker_config';
@@ -1038,7 +1032,6 @@ export async function executeActions(actions, operatorId, signer, onProgress, co
     }
     
     // Track freed funds from unstakes to validate stakes
-    let freedFunds = BigInt(0);
     let recalculationAttempts = 0;
     let currentActions = [...orderedActions];
     let actionIndex = 0;
@@ -1140,10 +1133,6 @@ export async function executeActions(actions, operatorId, signer, onProgress, co
                     console.log(`[Autostaker] Calling reduceStakeTo(${action.sponsorshipId}, ${targetStakeBN.toString()})`);
                     tx = await operatorContract.reduceStakeTo(action.sponsorshipId, targetStakeBN, gasSettings);
                 }
-                
-                // Calculate actual freed funds
-                const actualFreed = currentStakeOnChain.sub(targetStakeBN);
-                freedFunds += BigInt(actualFreed.toString());
             }
             
             const receipt = await tx.wait();
@@ -1217,7 +1206,7 @@ export async function executeActions(actions, operatorId, signer, onProgress, co
                 // If rate limited, try switching to a fallback RPC
                 if (isRateLimit) {
                     try {
-                        const newProvider = switchToFallbackRpc();
+                        switchToFallbackRpc();
                         console.log(`[Autostaker] Switched to fallback RPC: ${getCurrentRpcUrl()}`);
                         // Update the signer's provider connection for subsequent calls
                         // Note: The signer itself can't be changed, but read operations will use fallback
@@ -1239,7 +1228,6 @@ export async function executeActions(actions, operatorId, signer, onProgress, co
                         
                         // Count actions that completed on-chain but weren't in results.successful yet
                         // These are actions where tx was sent but tx.wait() failed with rate limit
-                        const previousActionSponsorships = new Set(currentActions.map(a => a.sponsorshipId));
                         const completedOnChain = currentActions.filter(a => {
                             // Action was in our list but is NOT in the new recalculated actions
                             // AND is not already counted as successful

@@ -633,7 +633,7 @@ export function renderOperatorDetails(data, globalState) {
         stakeHistoryChart = null;
     }
 
-    const { operator: op, selfDelegation: selfDelegationData, flagsAgainst, flagsAsFlagger, slashingEvents } = data;
+    const { operator: op, flagsAgainst, flagsAsFlagger, slashingEvents } = data;
     if (!op) {
         detailContent.innerHTML = '<p class="text-gray-500">Operator not found.</p>';
         return;
@@ -659,7 +659,6 @@ export function renderOperatorDetails(data, globalState) {
     const apy = calculateWeightedApy(op.stakes);
     const roundedApy = Math.round(apy * 100);
     const apyColorClass = roundedApy === 0 ? 'text-red-400' : 'text-green-400';
-    const ownersCutPercent = (BigInt(op.operatorsCutFraction) * 100n) / BigInt('1000000000000000000');
     
     const myAddress = globalState.myRealAddress?.toLowerCase();
     const isOwner = myAddress && op.owner && myAddress === op.owner.toLowerCase();

@@ -376,7 +376,6 @@ function renderLive() {
 
     el('gov-live-count').textContent = state.activeFlags.length;
     el('gov-live-list').innerHTML = state.activeFlags.map(flag => {
-        const target = operatorInfo(flag.target);
         const phase = phaseOf(flag);
         const voted = flag.votes?.length || 0;
         return `
@@ -648,7 +647,6 @@ function timelineStep(label, ts, isFuture, detail = '') {
 
 function renderDrawer(flag) {
     const t = now();
-    const target = operatorInfo(flag.target);
     const split = voteSplit(flag);
     const resolved = flag.result === 'kicked' || flag.result === 'failed';
     const votesByVoter = new Map((flag.votes || []).map(v => [v.voter.id, v]));
