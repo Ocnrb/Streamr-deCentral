@@ -6,7 +6,7 @@ A community dashboard for the [Streamr Network](https://streamr.network). Manage
 
 ## Features
 
-- **Overview**: the network at a glance: an introduction to Streamr and its three-layer network, then stake, delegations, APY, operators, sponsorships, streams, DATA sponsored and slashed, and the DATA price, each with its chart over time; top operators, best sponsorships and the latest staking, delegation, earnings and governance events
+- **Overview**: the network at a glance: an introduction to Streamr and its three-layer network, then stake, delegations, APY, operators, sponsorships, streams, DATA sponsored and slashed, and the DATA price, each with its chart over time; top operators, best sponsorships, the latest network activity (new streams, permission and storage changes, sponsorships created and funded) and incentive activity (staking, delegations, earnings, flags and votes)
 - **Streams**: browse, create and manage streams
 - **Operators and Delegators**: stake, delegate, sponsorships, history and wallets
 - **Governance**: flags and votes

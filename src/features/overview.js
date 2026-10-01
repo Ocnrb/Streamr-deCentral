@@ -6,17 +6,18 @@
  * its chart over time. Below: top operators, best sponsorships and the latest staking, delegation,
  * earnings and governance events.
  *
- * Everything comes from The Graph, except the DATA price (the app's price streams), the operators'
- * Delegated / Undelegated and Profit (earnings collected) events read through the Etherscan API (the
- * delegations with their transactions, to leave out the ones of staking actions) and the nodes, heard on the operators' coordination streams as on the
- * Network Map:
+ * Everything comes from The Graph, except the DATA price (the app's price streams), the events read
+ * through the Etherscan API (the operators' Delegated / Undelegated and Profit, the delegations with their
+ * transactions to leave out the ones of staking actions; the stream registries' permissions and storage
+ * nodes; the sponsorships created by the factory) and the nodes, heard on the operators' coordination
+ * streams as on the Network Map:
  * - totals: sums over every operator and sponsorship (paged), the slashings, the streams' creation dates;
  * - history: the daily buckets of sponsorships and operators (each keeps its last bucket until the next one),
  *   and the dated sponsoring events, slashings and stream creations, added up over time.
  */
 
 import * as Services from '../core/services.js';
-import { POLYGONSCAN_NETWORK, getEtherscanApiKey } from '../core/constants.js';
+import { POLYGONSCAN_NETWORK, getEtherscanApiKey, STREAM_REGISTRY_ADDRESS, STREAM_STORAGE_REGISTRY_ADDRESS, SPONSORSHIP_FACTORY_ADDRESS, PUBLIC_PERMISSION_ADDRESS } from '../core/constants.js';
 import { escapeHtml, convertWeiToData, formatBigNumber, parseOperatorMetadata, shortAddress, operatorAvatarHtml, calculateWeightedApy, logger } from '../core/utils.js';
 
 // ============================================
@@ -41,6 +42,15 @@ const STREAMS_CACHE_KEY = 'overview.streamsByDay.v1';
 const DELEGATION_TOPICS = {
     delegate: ethers.utils.id('Delegated(address,uint256)'),
     undelegate: ethers.utils.id('Undelegated(address,uint256)')
+};
+// Network activity: StreamRegistry, StreamStorageRegistry and SponsorshipFactory events (as in the Streamr SDK's ABIs)
+const NETWORK_TOPICS = {
+    streamCreated: ethers.utils.id('StreamCreated(string,string)'),
+    permission: ethers.utils.id('PermissionUpdated(string,address,bool,bool,uint256,uint256,bool)'),
+    permissionForUserId: ethers.utils.id('PermissionUpdatedForUserId(string,bytes,bool,bool,uint256,uint256,bool)'),
+    storageAdded: ethers.utils.id('Added(string,address)'),
+    storageRemoved: ethers.utils.id('Removed(string,address)'),
+    newSponsorship: ethers.utils.id('NewSponsorship(address,string,string,address[],uint256[],address)')
 };
 // Operator: earnings withdrawn from its sponsorships (to the delegators, the owner's cut, the protocol fee)
 const PROFIT_TOPIC = ethers.utils.id('Profit(uint256,uint256,uint256)');
@@ -96,7 +106,12 @@ const BADGES = {
     failed: { label: 'Not kicked', badge: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' },
     self: { label: 'Self', badge: 'bg-purple-500/10 text-purple-300 border-purple-500/30' },
     delegator: { label: 'Delegator', badge: 'bg-blue-500/10 text-blue-300 border-blue-500/30' },
-    owner: { label: 'Owner', badge: 'bg-purple-500/10 text-purple-300 border-purple-500/30' }
+    owner: { label: 'Owner', badge: 'bg-purple-500/10 text-purple-300 border-purple-500/30' },
+    granted: { label: 'Granted', badge: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' },
+    revoked: { label: 'Revoked', badge: 'bg-red-500/10 text-red-400 border-red-500/30' },
+    added: { label: 'Added', badge: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' },
+    removed: { label: 'Removed', badge: 'bg-red-500/10 text-red-400 border-red-500/30' },
+    created: { label: 'Created', badge: 'bg-blue-500/10 text-blue-300 border-blue-500/30' }
 };
 
 // ============================================
@@ -134,11 +149,18 @@ const state = {
     earnings: [],
     earningsLoaded: false,
     earningsError: false,
+    newStreams: [],
+    latestSponsoring: [],
+    feeds: {                    // network activity read from the explorer while its tab is open
+        permissions: { rows: [], loaded: false, error: false, at: 0 },
+        storage: { rows: [], loaded: false, error: false, at: 0 },
+        sponsorships: { rows: [], loaded: false, error: false, at: 0 }
+    },
+    panels: { network: 'streams', activity: 'staking' },
     govEvents: [],
     priceHistory: [],           // daily DATA/USD (ms, USD)
     metric: 'staked',           // metric whose chart is open (null: closed)
     range: '1y',
-    activity: 'staking',
     history: {},                // `${source}:${range}` -> { series: points[] } | 'loading' | 'error'
     sponsoringEvents: null,     // sorted [{ t, v }]
     chart: null
@@ -269,6 +291,10 @@ async function fetchLists() {
             id valueWithoutEarnings delegatorCount metadataJsonString
             stakes(first: 50) { amountWei sponsorship { spotAPY } }
         }
+        newStreams: streams(first: ${LIST_SIZE}, orderBy: createdAt, orderDirection: desc, where: { createdAt_gt: "0" }) { id createdAt }
+        sponsoring: sponsoringEvents(first: ${LIST_SIZE}, orderBy: date, orderDirection: desc) {
+            id sponsor amount date sponsorship { id stream { id } }
+        }
         stakingEvents(first: ${LIST_SIZE}, orderBy: date, orderDirection: desc) {
             id amount date operator { ${PARTY} } sponsorship { id stream { id } }
         }
@@ -284,6 +310,9 @@ async function fetchLists() {
         .filter(op => calculateWeightedApy(op.stakes) >= 0.0005)
         .slice(0, LIST_SIZE);
     state.stakingEvents = data.stakingEvents || [];
+    state.newStreams = data.newStreams || [];
+    state.latestSponsoring = (data.sponsoring || []).map(e => ({ kind: 'sponsored', sponsorshipId: e.sponsorship?.id, streamId: e.sponsorship?.stream?.id || '',
+        sponsor: e.sponsor, amount: weiToNumber(e.amount), time: Number(e.date), block: 0, index: 0 }));
 
     // Governance: flags raised, votes cast and results, newest first
     const events = [];
@@ -358,9 +387,9 @@ async function fetchTotals() {
 // Data: delegation events (operator contract logs)
 // ============================================
 
-/** Logs of one event from a block on, oldest first (at most 1000); a busy explorer is asked again shortly */
-async function fetchEventLogs(topic, fromBlock) {
-    const url = `${POLYGONSCAN_NETWORK.apiUrl}?chainid=${POLYGONSCAN_NETWORK.chainId}&module=logs&action=getLogs&topic0=${topic}`
+/** Logs of one event (of one contract, if given) from a block on, oldest first (at most 1000); a busy explorer is asked again shortly */
+async function fetchEventLogs(topic, fromBlock, address = null) {
+    const url = `${POLYGONSCAN_NETWORK.apiUrl}?chainid=${POLYGONSCAN_NETWORK.chainId}&module=logs&action=getLogs&topic0=${topic}${address ? `&address=${address.toLowerCase()}` : ''}`
         + `&fromBlock=${fromBlock}&toBlock=latest&page=1&offset=${PAGE}&apikey=${getEtherscanApiKey()}`;
     let lastError = null;
     for (let attempt = 0; attempt < 3; attempt++) {
@@ -375,14 +404,85 @@ async function fetchEventLogs(topic, fromBlock) {
 }
 
 /** Newest logs of an event since a block: when the explorer returns its 1000-log maximum, the newer half is asked */
-async function newestLogs(topic, fromBlock, latestBlock) {
+async function newestLogs(topic, fromBlock, latestBlock, address = null) {
     let from = fromBlock;
     for (let i = 0; i < 8; i++) {
-        const logs = await fetchEventLogs(topic, from);
+        const logs = await fetchEventLogs(topic, from, address);
         if (logs.length < PAGE) return logs;
         from = Math.floor((from + latestBlock) / 2);
     }
-    return fetchEventLogs(topic, from);
+    return fetchEventLogs(topic, from, address);
+}
+
+const logTime = (log) => ({ time: parseInt(log.timeStamp, 16), block: parseInt(log.blockNumber, 16), index: parseInt(log.logIndex, 16) });
+const newestFirst = (a, b) => b.block - a.block || b.index - a.index;
+
+/** The newest LIST_SIZE events of a contract's topics, looked back 1, 7, then 30 days; `parse` turns the logs into events */
+async function newestContractEvents(address, topics, parse) {
+    const latest = (await Services.runQuery('{ _meta { block { number } } }'))._meta.block.number;
+    let events = [];
+    for (const days of DELEGATION_WINDOWS_DAYS) {
+        const from = Math.max(0, latest - days * POLYGON_BLOCKS_PER_DAY);
+        const logs = (await Promise.all(topics.map(topic => newestLogs(topic, from, latest, address)))).flat()
+            .filter(log => log.address.toLowerCase() === address.toLowerCase());
+        events = parse(logs).sort(newestFirst);
+        if (events.length >= LIST_SIZE) break;
+    }
+    return events.slice(0, LIST_SIZE);
+}
+
+/** What a permission update leaves to the user */
+function permissionRights(canEdit, canDelete, publishExpiration, subscribeExpiration, canGrant) {
+    const nowSeconds = Math.floor(Date.now() / 1000);
+    const rights = [];
+    if (publishExpiration.gt(nowSeconds)) rights.push('publish');
+    if (subscribeExpiration.gt(nowSeconds)) rights.push('subscribe');
+    if (canEdit) rights.push('edit');
+    if (canDelete) rights.push('delete');
+    if (canGrant) rights.push('grant');
+    return rights;
+}
+
+const FEED_READERS = {
+    // Permission changes, without the ones given with a new stream (same transaction)
+    permissions: () => newestContractEvents(STREAM_REGISTRY_ADDRESS,
+        [NETWORK_TOPICS.streamCreated, NETWORK_TOPICS.permission, NETWORK_TOPICS.permissionForUserId], (logs) => {
+            const creations = new Set(logs.filter(log => log.topics[0] === NETWORK_TOPICS.streamCreated).map(log => log.transactionHash));
+            return logs.filter(log => log.topics[0] !== NETWORK_TOPICS.streamCreated && !creations.has(log.transactionHash)).map(log => {
+                const byUserId = log.topics[0] === NETWORK_TOPICS.permissionForUserId;
+                const [streamId, user, ...rights] = ethers.utils.defaultAbiCoder.decode(
+                    ['string', byUserId ? 'bytes' : 'address', 'bool', 'bool', 'uint256', 'uint256', 'bool'], log.data);
+                return { streamId, user: String(user).toLowerCase(), rights: permissionRights(...rights), ...logTime(log) };
+            });
+        }),
+    storage: () => newestContractEvents(STREAM_STORAGE_REGISTRY_ADDRESS,
+        [NETWORK_TOPICS.storageAdded, NETWORK_TOPICS.storageRemoved], (logs) => logs.map(log => ({
+            streamId: ethers.utils.defaultAbiCoder.decode(['string'], log.data)[0],
+            node: ethers.utils.hexDataSlice(log.topics[1], 12).toLowerCase(),
+            added: log.topics[0] === NETWORK_TOPICS.storageAdded,
+            ...logTime(log)
+        }))),
+    sponsorships: () => newestContractEvents(SPONSORSHIP_FACTORY_ADDRESS, [NETWORK_TOPICS.newSponsorship], (logs) => logs.map(log => ({
+        kind: 'created',
+        sponsorshipId: ethers.utils.hexDataSlice(log.topics[1], 12).toLowerCase(),
+        creator: ethers.utils.hexDataSlice(log.topics[2], 12).toLowerCase(),
+        streamId: ethers.utils.defaultAbiCoder.decode(['string', 'string', 'address[]', 'uint256[]'], log.data)[0],
+        ...logTime(log)
+    })))
+};
+
+async function loadFeed(name) {
+    const feed = state.feeds[name];
+    feed.at = Date.now();
+    try {
+        feed.rows = await FEED_READERS[name]();
+        feed.loaded = true;
+        feed.error = false;
+    } catch (e) {
+        logger.warn(`Overview: ${name} events not loaded`, e);
+        if (!feed.loaded) feed.error = true;
+    }
+    if (state.active) renderPanel('network');
 }
 
 async function loadEarnings() {
@@ -393,7 +493,7 @@ async function loadEarnings() {
         logger.warn('Overview: earnings events not loaded', e);
         if (!state.earningsLoaded) state.earningsError = true;
     }
-    if (state.active) renderActivity();
+    if (state.active) renderPanel('activity');
 }
 
 /** The operators' latest Profit events: earnings withdrawn from their sponsorships */
@@ -472,7 +572,7 @@ async function loadDelegations() {
         logger.warn('Overview: delegation events not loaded', e);
         if (!state.delegationsLoaded) state.delegationsError = true;
     }
-    if (state.active) renderActivity();
+    if (state.active) renderPanel('activity');
 }
 
 async function fetchDelegationEvents() {
@@ -1290,25 +1390,125 @@ function governanceRow(event) {
         </a>`;
 }
 
-const ACTIVITY = {
-    staking: { rows: () => state.stakingEvents, render: stakingRow, error: 'Staking events could not be loaded.', empty: 'No staking events.' },
-    delegations: { rows: () => state.delegations, render: delegationRow, error: 'Delegation events could not be loaded.', empty: 'No delegations in the last 30 days.',
-        loaded: () => state.delegationsLoaded, failed: () => state.delegationsError },
-    earnings: { rows: () => state.earnings, render: earningsRow, error: 'Earnings events could not be loaded.', empty: 'No earnings collected in the last 30 days.',
-        loaded: () => state.earningsLoaded, failed: () => state.earningsError },
-    governance: { rows: () => state.govEvents, render: governanceRow, error: 'Governance events could not be loaded.', empty: 'No governance events.' }
+const ICONS = {
+    stream: '<path d="M4.9 19.1C1 15.2 1 8.8 4.9 4.9"/><path d="M7.8 16.2c-2.3-2.3-2.3-6.1 0-8.5"/><circle cx="12" cy="12" r="2"/><path d="M16.2 7.8c2.3 2.3 2.3 6.1 0 8.5"/><path d="M19.1 4.9C23 8.8 23 15.1 19.1 19"/>',
+    key: '<path d="m15.5 7.5 2.3 2.3a1 1 0 0 0 1.4 0l2.1-2.1a1 1 0 0 0 0-1.4L19 4"/><path d="m21 2-9.6 9.6"/><circle cx="7.5" cy="15.5" r="5.5"/>',
+    storage: '<ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0 0 18 0V5"/><path d="M3 12a9 3 0 0 0 18 0"/>',
+    sponsorship: '<path d="M12 2v20"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>'
 };
 
-/** Explorer-backed tabs: read while open (at most once a minute), and once at the start */
-const ACTIVITY_LOADERS = { delegations: () => loadDelegations(), earnings: () => loadEarnings() };
+function iconTile(kind) {
+    return `<span class="flex-shrink-0 inline-flex items-center justify-center w-8 h-8 rounded-full border border-[#333] bg-[#252525] text-gray-400">
+        <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[kind]}</svg></span>`;
+}
 
-function renderActivity() {
-    const el = $('overview-activity');
+const streamHref = (streamId) => `/stream/${encodeURIComponent(streamId)}`;
+const streamTitle = (streamId) => `<p class="text-sm font-semibold text-white truncate" data-tooltip-content="${escapeHtml(streamId)}">${escapeHtml(shortStreamId(streamId))}</p>`;
+const who = (address) => (address === PUBLIC_PERMISSION_ADDRESS.toLowerCase() ? 'Everyone' : shortAddress(address));
+
+function newStreamRow(stream) {
+    return `
+        <a href="${streamHref(stream.id)}" class="${ROW}">
+            ${iconTile('stream')}
+            <div class="min-w-0 flex-1">
+                ${streamTitle(stream.id)}
+                <p class="text-xs text-gray-400 truncate">New stream</p>
+            </div>
+            <p class="text-xs text-gray-400 whitespace-nowrap">${timeAgo(stream.createdAt)}</p>
+        </a>`;
+}
+
+function permissionRow(event) {
+    const granted = event.rights.length > 0;
+    return `
+        <a href="${streamHref(event.streamId)}" class="${ROW}">
+            ${iconTile('key')}
+            <div class="min-w-0 flex-1">
+                ${streamTitle(event.streamId)}
+                <p class="text-xs text-gray-400 truncate">${escapeHtml(who(event.user))} · ${granted ? event.rights.join(', ') : 'no permissions'}</p>
+            </div>
+            <div class="text-right whitespace-nowrap">
+                ${badge(granted ? 'granted' : 'revoked')}
+                <p class="text-xs text-gray-400 mt-1">${timeAgo(event.time)}</p>
+            </div>
+        </a>`;
+}
+
+function storageRow(event) {
+    return `
+        <a href="${streamHref(event.streamId)}" class="${ROW}">
+            ${iconTile('storage')}
+            <div class="min-w-0 flex-1">
+                ${streamTitle(event.streamId)}
+                <p class="text-xs text-gray-400 truncate">Storage node ${escapeHtml(shortAddress(event.node))}</p>
+            </div>
+            <div class="text-right whitespace-nowrap">
+                ${badge(event.added ? 'added' : 'removed')}
+                <p class="text-xs text-gray-400 mt-1">${timeAgo(event.time)}</p>
+            </div>
+        </a>`;
+}
+
+function sponsorshipEventRow(event) {
+    const right = event.kind === 'created' ? badge('created')
+        : `<p class="text-sm font-semibold text-green-400" data-tooltip-content="${usdLine(event.amount)}${full(event.amount)} DATA">+${compact(event.amount)} DATA</p>`;
+    return `
+        <a href="${sponsorshipHref(event.sponsorshipId, event.streamId)}" class="${ROW}">
+            ${iconTile('sponsorship')}
+            <div class="min-w-0 flex-1">
+                ${streamTitle(event.streamId || event.sponsorshipId)}
+                <p class="text-xs text-gray-400 truncate">${event.kind === 'created' ? `Sponsorship created by ${escapeHtml(shortAddress(event.creator))}` : `Sponsored by ${escapeHtml(shortAddress(event.sponsor))}`}</p>
+            </div>
+            <div class="text-right whitespace-nowrap">
+                ${right}
+                <p class="text-xs text-gray-400 ${event.kind === 'created' ? 'mt-1' : ''}">${timeAgo(event.time)}</p>
+            </div>
+        </a>`;
+}
+
+const feedTab = (name, render, what) => ({
+    rows: () => state.feeds[name].rows, render, error: `${what} could not be loaded.`, empty: `No ${what.toLowerCase()} in the last 30 days.`,
+    loaded: () => state.feeds[name].loaded, failed: () => state.feeds[name].error, load: () => loadFeed(name), at: () => state.feeds[name].at
+});
+
+const PANELS = {
+    // The network: streams, their permissions and storage, sponsorships
+    network: {
+        list: 'overview-network',
+        tabs: {
+            streams: { rows: () => state.newStreams, render: newStreamRow, error: 'Streams could not be loaded.', empty: 'No new streams.' },
+            permissions: feedTab('permissions', permissionRow, 'Permission changes'),
+            storage: feedTab('storage', storageRow, 'Storage changes'),
+            // Created (factory events) and sponsored (subgraph), newest first
+            sponsorships: { rows: () => [...state.feeds.sponsorships.rows, ...state.latestSponsoring].sort((a, b) => b.time - a.time).slice(0, LIST_SIZE),
+                render: sponsorshipEventRow, error: 'Sponsorship events could not be loaded.', empty: 'No sponsorship events.',
+                loaded: () => state.loaded && (state.feeds.sponsorships.loaded || state.feeds.sponsorships.error),
+                failed: () => state.error && state.feeds.sponsorships.error,
+                load: () => loadFeed('sponsorships'), at: () => state.feeds.sponsorships.at }
+        }
+    },
+    // The incentive layer: staking, delegations, earnings, flags and votes
+    activity: {
+        list: 'overview-activity',
+        tabs: {
+            staking: { rows: () => state.stakingEvents, render: stakingRow, error: 'Staking events could not be loaded.', empty: 'No staking events.' },
+            delegations: { rows: () => state.delegations, render: delegationRow, error: 'Delegation events could not be loaded.', empty: 'No delegations in the last 30 days.',
+                loaded: () => state.delegationsLoaded, failed: () => state.delegationsError, load: () => loadDelegations(), at: () => state.delegationsAt },
+            earnings: { rows: () => state.earnings, render: earningsRow, error: 'Earnings events could not be loaded.', empty: 'No earnings collected in the last 30 days.',
+                loaded: () => state.earningsLoaded, failed: () => state.earningsError, load: () => loadEarnings(), at: () => state.earningsAt },
+            governance: { rows: () => state.govEvents, render: governanceRow, error: 'Governance events could not be loaded.', empty: 'No governance events.' }
+        }
+    }
+};
+
+function renderPanel(name) {
+    const panel = PANELS[name];
+    const el = $(panel.list);
     if (!el) return;
-    const tab = ACTIVITY[state.activity];
+    const tab = panel.tabs[state.panels[name]];
     el.innerHTML = listContent(tab.rows(), tab.render, tab);
-    document.querySelectorAll('#overview-activity-tabs button').forEach(btn => {
-        const active = btn.dataset.tab === state.activity;
+    document.querySelectorAll(`#${panel.list}-tabs button`).forEach(btn => {
+        const active = btn.dataset.tab === state.panels[name];
         btn.classList.toggle('bg-[#3A3A3A]', active);
         btn.classList.toggle('text-white', active);
         btn.classList.toggle('text-gray-400', !active);
@@ -1316,10 +1516,19 @@ function renderActivity() {
     });
 }
 
+/** Explorer-backed tabs: read when opened (at most once a minute) and on each refresh while open */
+function openTab(name, tabName) {
+    state.panels[name] = tabName;
+    renderPanel(name);
+    const tab = PANELS[name].tabs[tabName];
+    if (tab.load && state.totals && Date.now() - (tab.at() || 0) > REFRESH_MS) tab.load();
+}
+
 function renderLists() {
     renderOperators();
     renderSponsorships();
-    renderActivity();
+    renderPanel('network');
+    renderPanel('activity');
 }
 
 // ============================================
@@ -1521,9 +1730,13 @@ function meshUpdate() {
 async function refresh() {
     const totals = fetchTotals();
     state.totalsPromise = totals.catch(() => {});
-    // Delegation and earnings events (explorer requests): while their tab is open, or once
-    if (state.activity === 'delegations' || !state.delegationsLoaded) totals.then(loadDelegations).catch(() => {});
-    if (state.activity === 'earnings' || !state.earningsLoaded) totals.then(loadEarnings).catch(() => {});
+    // Explorer-backed tabs: while open; the delegations and earnings also once at the start
+    for (const [name, panel] of Object.entries(PANELS)) {
+        const tab = panel.tabs[state.panels[name]];
+        if (tab.load) totals.then(tab.load).catch(() => {});
+    }
+    if (state.panels.activity !== 'delegations' && !state.delegationsLoaded) totals.then(loadDelegations).catch(() => {});
+    if (state.panels.activity !== 'earnings' && !state.earningsLoaded) totals.then(loadEarnings).catch(() => {});
     try {
         await Promise.all([totals, fetchLists()]);
         state.loaded = true;
@@ -1571,12 +1784,9 @@ function init() {
         state.range = btn.dataset.range;
         renderChart();
     }));
-    document.querySelectorAll('#overview-activity-tabs button').forEach(btn => btn.addEventListener('click', () => {
-        state.activity = btn.dataset.tab;
-        renderActivity();
-        const at = { delegations: state.delegationsAt, earnings: state.earningsAt }[state.activity];
-        if (ACTIVITY_LOADERS[state.activity] && state.totals && Date.now() - (at || 0) > REFRESH_MS) ACTIVITY_LOADERS[state.activity]();
-    }));
+    for (const name of Object.keys(PANELS)) {
+        document.querySelectorAll(`#${PANELS[name].list}-tabs button`).forEach(btn => btn.addEventListener('click', () => openTab(name, btn.dataset.tab)));
+    }
     // The page stops itself when another one opens
     window.addEventListener('app:routechange', (e) => {
         if (e.detail.path !== '/') stop();
