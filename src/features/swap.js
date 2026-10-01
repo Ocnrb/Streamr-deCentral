@@ -1550,7 +1550,7 @@ function renderHistory() {
     }).join('');
     fillPolPrices();
     fillRoutes();
-    SwapMarket.setOwnTxHashes(state.history.map(h => h.txHash));
+    SwapMarket.setOwnSwaps(state.history.map(h => ({ txHash: h.txHash, pay: h.pay?.symbol, receive: h.receive?.symbol })));
 }
 
 /** Spins a refresh button's icon while the work runs (at least half a second, so it is noticed) */

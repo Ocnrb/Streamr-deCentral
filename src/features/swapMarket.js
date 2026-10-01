@@ -75,7 +75,7 @@ const state = {
     loaded: false,
     error: false,
     history: [],           // daily { t, p }, oldest first
-    ownHashes: new Set(),
+    ownSwaps: new Map(),   // this wallet's swaps: txHash -> { pay, receive } symbols of the whole swap
     shown: TRADES_PAGE,    // rows of the trades list
     loadingOlder: false,
     days: null,            // the pools' days from their DEX subgraphs, added up: { date, volume, txCount }, oldest first
@@ -484,6 +484,9 @@ const compactChip = (symbol) => state.tokenChip(symbol)
     .replace('gap-1.5 pl-1 pr-2', 'gap-1 pl-0.5 pr-1.5')
     .replace('text-xs', 'text-[11px]')
     .replaceAll('w-4 h-4', 'w-3.5 h-3.5');
+const SHORT_DEX = [[/^Uniswap /, 'Uni '], [/^QuickSwap /, 'QS '], [/^SushiSwap V2/, 'Sushi']];
+/** Short pool name for the list ("Uni v4 0.3%", "QS V2"): the tokens are in the trade's chips */
+const poolShortName = (pool) => (pool ? SHORT_DEX.reduce((name, [from, to]) => name.replace(from, to), pool.label) : '');
 const poolFullName = (pool) => (pool ? `${pool.label} · DATA/${counterName(pool)}` : '');
 
 function renderFilter() {
@@ -498,7 +501,7 @@ function renderFilter() {
 function renderTrades() {
     const body = $('swap-trades');
     if (!body) return;
-    const row = (text) => `<tr><td colspan="5" class="py-4 text-sm text-gray-300">${text}</td></tr>`;
+    const row = (text) => `<tr><td colspan="6" class="py-4 text-sm text-gray-300">${text}</td></tr>`;
     if (!state.loaded) {
         $('swap-trades-more')?.classList.add('hidden');
         const spinner = '<span class="w-4 h-4 flex-shrink-0 border-2 border-gray-500 border-t-transparent rounded-full animate-spin" aria-hidden="true"></span>';
@@ -518,14 +521,18 @@ function renderTrades() {
     body.innerHTML = recent.map(trade => {
         const hash = Utils.escapeHtml(trade.txHash);
         const pool = pools.get(trade.pool);
+        const ownSwap = state.ownSwaps.get(trade.txHash.toLowerCase());
         const side = trade.buy
             ? '<span class="tx-badge tx-badge-in whitespace-nowrap">Buy</span>'
             : '<span class="tx-badge tx-badge-out whitespace-nowrap">Sell</span>';
         // What was paid -> what was received in the pool (the pool's full name in the tooltip)
+        // The wallet's own swaps show what it paid and received in the whole swap (e.g. DATA -> POL through USDC)
         const counter = pool ? counterName(pool) : '';
-        const [paid, received] = trade.buy ? [counter, 'DATA'] : ['DATA', counter];
-        const tradeCell = `<span class="inline-flex items-center gap-1 whitespace-nowrap" data-tooltip-content="${Utils.escapeHtml(poolFullName(pool))}">${side}<span class="ml-0.5"></span>${compactChip(paid)}<span class="text-gray-400 text-xs">→</span>${compactChip(received)}</span>`;
-        const own = state.ownHashes.has(trade.txHash.toLowerCase())
+        const [paid, received] = ownSwap?.pay && ownSwap?.receive
+            ? [ownSwap.pay, ownSwap.receive]
+            : trade.buy ? [counter, 'DATA'] : ['DATA', counter];
+        const tradeCell = `<span class="inline-flex items-center gap-2.5 whitespace-nowrap" data-tooltip-content="${Utils.escapeHtml(poolFullName(pool))}">${side}<span class="inline-flex items-center gap-1">${compactChip(paid)}<span class="text-gray-400 text-xs">→</span>${compactChip(received)}</span></span>`;
+        const own = ownSwap
             ? '<span class="ml-2 px-1.5 py-0.5 rounded bg-[#2C2C2C] text-[10px] font-semibold text-gray-300">You</span>'
             : '';
         return `
@@ -534,7 +541,8 @@ function renderTrades() {
                 <td class="py-2 pr-2">${tradeCell}</td>
                 <td class="py-2 pr-2 text-right whitespace-nowrap text-white font-medium">${formatPrice(trade.price)}</td>
                 <td class="py-2 pr-2 text-right whitespace-nowrap text-gray-200">${formatData(trade.data)}</td>
-                <td class="py-2 text-right whitespace-nowrap text-gray-200">${trade.usd === null ? '--' : formatUsd(trade.usd)}</td>
+                <td class="py-2 2xl:pr-2 text-right whitespace-nowrap text-gray-200">${trade.usd === null ? '--' : formatUsd(trade.usd)}</td>
+                <td class="hidden 2xl:table-cell py-2 text-right whitespace-nowrap text-xs text-gray-300"><span data-tooltip-content="${Utils.escapeHtml(poolFullName(pool))}">${Utils.escapeHtml(poolShortName(pool))}</span></td>
             </tr>`;
     }).join('');
 }
@@ -843,8 +851,8 @@ export const SwapMarket = {
     },
 
     /** Swaps of this wallet: marked in the trades list */
-    setOwnTxHashes(hashes) {
-        state.ownHashes = new Set(hashes.map(h => h.toLowerCase()));
+    setOwnSwaps(swaps) {
+        state.ownSwaps = new Map(swaps.map(swap => [swap.txHash.toLowerCase(), { pay: swap.pay, receive: swap.receive }]));
         if (state.active && state.loaded) renderTrades();
     }
 };
