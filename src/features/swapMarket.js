@@ -305,7 +305,7 @@ function renderStats() {
     const day = state.trades.filter(t => t.time >= Date.now() - DAY);
     // Volume and trades come from the trades list: empty until it loads
     $('swap-market-stats').textContent = state.loaded
-        ? `24h volume ${formatUsd(day.reduce((sum, t) => sum + t.usd, 0))} · ${day.length} ${day.length === 1 ? 'trade' : 'trades'} in 24h`
+        ? `24h volume ${formatUsd(day.reduce((sum, t) => sum + t.usd, 0))} · ${day.length} ${day.length === 1 ? 'trade' : 'trades'}`
         : '';
 }
 
