@@ -324,10 +324,29 @@ async function loadTrades() {
         }
     }
     await fillUsdRates();
+    markOutliers();
     return added;
 }
 
 const allReachedStart = () => state.pools.every(p => p.reachedStart);
+
+const OUTLIER_FACTOR = 3;   // a trade priced over 3x away from the main pool's price is a broken pool's
+
+/**
+ * Marks the trades priced far from the main pool at their time (nearly empty pools trade at any price):
+ * left out of the list and the volume. One pass in time order, following the main pool's price.
+ */
+function markOutliers() {
+    let reference = null;
+    for (const trade of state.trades) {
+        if (trade.pool === MAIN.key) {
+            reference = trade.poolPrice;
+            trade.outlier = false;
+            continue;
+        }
+        trade.outlier = Boolean(reference && trade.price && (trade.price > reference * OUTLIER_FACTOR || trade.price < reference / OUTLIER_FACTOR));
+    }
+}
 
 /** New pools (from the swap page or the Ethereum lookup): their trades and subgraph days are read right away */
 function addPools(descs) {
@@ -373,6 +392,7 @@ async function loadOlder() {
     const main = mainTrades();
     if (main.length) state.windowStart = Math.min(state.windowStart, main[0].time);
     await fillUsdRates();
+    markOutliers();
     return added;
 }
 
@@ -400,6 +420,7 @@ const ETH = {
 };
 const MULTICALL3 = '0xcA11bde05977b3631167028862bE2a173976CA11';
 const ETH_POOL_MIN_DATA = ethers.utils.parseUnits('10000', 18);
+const ETH_POOL_MIN_USD = 50;
 const ETH_IFACES = {
     multicall: new ethers.utils.Interface(['function aggregate3((address target, bool allowFailure, bytes callData)[] calls) payable returns ((bool success, bytes returnData)[] returnData)']),
     v2Factory: new ethers.utils.Interface(['function getPair(address, address) view returns (address)']),
@@ -480,8 +501,20 @@ async function discoverEthereumPools() {
         const address = found[v2.length + i]?.[0];
         if (address && address !== zero) candidates.push({ chain: 1, kind: 'v3', venue: 'v3', address: address.toLowerCase(), counter: c, label: `Uniswap v3 ${fee / 10000}%`, subgraph: 'ethUniV3' });
     });
-    const balances = await ethMulticall(candidates.map(p => ({ target: ETH.DATA, iface: ETH_IFACES.erc20, fn: 'balanceOf', args: [p.address] })));
-    const pools = candidates.filter((p, i) => balances[i]?.[0]?.gte(ETH_POOL_MIN_DATA));
+    // Both sides: at least 10k DATA and ETH_POOL_MIN_USD of the other token (a nearly empty pool trades at any price)
+    const [ethUsd] = await ethUsdAt([Math.floor(Date.now() / 1000)]);
+    const balances = await ethMulticall(candidates.flatMap(p => [
+        { target: ETH.DATA, iface: ETH_IFACES.erc20, fn: 'balanceOf', args: [p.address] },
+        { target: p.counter.address, iface: ETH_IFACES.erc20, fn: 'balanceOf', args: [p.address] }
+    ]));
+    const pools = candidates.filter((p, i) => {
+        const data = balances[i * 2]?.[0];
+        const other = balances[i * 2 + 1]?.[0];
+        if (!data?.gte(ETH_POOL_MIN_DATA) || !other) return false;
+        const amount = Number(ethers.utils.formatUnits(other, p.counter.decimals));
+        const usd = p.counter.symbol === 'WETH' ? amount * (ethUsd || 0) : amount;
+        return usd >= ETH_POOL_MIN_USD;
+    });
 
     // v4: the pools of the standard tiers, against native ETH and the counters; liquidity from the PoolManager's storage
     const v4Counters = [{ address: zero, symbol: 'ETH', decimals: 18 }, ...ETH.counters];
@@ -570,7 +603,7 @@ function rangeStats() {
     const now = Date.now();
     const start = span === Infinity ? -Infinity : now - span;
     if (state.loaded && state.windowStart !== null && start >= state.windowStart) {
-        const trades = state.trades.filter(t => t.time >= start);
+        const trades = state.trades.filter(t => t.time >= start && !t.outlier);
         return { volume: trades.reduce((sum, t) => sum + (t.usd || 0), 0), count: trades.length };
     }
     if (state.days) {
@@ -662,9 +695,8 @@ function filteredPools() {
     return state.pools;
 }
 function listedTrades() {
-    if (state.filter === 'all') return state.trades;
-    const keys = new Set(filteredPools().map(p => p.key));
-    return state.trades.filter(t => keys.has(t.pool));
+    const keys = state.filter === 'all' ? null : new Set(filteredPools().map(p => p.key));
+    return state.trades.filter(t => !t.outlier && (!keys || keys.has(t.pool)));
 }
 
 // Small Ethereum logo beside the trades of Ethereum pools
