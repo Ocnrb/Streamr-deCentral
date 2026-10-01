@@ -1,29 +1,52 @@
 /**
- * Swap page market panel: the DATA/USD chart and the latest trades of the main DATA pool.
- * - Trades: Swap events of the Uniswap v4 DATA/USDC 0.3% pool (where the DATA liquidity on Polygon is),
- *   read with the explorer's log API. A trade's price is its USDC amount over its DATA amount; whether it
- *   bought or sold DATA comes from the move of the pool price (only swaps move it).
- * - Chart: 24H and 7D follow the pool price trade by trade; longer ranges use the daily DATA/USD
- *   history (DATA_History stream, CSV fallback). Every range ends at the pool's current price.
- * - Volume and trades of the range: from the loaded trades (24H / 7D, to the minute), else from the pool's
- *   daily volume and transaction counts in the Uniswap v4 subgraph (The Graph).
+ * Swap page market panel: the DATA/USD chart and the latest trades of the DATA pools.
+ * - Trades: Swap events of every DATA pool with liquidity (the main one, Uniswap v4 DATA/USDC 0.3%, and
+ *   the others the swap page finds: Uniswap v4 / v3, QuickSwap V2 / V3, SushiSwap), read with the
+ *   explorer's log API. A trade's price is its USD value over its DATA amount: USD stablecoins as is,
+ *   POL at the Chainlink POL/USD price of the hour. Buy / sell: the amounts' signs (v2 / v3), the move of
+ *   the pool price for v4 (only swaps move it).
+ * - Chart: the main pool's price. 24H and 7D follow it trade by trade; longer ranges use the daily
+ *   DATA/USD history (DATA_History stream, CSV fallback). Every range ends at the pool's current price.
+ * - Volume and trades of the range: from the loaded trades of every pool (24H / 7D, to the minute), else
+ *   from the daily volume and transaction counts of the pools in their DEX's subgraph (Uniswap v4 / v3,
+ *   QuickSwap V3; the others have none here).
  */
 
 import * as Utils from '../core/utils.js';
 import * as Services from '../core/services.js';
-import { DATA_TOKEN_ADDRESS_POLYGON, POLYGONSCAN_NETWORK, getEtherscanApiKey, getUniswapV4SubgraphUrl } from '../core/constants.js';
+import { DATA_TOKEN_ADDRESS_POLYGON, POLYGONSCAN_NETWORK, getEtherscanApiKey, DEX_SUBGRAPH_IDS, getDexSubgraphUrl } from '../core/constants.js';
 
 const { logger } = Utils;
 
 const DATA = DATA_TOKEN_ADDRESS_POLYGON.toLowerCase();
 const USDC = '0x3c499c542cef5e3811e1192ce70d8cc03d5c3359';
 const POOL_MANAGER = '0x67366782805870060151383f4bbff9dab53e5cd6';
-const SWAP_TOPIC = ethers.utils.id('Swap(bytes32,address,int128,int128,uint160,uint128,int24,uint24)');
+const SWAP_TOPICS = {
+    v4: ethers.utils.id('Swap(bytes32,address,int128,int128,uint160,uint128,int24,uint24)'),
+    v3: ethers.utils.id('Swap(address,address,int256,int256,uint160,uint128,int24)'),   // Uniswap v3 and QuickSwap V3 (Algebra)
+    v2: ethers.utils.id('Swap(address,uint256,uint256,uint256,uint256,address)')
+};
 const DATA_IS_CURRENCY0 = DATA < USDC;
 const POOL_ID = ethers.utils.keccak256(ethers.utils.defaultAbiCoder.encode(
     ['address', 'address', 'uint24', 'int24', 'address'],
     [...(DATA_IS_CURRENCY0 ? [DATA, USDC] : [USDC, DATA]), 3000, 60, ethers.constants.AddressZero]
 ));
+const USD_STABLES = ['USDC', 'USDC.e', 'USDT', 'DAI'];
+
+/** A DATA pool: kind v4 (id) / v3 / v2 (address), the token against DATA, and its own loading state */
+function makePool(desc) {
+    return {
+        ...desc,
+        key: desc.kind === 'v4' ? `v4:${desc.id.toLowerCase()}` : `${desc.kind}:${desc.address.toLowerCase()}`,
+        nextFromBlock: null,
+        oldestBlock: null,
+        firstTradeBlock: undefined,
+        reachedStart: false
+    };
+}
+
+// The main pool: the chart, the price and the change follow it
+const MAIN = makePool({ kind: 'v4', venue: 'v4', id: POOL_ID, dataIs0: DATA_IS_CURRENCY0, counterSymbol: 'USDC', counterDecimals: 6, label: 'Uniswap v4 0.3%' });
 
 const BLOCKS_PER_DAY = 43200;        // Polygon: about 2 s per block
 const TRADE_DAYS = 7;
@@ -41,20 +64,20 @@ const TRADE_RANGES = ['24H', '7D'];
 const state = {
     active: false,
     range: '24H',
-    trades: [],            // oldest first
+    trades: [],            // every pool's, oldest first
     seen: new Set(),       // txHash:logIndex
-    nextFromBlock: null,
-    windowStart: null,     // time from which the trades are complete
+    pools: [MAIN],         // the DATA pools read (the main one first)
+    filter: 'all',         // trades list: 'all' pools or 'main'
+    polUsdAt: null,        // (times in s) -> POL/USD prices, from the swap page (Chainlink)
+    polUsd: new Map(),     // hour (ms) -> POL/USD
+    windowStart: null,     // time from which the main pool's trades are complete
     loaded: false,
     error: false,
     history: [],           // daily { t, p }, oldest first
     ownHashes: new Set(),
     shown: TRADES_PAGE,    // rows of the trades list
-    oldestBlock: null,     // first block of the loaded trades range
-    firstTradeBlock: undefined,  // block of the pool's first trade (null: none)
-    reachedStart: false,   // every trade since the pool's first one is loaded
     loadingOlder: false,
-    days: null,            // the pool's days from the subgraph: { date, volume, txCount }, oldest first
+    days: null,            // the pools' days from their DEX subgraphs, added up: { date, volume, txCount }, oldest first
     daysAt: 0,
     failures: 0,           // failed loads in a row (before the first success: asked again sooner)
     chart: null,
@@ -84,12 +107,12 @@ function formatData(value) {
     return Utils.formatBigNumber(value >= 1000 ? value.toFixed(0) : Number(value.toFixed(2)).toString());
 }
 
-function formatTime(ms, withYear = false) {
+/** Compact time for the trades list: "15:08" today, "Sep 29 15:08" before */
+function formatTime(ms) {
     const date = new Date(ms);
-    const today = new Date().toDateString() === date.toDateString();
-    return today
-        ? date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
-        : date.toLocaleString(undefined, { ...(withYear ? { year: 'numeric' } : {}), month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+    const time = date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', hour12: false });
+    if (new Date().toDateString() === date.toDateString()) return time;
+    return `${date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} ${time}`;
 }
 
 // ============================================
@@ -98,11 +121,13 @@ function formatTime(ms, withYear = false) {
 
 const EXPLORER_BUSY = /rate limit|max calls|too many|timeout|temporarily|busy/i;
 
-/** Swap logs of the pool from a block on; a busy explorer (rate limit: the app's default key is shared) is asked again shortly */
-async function fetchLogs(fromBlock, page = 1, toBlock = 'latest', offset = MAX_LOGS) {
-    const url = `${POLYGONSCAN_NETWORK.apiUrl}?chainid=137&module=logs&action=getLogs&address=${POOL_MANAGER}`
-        + `&topic0=${SWAP_TOPIC}&topic0_1_opr=and&topic1=${POOL_ID}&fromBlock=${fromBlock}&toBlock=${toBlock}`
-        + `&page=${page}&offset=${offset}&apikey=${getEtherscanApiKey()}`;
+/** Swap logs of a pool from a block on; a busy explorer (rate limit: the app's default key is shared) is asked again shortly */
+async function fetchLogs(pool, fromBlock, page = 1, toBlock = 'latest', offset = MAX_LOGS) {
+    const filter = pool.kind === 'v4'
+        ? `address=${POOL_MANAGER}&topic0=${SWAP_TOPICS.v4}&topic0_1_opr=and&topic1=${pool.id}`
+        : `address=${pool.address}&topic0=${SWAP_TOPICS[pool.kind]}`;
+    const url = `${POLYGONSCAN_NETWORK.apiUrl}?chainid=137&module=logs&action=getLogs&${filter}`
+        + `&fromBlock=${fromBlock}&toBlock=${toBlock}&page=${page}&offset=${offset}&apikey=${getEtherscanApiKey()}`;
     let lastError = null;
     for (let attempt = 0; attempt < 4; attempt++) {
         if (attempt) await new Promise(resolve => setTimeout(resolve, 1000 * 2 ** (attempt - 1)));
@@ -121,36 +146,80 @@ async function fetchLogs(fromBlock, page = 1, toBlock = 'latest', offset = MAX_L
     throw lastError;
 }
 
-/** USDC per DATA from the pool's sqrtPriceX96 */
-function poolPrice(sqrtPriceX96) {
+/** Counter token per DATA (or USDC per DATA for the main pool) from a pool's sqrtPriceX96 */
+function poolPrice(pool, sqrtPriceX96) {
     const ratio = (Number(sqrtPriceX96.toString()) / 2 ** 96) ** 2;   // currency1 per currency0, raw units
-    return DATA_IS_CURRENCY0 ? ratio * 1e12 : 1e12 / ratio;
+    const scale = 10 ** (18 - pool.counterDecimals);
+    return pool.dataIs0 ? ratio * scale : scale / ratio;
 }
 
-function parseLog(log) {
-    const [amount0, amount1, sqrtPriceX96] = ethers.utils.defaultAbiCoder.decode(
-        ['int128', 'int128', 'uint160', 'uint128', 'int24', 'uint24'], log.data
-    );
-    const dataDelta = DATA_IS_CURRENCY0 ? amount0 : amount1;
-    const usdcDelta = DATA_IS_CURRENCY0 ? amount1 : amount0;
-    const data = Math.abs(Number(ethers.utils.formatUnits(dataDelta, 18)));
-    const usd = Math.abs(Number(ethers.utils.formatUnits(usdcDelta, 6)));
-    return {
+const units = (value, decimals) => Math.abs(Number(ethers.utils.formatUnits(value, decimals)));
+
+function parseLog(pool, log) {
+    const trade = {
         id: `${log.transactionHash}:${parseInt(log.logIndex, 16)}`,
+        pool: pool.key,
         txHash: log.transactionHash,
         block: parseInt(log.blockNumber, 16),
         logIndex: parseInt(log.logIndex, 16),
-        time: parseInt(log.timeStamp, 16) * 1000,
-        data,
-        usd,
-        price: data > 0 ? usd / data : 0,
-        poolPrice: poolPrice(sqrtPriceX96),
-        // v4 swap deltas are the swapper's: negative = paid into the pool
-        signBuy: dataDelta.gt(0)
+        time: parseInt(log.timeStamp, 16) * 1000
     };
+    if (pool.kind === 'v4') {
+        const [amount0, amount1, sqrtPriceX96] = ethers.utils.defaultAbiCoder.decode(['int128', 'int128', 'uint160', 'uint128', 'int24', 'uint24'], log.data);
+        const dataDelta = pool.dataIs0 ? amount0 : amount1;
+        trade.data = units(dataDelta, 18);
+        trade.counter = units(pool.dataIs0 ? amount1 : amount0, pool.counterDecimals);
+        trade.poolPrice = poolPrice(pool, sqrtPriceX96);
+        trade.signBuy = dataDelta.gt(0);   // v4 swap deltas are the swapper's: negative = paid into the pool
+    } else if (pool.kind === 'v3') {
+        const [amount0, amount1] = ethers.utils.defaultAbiCoder.decode(['int256', 'int256', 'uint160', 'uint128', 'int24'], log.data);
+        const dataDelta = pool.dataIs0 ? amount0 : amount1;   // the pool's side: positive = DATA paid in (a sell)
+        trade.data = units(dataDelta, 18);
+        trade.counter = units(pool.dataIs0 ? amount1 : amount0, pool.counterDecimals);
+        trade.buy = dataDelta.lt(0);
+    } else {
+        const [in0, in1, out0, out1] = ethers.utils.defaultAbiCoder.decode(['uint256', 'uint256', 'uint256', 'uint256'], log.data);
+        const [dataIn, dataOut, counterIn, counterOut] = pool.dataIs0 ? [in0, out0, in1, out1] : [in1, out1, in0, out0];
+        trade.buy = dataOut.gt(dataIn);
+        trade.data = units(trade.buy ? dataOut.sub(dataIn) : dataIn.sub(dataOut), 18);
+        trade.counter = units(trade.buy ? counterIn.sub(counterOut) : counterOut.sub(counterIn), pool.counterDecimals);
+    }
+    setUsd(pool, trade);
+    return trade;
 }
 
-/** Buy / sell of each trade: the pool price goes up when DATA is bought (only swaps move it) */
+const hourOf = (ms) => Math.floor(ms / HOUR) * HOUR;
+
+/** USD value and price per DATA: stablecoins as is, POL at the hour's POL/USD (filled in once read) */
+function setUsd(pool, trade) {
+    let usd = null;
+    if (USD_STABLES.includes(pool.counterSymbol)) usd = trade.counter;
+    else if (pool.counterSymbol === 'POL' || pool.counterSymbol === 'WPOL') {
+        const polUsd = state.polUsd.get(hourOf(trade.time));
+        if (polUsd) usd = trade.counter * polUsd;
+    }
+    trade.usd = usd;
+    trade.price = usd !== null && trade.data > 0 ? usd / trade.data : null;
+}
+
+/** POL/USD of the hours of the POL trades still without a USD value */
+async function fillPolUsd() {
+    if (!state.polUsdAt) return;
+    const polPools = new Set(state.pools.filter(p => p.counterSymbol === 'POL' || p.counterSymbol === 'WPOL').map(p => p.key));
+    const hours = [...new Set(state.trades.filter(t => t.usd === null && polPools.has(t.pool)).map(t => hourOf(t.time)))]
+        .filter(h => !state.polUsd.has(h));
+    if (!hours.length) return;
+    try {
+        const prices = await state.polUsdAt(hours.map(h => Math.floor((h + HOUR / 2) / 1000)));
+        hours.forEach((h, i) => { if (prices[i]) state.polUsd.set(h, prices[i]); });
+        const byKey = new Map(state.pools.map(p => [p.key, p]));
+        for (const trade of state.trades) if (trade.usd === null && polPools.has(trade.pool)) setUsd(byKey.get(trade.pool), trade);
+    } catch (e) {
+        logger.warn('Swap market: POL/USD for the POL pools not read', e);
+    }
+}
+
+/** Buy / sell of a v4 pool's trades: the pool price goes up when DATA is bought (only swaps move it) */
 function setSides(trades) {
     let agree = 0;
     let disagree = 0;
@@ -172,11 +241,11 @@ function setSides(trades) {
 const pause = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
 /** Every log of a block range, page by page (oldest first); complete: false when it holds more than MAX_PAGES pages */
-async function fetchRange(fromBlock, toBlock) {
+async function fetchRange(pool, fromBlock, toBlock) {
     const logs = [];
     for (let page = 1; page <= MAX_PAGES; page++) {
         if (page > 1) await pause(PAGE_PAUSE_MS);
-        const pageLogs = await fetchLogs(fromBlock, page, toBlock);
+        const pageLogs = await fetchLogs(pool, fromBlock, page, toBlock);
         logs.push(...pageLogs);
         if (pageLogs.length < MAX_LOGS) return { logs, complete: true };
     }
@@ -184,71 +253,98 @@ async function fetchRange(fromBlock, toBlock) {
 }
 
 /** The trades of up to `days` before toBlock; a range too busy for MAX_PAGES pages is narrowed, so the newest are there */
-async function fetchNewest(toBlock, days, floorBlock = 0) {
+async function fetchNewest(pool, toBlock, days, floorBlock = 0) {
     for (;;) {
         const fromBlock = Math.max(floorBlock, toBlock - Math.round(days * BLOCKS_PER_DAY));
-        const { logs, complete } = await fetchRange(fromBlock, toBlock);
+        const { logs, complete } = await fetchRange(pool, fromBlock, toBlock);
         if (complete || days <= 0.25) return { logs, fromBlock };
         days /= 4;
     }
 }
 
-function addTrades(logs) {
+function addTrades(pool, logs) {
     let added = 0;
     for (const log of logs) {
-        const trade = parseLog(log);
+        const trade = parseLog(pool, log);
         if (state.seen.has(trade.id)) continue;
         state.seen.add(trade.id);
         state.trades.push(trade);
         added++;
     }
-    state.trades.sort((a, b) => a.block - b.block || a.logIndex - b.logIndex);
-    setSides(state.trades);
+    if (!added) return 0;
+    state.trades.sort((a, b) => a.time - b.time || a.block - b.block || a.logIndex - b.logIndex);
+    if (pool.kind === 'v4') setSides(state.trades.filter(t => t.pool === pool.key));
     return added;
 }
 
+const mainTrades = () => state.trades.filter(t => t.pool === MAIN.key);
+
+/** New trades of one pool: its first load reads the last 7 days, then from its last trade on */
+async function loadPool(pool, latest) {
+    let added;
+    if (pool.nextFromBlock === null) {
+        const { logs, fromBlock } = await fetchNewest(pool, latest, TRADE_DAYS);
+        pool.oldestBlock = fromBlock;
+        if (pool === MAIN) state.windowStart = Date.now() - (latest - fromBlock) * (DAY / BLOCKS_PER_DAY);
+        added = addTrades(pool, logs);
+    } else {
+        added = addTrades(pool, await fetchLogs(pool, pool.nextFromBlock));
+    }
+    const own = state.trades.filter(t => t.pool === pool.key);
+    const lastLogBlock = own.length ? own[own.length - 1].block : 0;
+    // From the last trade seen (the explorer may be a few blocks behind the RPC); duplicates are skipped
+    pool.nextFromBlock = Math.max(lastLogBlock, latest - 150);
+    return added;
+}
+
+/** New trades of every pool: the main one first (it alone decides whether the trades loaded), the others after it */
 async function loadTrades() {
     const latest = await Services.readWithFallback(() => Services.getReadOnlyProvider().getBlockNumber());
-    let added;
-    if (state.nextFromBlock === null) {
-        const { logs, fromBlock } = await fetchNewest(latest, TRADE_DAYS);
-        state.oldestBlock = fromBlock;
-        state.windowStart = Date.now() - (latest - fromBlock) * (DAY / BLOCKS_PER_DAY);
-        added = addTrades(logs);
-    } else {
-        added = addTrades(await fetchLogs(state.nextFromBlock));
-    }
-    const lastLogBlock = state.trades.length ? state.trades[state.trades.length - 1].block : 0;
-    // From the last trade seen (the explorer may be a few blocks behind the RPC); duplicates are skipped
-    state.nextFromBlock = Math.max(lastLogBlock, latest - 150);
+    let added = await loadPool(MAIN, latest);
     state.loaded = true;
     state.error = false;
+    for (const pool of state.pools) {
+        if (pool === MAIN) continue;
+        await pause(PAGE_PAUSE_MS);
+        try {
+            added += await loadPool(pool, latest);
+        } catch (e) {
+            logger.warn(`Swap market: trades of ${pool.label} not loaded`, e);
+        }
+    }
+    await fillPolUsd();
     return added;
 }
 
-/** Trades before the oldest loaded: 7 days back, further (a doubling window) over quiet weeks, until the pool's first trade */
+const allReachedStart = () => state.pools.every(p => p.reachedStart);
+
+/** Trades before each pool's oldest loaded: 7 days back, further (a doubling window) over quiet weeks, until its first trade */
 async function loadOlder() {
-    if (state.reachedStart || state.oldestBlock === null) return 0;
-    if (state.firstTradeBlock === undefined) {
-        const first = await fetchLogs(0, 1, 'latest', 1);
-        state.firstTradeBlock = first.length ? parseInt(first[0].blockNumber, 16) : null;
-    }
     let added = 0;
     let days = TRADE_DAYS;
-    while (!added) {
-        if (state.firstTradeBlock === null || state.oldestBlock <= state.firstTradeBlock) {
-            state.reachedStart = true;
-            break;
+    while (!added && !allReachedStart()) {
+        for (const pool of state.pools) {
+            if (pool.reachedStart || pool.oldestBlock === null) continue;
+            if (pool.firstTradeBlock === undefined) {
+                const first = await fetchLogs(pool, 0, 1, 'latest', 1);
+                pool.firstTradeBlock = first.length ? parseInt(first[0].blockNumber, 16) : null;
+            }
+            if (pool.firstTradeBlock === null || pool.oldestBlock <= pool.firstTradeBlock) {
+                pool.reachedStart = true;
+                continue;
+            }
+            const { logs, fromBlock } = await fetchNewest(pool, pool.oldestBlock - 1, days, pool.firstTradeBlock);
+            pool.oldestBlock = fromBlock;
+            added += addTrades(pool, logs);
+            if (pool.oldestBlock <= pool.firstTradeBlock) pool.reachedStart = true;
+            await pause(PAGE_PAUSE_MS);
         }
-        const { logs, fromBlock } = await fetchNewest(state.oldestBlock - 1, days, state.firstTradeBlock);
-        state.oldestBlock = fromBlock;
-        added = addTrades(logs);
         days *= 2;
-        if (!added) await pause(PAGE_PAUSE_MS);
     }
-    // The trades are complete from the oldest one loaded on
-    if (state.trades.length) state.windowStart = Math.min(state.windowStart, state.trades[0].time);
-    if (state.oldestBlock <= state.firstTradeBlock) state.reachedStart = true;
+    // The main pool's trades are complete from its oldest one loaded on
+    const main = mainTrades();
+    if (main.length) state.windowStart = Math.min(state.windowStart, main[0].time);
+    await fillPolUsd();
     return added;
 }
 
@@ -256,24 +352,41 @@ async function loadOlder() {
 // Daily volume (Uniswap v4 subgraph)
 // ============================================
 
+/** One DEX subgraph's days for its pools (one query, an alias per pool) */
+async function fetchDays(venue, pools) {
+    const query = `{ ${pools.map((p, i) => `p${i}: poolDayDatas(first: 1000, orderBy: date, orderDirection: desc, where: { pool: "${(p.kind === 'v4' ? p.id : p.address).toLowerCase()}" }) { date volumeUSD txCount }`).join(' ')} }`;
+    const json = await fetch(getDexSubgraphUrl(venue), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query })
+    }).then(r => r.json());
+    const lists = pools.map((p, i) => json?.data?.[`p${i}`]);
+    if (!lists.some(Array.isArray)) throw new Error(json?.errors?.[0]?.message || 'No pool days');
+    return lists.filter(Array.isArray).flat();
+}
+
+/** Daily volume and transactions of every pool whose DEX has a subgraph here, added up by day */
 async function loadDays() {
     state.daysAt = Date.now();
-    const query = `{ poolDayDatas(first: 1000, orderBy: date, orderDirection: desc, where: { pool: "${POOL_ID}" }) { date volumeUSD txCount } }`;
-    try {
-        const json = await fetch(getUniswapV4SubgraphUrl(), {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ query })
-        }).then(r => r.json());
-        const rows = json?.data?.poolDayDatas;
-        if (!Array.isArray(rows)) throw new Error(json?.errors?.[0]?.message || 'No pool days');
-        state.days = rows
-            .map(d => ({ date: Number(d.date) * 1000, volume: Number(d.volumeUSD) || 0, txCount: Number(d.txCount) || 0 }))
-            .sort((a, b) => a.date - b.date);
-        if (state.active) renderStats();
-    } catch (e) {
-        logger.warn('Swap market: pool volume (subgraph) not loaded', e);
+    const byVenue = new Map();
+    for (const pool of state.pools) {
+        if (!DEX_SUBGRAPH_IDS[pool.venue]) continue;
+        byVenue.set(pool.venue, [...(byVenue.get(pool.venue) || []), pool]);
     }
+    const results = await Promise.allSettled([...byVenue].map(([venue, pools]) => fetchDays(venue, pools)));
+    const rows = results.flatMap(r => (r.status === 'fulfilled' ? r.value : []));
+    results.filter(r => r.status === 'rejected').forEach(r => logger.warn('Swap market: pool volume (subgraph) not loaded', r.reason));
+    if (!rows.length) return;
+    const byDate = new Map();
+    for (const d of rows) {
+        const date = Number(d.date) * 1000;
+        const day = byDate.get(date) || { date, volume: 0, txCount: 0 };
+        day.volume += Number(d.volumeUSD) || 0;
+        day.txCount += Number(d.txCount) || 0;
+        byDate.set(date, day);
+    }
+    state.days = [...byDate.values()].sort((a, b) => a.date - b.date);
+    if (state.active) renderStats();
 }
 
 /** Volume (USD) and trades of the selected range: the loaded trades when they cover it, else the subgraph's days */
@@ -283,7 +396,7 @@ function rangeStats() {
     const start = span === Infinity ? -Infinity : now - span;
     if (state.loaded && state.windowStart !== null && start >= state.windowStart) {
         const trades = state.trades.filter(t => t.time >= start);
-        return { volume: trades.reduce((sum, t) => sum + t.usd, 0), count: trades.length };
+        return { volume: trades.reduce((sum, t) => sum + (t.usd || 0), 0), count: trades.length };
     }
     if (state.days) {
         const firstDay = start === -Infinity ? -Infinity : Math.floor(start / DAY) * DAY;
@@ -314,7 +427,8 @@ function setHistory({ priceMap }) {
 // ============================================
 
 function currentPrice() {
-    const last = state.trades[state.trades.length - 1];
+    const main = mainTrades();
+    const last = main[main.length - 1];
     return last?.poolPrice || Services.getCurrentLivePrice() || state.history[state.history.length - 1]?.p || null;
 }
 
@@ -322,7 +436,7 @@ function currentPrice() {
 function priceAt(time) {
     let price = null;
     if (state.windowStart !== null && time >= state.windowStart) {
-        for (const trade of state.trades) {
+        for (const trade of mainTrades()) {
             if (trade.time > time) break;
             price = trade.poolPrice;
         }
@@ -342,7 +456,7 @@ function renderStats() {
     // Change over the chart's range: from the price at its start (All: the first price known)
     const span = RANGES[state.range];
     const before = span === Infinity
-        ? (state.history[0]?.p || state.trades[0]?.poolPrice || null)
+        ? (state.history[0]?.p || mainTrades()[0]?.poolPrice || null)
         : priceAt(Date.now() - span);
     if (now && before) {
         const pct = (now / before - 1) * 100;
@@ -363,23 +477,45 @@ function renderStats() {
 // Trades table
 // ============================================
 
+const counterName = (pool) => (pool.counterSymbol === 'WPOL' ? 'POL' : pool.counterSymbol);
+const SHORT_DEX = [[/^Uniswap /, 'Uni '], [/^QuickSwap /, 'QS '], [/^SushiSwap V2/, 'Sushi']];
+/** Short pool name for the list ("Uni v4 · USDC"); the full one ("Uniswap v4 0.3% · DATA/USDC") in its tooltip */
+function poolShortName(pool) {
+    if (!pool) return '';
+    const dex = SHORT_DEX.reduce((name, [from, to]) => name.replace(from, to), pool.label).replace(/ [\d.]+%$/, '');
+    return `${dex} · ${counterName(pool)}`;
+}
+const poolFullName = (pool) => (pool ? `${pool.label} · DATA/${counterName(pool)}` : '');
+
+function renderFilter() {
+    document.querySelectorAll('#swap-trades-filter button').forEach(btn => {
+        const active = btn.dataset.filter === state.filter;
+        btn.classList.toggle('bg-blue-800', active);
+        btn.classList.toggle('text-white', active);
+        btn.classList.toggle('text-gray-300', !active);
+    });
+}
+
 function renderTrades() {
     const body = $('swap-trades');
     if (!body) return;
-    const row = (text) => `<tr><td colspan="5" class="py-4 text-sm text-gray-300">${text}</td></tr>`;
+    const row = (text) => `<tr><td colspan="6" class="py-4 text-sm text-gray-300">${text}</td></tr>`;
     if (!state.loaded) {
         $('swap-trades-more')?.classList.add('hidden');
         const spinner = '<span class="w-4 h-4 flex-shrink-0 border-2 border-gray-500 border-t-transparent rounded-full animate-spin" aria-hidden="true"></span>';
         body.innerHTML = row(`<span class="inline-flex items-center gap-2">${spinner}${state.error ? 'The explorer is busy, trying again...' : 'Loading market trades...'}</span>`);
         return;
     }
-    // Load More stays until every trade since the pool's first one is shown
-    $('swap-trades-more')?.classList.toggle('hidden', state.trades.length <= state.shown && state.reachedStart);
-    const recent = state.trades.slice(-state.shown).reverse();
+    const listed = state.filter === 'main' ? mainTrades() : state.trades;
+    const reachedStart = state.filter === 'main' ? MAIN.reachedStart : allReachedStart();
+    // Load More stays until every trade since the pools' first ones is shown
+    $('swap-trades-more')?.classList.toggle('hidden', listed.length <= state.shown && reachedStart);
+    const recent = listed.slice(-state.shown).reverse();
     if (!recent.length) {
-        body.innerHTML = row(state.reachedStart ? 'No trades on this pool yet.' : `No trades in the last ${TRADE_DAYS} days.`);
+        body.innerHTML = row(reachedStart ? 'No trades yet.' : `No trades in the last ${TRADE_DAYS} days.`);
         return;
     }
+    const pools = new Map(state.pools.map(p => [p.key, p]));
     body.innerHTML = recent.map(trade => {
         const hash = Utils.escapeHtml(trade.txHash);
         const side = trade.buy
@@ -394,7 +530,8 @@ function renderTrades() {
                 <td class="py-2 pr-2">${side}</td>
                 <td class="py-2 pr-2 text-right whitespace-nowrap text-white font-medium">${formatPrice(trade.price)}</td>
                 <td class="py-2 pr-2 text-right whitespace-nowrap text-gray-200">${formatData(trade.data)}</td>
-                <td class="py-2 text-right whitespace-nowrap text-gray-200">${formatUsd(trade.usd)}</td>
+                <td class="py-2 pr-2 text-right whitespace-nowrap text-gray-200">${trade.usd === null ? '--' : formatUsd(trade.usd)}</td>
+                <td class="py-2 text-right whitespace-nowrap text-xs text-gray-300"><span data-tooltip-content="${Utils.escapeHtml(poolFullName(pools.get(trade.pool)))}">${Utils.escapeHtml(poolShortName(pools.get(trade.pool)))}</span></td>
             </tr>`;
     }).join('');
 }
@@ -413,7 +550,7 @@ function chartPoints() {
     if (tradeStart !== Infinity) {
         const opening = priceAt(tradeStart);
         if (opening) points.push({ x: tradeStart, y: opening });
-        for (const trade of state.trades) {
+        for (const trade of mainTrades()) {
             if (trade.time >= tradeStart) points.push({ x: trade.time, y: trade.poolPrice });
         }
     } else if (!points.length && start !== -Infinity) {
@@ -602,7 +739,8 @@ function schedule() {
 /** Next 50 rows: from the loaded trades, else older ones from the explorer */
 async function loadMore() {
     const btn = $('swap-trades-more');
-    if (state.shown < state.trades.length) {
+    const listed = state.filter === 'main' ? mainTrades() : state.trades;
+    if (state.shown < listed.length) {
         state.shown += TRADES_PAGE;
         renderTrades();
         return;
@@ -631,6 +769,14 @@ function setupListeners() {
     if (state.listening) return;
     state.listening = true;
     $('swap-trades-more')?.addEventListener('click', loadMore);
+    $('swap-trades-filter')?.addEventListener('click', (e) => {
+        const btn = e.target.closest('button[data-filter]');
+        if (!btn || btn.dataset.filter === state.filter) return;
+        state.filter = btn.dataset.filter;
+        state.shown = TRADES_PAGE;
+        renderFilter();
+        renderTrades();
+    });
     $('swap-chart-range')?.addEventListener('click', (e) => {
         const btn = e.target.closest('button[data-range]');
         if (!btn || btn.dataset.range === state.range) return;
@@ -647,6 +793,7 @@ export const SwapMarket = {
         setupListeners();
         state.active = true;
         renderRange();
+        renderFilter();
         renderAll();
         if (Date.now() - state.daysAt > DAYS_REFRESH_MS) loadDays();
         refresh().finally(schedule);
@@ -661,6 +808,30 @@ export const SwapMarket = {
     /** Trades right after a swap made here */
     refresh() {
         if (state.active) refresh();
+    },
+
+    /**
+     * The DATA pools with liquidity found by the swap page (besides the main one): { kind: 'v4', id } or
+     * { kind: 'v3' | 'v2', address }, with dataIs0, counterSymbol, counterDecimals and label
+     */
+    setPools(descs) {
+        const known = new Set(state.pools.map(p => p.key));
+        let added = false;
+        for (const desc of descs) {
+            const pool = makePool(desc);
+            if (known.has(pool.key)) continue;
+            known.add(pool.key);
+            state.pools.push(pool);
+            added = true;
+        }
+        if (!added) return;
+        if (state.active) loadDays(); else state.daysAt = 0;   // the subgraph's days again, with the new v4 pools
+        if (state.active && state.loaded) refresh();
+    },
+
+    /** POL/USD at times (s), for the trades of the POL pools */
+    setPolUsdSource(fn) {
+        state.polUsdAt = fn;
     },
 
     /** Swaps of this wallet: marked in the trades list */

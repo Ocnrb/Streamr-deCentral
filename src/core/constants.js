@@ -228,11 +228,15 @@ export function getGraphUrl() {
     return `https://gateway-arbitrum.network.thegraph.com/api/${getGraphApiKey()}/subgraphs/id/${SUBGRAPH_ID}`;
 }
 
-// Uniswap v4 on Polygon (The Graph): daily volume and transactions of the DATA/USDC pool for the Swap page
-export const UNISWAP_V4_SUBGRAPH_ID = '2CB2uQxcDKWDenagn2z17KQVCtfwSx5eXYuvqTciRTJu';
+// DEX subgraphs on Polygon (The Graph): daily volume and transactions of the DATA pools for the Swap page
+export const DEX_SUBGRAPH_IDS = {
+    v4: '2CB2uQxcDKWDenagn2z17KQVCtfwSx5eXYuvqTciRTJu',    // Uniswap v4
+    uni: '3hCPRGf4z88VC5rsBKU5AA9FBBq5nF3jbKJG7VZCbhjm',   // Uniswap v3
+    qv3: 'FqsRcH1XqSjqVx9GRTvEJe959aCbKrcyGgDWBrUkG24g'    // QuickSwap V3 (Algebra)
+};
 
-export function getUniswapV4SubgraphUrl() {
-    return `https://gateway.thegraph.com/api/${getGraphApiKey()}/subgraphs/id/${UNISWAP_V4_SUBGRAPH_ID}`;
+export function getDexSubgraphUrl(venue) {
+    return `https://gateway.thegraph.com/api/${getGraphApiKey()}/subgraphs/id/${DEX_SUBGRAPH_IDS[venue]}`;
 }
 
 /**
