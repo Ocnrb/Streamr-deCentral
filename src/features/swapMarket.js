@@ -37,7 +37,7 @@ const TRADE_RANGES = ['24H', '7D'];
 
 const state = {
     active: false,
-    range: '7D',
+    range: '24H',
     trades: [],            // oldest first
     seen: new Set(),       // txHash:logIndex
     nextFromBlock: null,
@@ -293,11 +293,15 @@ function renderStats() {
     const now = currentPrice();
     $('swap-market-price').textContent = formatPrice(now);
     const change = $('swap-market-change');
-    const before = priceAt(Date.now() - DAY);
+    // Change over the chart's range: from the price at its start (All: the first price known)
+    const span = RANGES[state.range];
+    const before = span === Infinity
+        ? (state.history[0]?.p || state.trades[0]?.poolPrice || null)
+        : priceAt(Date.now() - span);
     if (now && before) {
         const pct = (now / before - 1) * 100;
         const sign = pct > 0 ? '+' : pct < 0 ? '−' : '';
-        change.textContent = `${sign}${Math.abs(pct).toFixed(2)}% 24h`;
+        change.textContent = `${sign}${Math.abs(pct).toFixed(2)}% ${state.range}`;
         change.className = `text-sm font-semibold ${pct > 0 ? 'text-green-400' : pct < 0 ? 'text-red-400' : 'text-gray-300'}`;
     } else {
         change.textContent = '';
@@ -583,6 +587,7 @@ function setupListeners() {
         if (!btn || btn.dataset.range === state.range) return;
         state.range = btn.dataset.range;
         renderRange();
+        renderStats();
         renderChart();
     });
     Services.onHistoricalDataLoaded(setHistory);
