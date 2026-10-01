@@ -504,10 +504,6 @@
       padding-left: 1.75rem; /* 28px */
     }
     
-    /* Sidebar logo text spacing */
-    #sidebar-logo span {
-      margin-right: 1.5rem; /* 24px de espaço à direita do texto */
-    }
   }
   
   /* Desktop with the compact sidebar: as on tablets (icons only, 72px) */

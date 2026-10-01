@@ -547,9 +547,6 @@
   .mr-2 {
     margin-right: calc(var(--spacing) * 2);
   }
-  .mr-3 {
-    margin-right: calc(var(--spacing) * 3);
-  }
   .\!mb-2 {
     margin-bottom: calc(var(--spacing) * 2) !important;
   }
@@ -4978,9 +4975,6 @@
     }
     #sidebar-logo {
       padding-left: 1.75rem;
-    }
-    #sidebar-logo span {
-      margin-right: 1.5rem;
     }
   }
   @media (min-width: 1024px) {
