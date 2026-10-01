@@ -52,6 +52,9 @@ const NETWORK_TOPICS = {
     storageRemoved: ethers.utils.id('Removed(string,address)'),
     newSponsorship: ethers.utils.id('NewSponsorship(address,string,string,address[],uint256[],address)')
 };
+// Operator: left a sponsorship (unstaked, kicked or forced out). The subgraph keeps no staking event at 0
+const UNSTAKED_TOPIC = ethers.utils.id('Unstaked(address)');
+const STAKING_SCAN = 40;                 // latest staking events read (the ones of collected earnings are skipped)
 // Operator: earnings withdrawn from its sponsorships (to the delegators, the owner's cut, the protocol fee)
 const PROFIT_TOPIC = ethers.utils.id('Profit(uint256,uint256,uint256)');
 // streamr.eth/recovery: in March 2024 the stake of the broken operator contracts was moved out through
@@ -142,7 +145,6 @@ const state = {
     streams: null,              // { byDay: Map(day -> count), total }
     streamsLoading: false,
     topOperators: [],
-    stakingEvents: [],
     delegations: [],
     delegationTxs: new Map(),   // tx hash -> true when it is a delegation of its own (no sponsorship took part)
     delegationsLoaded: false,
@@ -152,7 +154,9 @@ const state = {
     earningsError: false,
     newStreams: [],
     latestSponsoring: [],
-    feeds: {                    // network activity read from the explorer while its tab is open
+    stakeBefore: new Map(),     // `e:<staking event id>` | `u:<unstake tx>` -> { amount, date } of the stake before it (null: none)
+    feeds: {                    // activity read from the explorer while its tab is open
+        staking: { rows: [], loaded: false, error: false, at: 0 },
         permissions: { rows: [], loaded: false, error: false, at: 0 },
         storage: { rows: [], loaded: false, error: false, at: 0 },
         sponsorships: { rows: [], loaded: false, error: false, at: 0 }
@@ -296,9 +300,6 @@ async function fetchLists() {
         sponsoring: sponsoringEvents(first: ${LIST_SIZE}, orderBy: date, orderDirection: desc) {
             id sponsor amount date sponsorship { id stream { id } }
         }
-        stakingEvents(first: ${LIST_SIZE}, orderBy: date, orderDirection: desc) {
-            id amount date operator { ${PARTY} } sponsorship { id stream { id } }
-        }
         raised: flags(first: ${LIST_SIZE}, orderBy: flaggingTimestamp, orderDirection: desc) { ${FLAG} }
         resolved: flags(first: ${LIST_SIZE}, orderBy: flagResolutionTimestamp, orderDirection: desc, where: { result_in: ["kicked", "failed"] }) { ${FLAG} }
         votes(first: ${LIST_SIZE}, orderBy: timestamp, orderDirection: desc) {
@@ -310,7 +311,6 @@ async function fetchLists() {
     state.topOperators = (data.topOperators || [])
         .filter(op => calculateWeightedApy(op.stakes) >= 0.0005)
         .slice(0, LIST_SIZE);
-    state.stakingEvents = data.stakingEvents || [];
     state.newStreams = data.newStreams || [];
     state.latestSponsoring = (data.sponsoring || []).map(e => ({ kind: 'sponsored', sponsorshipId: e.sponsorship?.id, streamId: e.sponsorship?.stream?.id || '',
         sponsor: e.sponsor, amount: weiToNumber(e.amount), time: Number(e.date), block: 0, index: 0 }));
@@ -418,14 +418,14 @@ async function newestLogs(topic, fromBlock, latestBlock, address = null) {
 const logTime = (log) => ({ time: parseInt(log.timeStamp, 16), block: parseInt(log.blockNumber, 16), index: parseInt(log.logIndex, 16) });
 const newestFirst = (a, b) => b.block - a.block || b.index - a.index;
 
-/** The newest LIST_SIZE events of a contract's topics, looked back 1, 7, then 30 days; `parse` turns the logs into events */
+/** The newest LIST_SIZE events of a contract's topics (any contract's without an address), looked back 1, 7, then 30 days; `parse` turns the logs into events */
 async function newestContractEvents(address, topics, parse) {
     const latest = (await Services.runQuery('{ _meta { block { number } } }'))._meta.block.number;
     let events = [];
     for (const days of DELEGATION_WINDOWS_DAYS) {
         const from = Math.max(0, latest - days * POLYGON_BLOCKS_PER_DAY);
         const logs = (await Promise.all(topics.map(topic => newestLogs(topic, from, latest, address)))).flat()
-            .filter(log => log.address.toLowerCase() === address.toLowerCase());
+            .filter(log => !address || log.address.toLowerCase() === address.toLowerCase());
         events = parse(logs).sort(newestFirst);
         if (events.length >= LIST_SIZE) break;
     }
@@ -444,7 +444,82 @@ function permissionRights(canEdit, canDelete, publishExpiration, subscribeExpira
     return rights;
 }
 
+/** The stake an operator had in a sponsorship before a time: its last staking event (the subgraph keeps the stake after each change) */
+async function readStakesBefore(queries) {
+    const pending = queries.filter(q => !state.stakeBefore.has(q.key));
+    const batches = [];
+    for (let k = 0; k < pending.length; k += ALIASES) batches.push(pending.slice(k, k + ALIASES));
+    await pool(batches.map(batch => async () => {
+        const body = batch.map((q, i) => `q${i}: stakingEvents(first: 1, orderBy: date, orderDirection: desc, where: { operator: "${q.operator}", sponsorship: "${q.sponsorship}", date_${q.inclusive ? 'lte' : 'lt'}: "${q.before}" }) { amount date }`).join('\n');
+        const data = await Services.runQuery(`{ ${body} }`);
+        batch.forEach((q, i) => {
+            const row = data[`q${i}`]?.[0];
+            state.stakeBefore.set(q.key, row ? { amount: weiToNumber(row.amount), date: Number(row.date) } : null);
+        });
+    }));
+}
+
+/**
+ * Staking actions: staked, reduced, slashed and unstaked. A staking event holds the stake after the change, so its
+ * change is the difference to the pair's event before it; none (earnings collected) is skipped. Leaving a sponsorship
+ * leaves no event: those come from the operators' Unstaked events, with the stake they had.
+ */
+async function readStakingActions() {
+    const data = await Services.runQuery(`{ stakingEvents(first: ${STAKING_SCAN}, orderBy: date, orderDirection: desc) {
+        id amount date operator { id metadataJsonString } sponsorship { id stream { id } } } }`);
+    const events = (data.stakingEvents || []).filter(e => e.operator && e.sponsorship);
+    const operators = new Set(state.allOperators.map(op => op.id.toLowerCase()));
+    const unstakes = operators.size ? await newestContractEvents(null, [UNSTAKED_TOPIC], (logs) => logs
+        .filter(log => operators.has(log.address.toLowerCase()) && log.topics.length > 1)
+        .map(log => ({ operatorId: log.address.toLowerCase(), sponsorshipId: ethers.utils.hexDataSlice(log.topics[1], 12).toLowerCase(),
+            tx: log.transactionHash.toLowerCase(), ...logTime(log) }))) : [];
+    await readStakesBefore([
+        ...events.map(e => ({ key: `e:${e.id}`, operator: e.operator.id, sponsorship: e.sponsorship.id, before: e.date })),
+        ...unstakes.map(u => ({ key: `u:${u.tx}`, operator: u.operatorId, sponsorship: u.sponsorshipId, before: u.time, inclusive: true }))
+    ]);
+    // A slashing shares its staking event's id (sponsorship-transaction)
+    const slashed = new Set();
+    if (events.length) {
+        const found = await Services.runQuery(`{ slashingEvents(where: { id_in: ${JSON.stringify(events.map(e => e.id))} }) { id } }`);
+        for (const row of found.slashingEvents || []) slashed.add(row.id);
+    }
+    const actions = [];
+    for (const e of events) {
+        const operatorId = e.operator.id.toLowerCase();
+        const sponsorshipId = e.sponsorship.id.toLowerCase();
+        const previous = state.stakeBefore.get(`e:${e.id}`);
+        // Left the sponsorship in between: the stake started again from 0
+        const leftSince = previous && unstakes.some(u => u.operatorId === operatorId && u.sponsorshipId === sponsorshipId
+            && u.time >= previous.date && u.time <= Number(e.date));
+        const change = weiToNumber(e.amount) - (previous && !leftSince ? previous.amount : 0);
+        if (Math.abs(change) < 0.5) continue;   // earnings collected: the stake did not change
+        actions.push({ kind: slashed.has(e.id) ? 'slashed' : change > 0 ? 'staked' : 'reduced', amount: Math.abs(change),
+            operator: e.operator, operatorId, sponsorshipId, streamId: e.sponsorship.stream?.id || '', time: Number(e.date) });
+    }
+    for (const u of unstakes) {
+        actions.push({ kind: 'unstaked', amount: state.stakeBefore.get(`u:${u.tx}`)?.amount ?? null,
+            operatorId: u.operatorId, sponsorshipId: u.sponsorshipId, streamId: '', time: u.time });
+    }
+    const top = actions.sort((a, b) => b.time - a.time).slice(0, LIST_SIZE);
+    // Names and streams of the unstakes
+    const left = top.filter(a => a.kind === 'unstaked');
+    if (left.length) {
+        const meta = await Services.runQuery(`{
+            operators(where: { id_in: ${JSON.stringify([...new Set(left.map(a => a.operatorId))])} }) { id metadataJsonString }
+            sponsorships(where: { id_in: ${JSON.stringify([...new Set(left.map(a => a.sponsorshipId))])} }) { id stream { id } }
+        }`);
+        const ops = new Map((meta.operators || []).map(op => [op.id.toLowerCase(), op]));
+        const streams = new Map((meta.sponsorships || []).map(sp => [sp.id.toLowerCase(), sp.stream?.id || '']));
+        for (const a of left) {
+            a.operator = ops.get(a.operatorId) || { id: a.operatorId };
+            a.streamId = streams.get(a.sponsorshipId) || '';
+        }
+    }
+    return top;
+}
+
 const FEED_READERS = {
+    staking: readStakingActions,
     // Permission changes, without the ones given with a new stream (same transaction)
     permissions: () => newestContractEvents(STREAM_REGISTRY_ADDRESS,
         [NETWORK_TOPICS.streamCreated, NETWORK_TOPICS.permission, NETWORK_TOPICS.permissionForUserId], (logs) => {
@@ -483,7 +558,10 @@ async function loadFeed(name) {
         logger.warn(`Overview: ${name} events not loaded`, e);
         if (!feed.loaded) feed.error = true;
     }
-    if (state.active) renderPanel('network');
+    if (state.active) {
+        renderPanel('network');
+        renderPanel('activity');
+    }
 }
 
 async function loadEarnings() {
@@ -1313,20 +1391,28 @@ function renderSponsorships() {
     }, { error: 'Sponsorships could not be loaded.', empty: 'No running sponsorships.' });
 }
 
-function stakingRow(event) {
-    const amount = weiToNumber(event.amount);   // negative: unstaked
-    const staked = amount >= 0;
-    const streamId = event.sponsorship?.stream?.id || '';
+const STAKING_ACTIONS = {
+    staked: { text: 'Staked in', sign: '+', color: 'text-green-400' },
+    reduced: { text: 'Reduced stake in', sign: '-', color: 'text-red-400' },
+    slashed: { text: 'Slashed in', sign: '-', color: 'text-red-400' },
+    unstaked: { text: 'Unstaked from', sign: '-', color: 'text-red-400' }
+};
+
+function stakingRow(action) {
+    const how = STAKING_ACTIONS[action.kind];
+    const where = shortStreamId(action.streamId) || shortAddress(action.sponsorshipId);
+    const amount = action.amount === null ? '<p class="text-sm font-semibold text-gray-400">--</p>'
+        : `<p class="text-sm font-semibold ${how.color}" data-tooltip-content="${usdLine(action.amount)}${full(action.amount)} DATA">${how.sign}${compact(action.amount)} DATA</p>`;
     return `
-        <a href="/operator/${event.operator?.id}" class="${ROW}">
-            ${avatar(event.operator)}
+        <a href="/operator/${action.operatorId}" class="${ROW}">
+            ${avatar(action.operator)}
             <div class="min-w-0 flex-1">
-                <p class="text-sm font-semibold text-white truncate">${escapeHtml(operatorName(event.operator))}</p>
-                <p class="text-xs text-gray-400 truncate" data-tooltip-content="${escapeHtml(streamId)}">${staked ? 'Staked in' : 'Unstaked from'} ${escapeHtml(shortStreamId(streamId) || shortAddress(event.sponsorship?.id || ''))}</p>
+                <p class="text-sm font-semibold text-white truncate">${escapeHtml(operatorName(action.operator))}</p>
+                <p class="text-xs text-gray-400 truncate" data-tooltip-content="${escapeHtml(action.streamId || action.sponsorshipId)}">${how.text} ${escapeHtml(where)}</p>
             </div>
             <div class="text-right whitespace-nowrap">
-                <p class="text-sm font-semibold ${staked ? 'text-green-400' : 'text-red-400'}" data-tooltip-content="${usdLine(amount)}${full(Math.abs(amount))} DATA">${staked ? '+' : '-'}${compact(Math.abs(amount))} DATA</p>
-                <p class="text-xs text-gray-400">${timeAgo(event.date)}</p>
+                ${amount}
+                <p class="text-xs text-gray-400">${timeAgo(action.time)}</p>
             </div>
         </a>`;
 }
@@ -1492,7 +1578,7 @@ const PANELS = {
     activity: {
         list: 'overview-activity',
         tabs: {
-            staking: { rows: () => state.stakingEvents, render: stakingRow, error: 'Staking events could not be loaded.', empty: 'No staking events.' },
+            staking: feedTab('staking', stakingRow, 'Staking events'),
             delegations: { rows: () => state.delegations, render: delegationRow, error: 'Delegation events could not be loaded.', empty: 'No delegations in the last 30 days.',
                 loaded: () => state.delegationsLoaded, failed: () => state.delegationsError, load: () => loadDelegations(), at: () => state.delegationsAt },
             earnings: { rows: () => state.earnings, render: earningsRow, error: 'Earnings events could not be loaded.', empty: 'No earnings collected in the last 30 days.',
