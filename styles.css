@@ -2475,6 +2475,9 @@
   .underline {
     text-decoration-line: underline;
   }
+  .decoration-gray-600 {
+    text-decoration-color: var(--color-gray-600);
+  }
   .underline-offset-2 {
     text-underline-offset: 2px;
   }
@@ -3283,6 +3286,13 @@
     &:hover {
       @media (hover: hover) {
         text-decoration-line: underline;
+      }
+    }
+  }
+  .hover\:decoration-gray-400 {
+    &:hover {
+      @media (hover: hover) {
+        text-decoration-color: var(--color-gray-400);
       }
     }
   }
