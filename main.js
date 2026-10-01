@@ -545,7 +545,7 @@ async function initializeApp() {
         
         // Sidebar: hidden on mobile, flex on md+
         if (sidebar) {
-            sidebar.className = 'group/sidebar hidden md:flex flex-col fixed left-0 top-0 h-full w-[72px] lg:w-72 bg-[#1A1A1A] border-r border-[#2a2a2a] z-40 transition-all duration-300';
+            sidebar.className = 'hidden md:flex flex-col fixed left-0 top-0 h-full w-[72px] lg:w-72 bg-[#1A1A1A] border-r border-[#2a2a2a] z-40 transition-all duration-300';
         }
         // Mobile header: visible on mobile, hidden on md+
         if (mobileHeader) {

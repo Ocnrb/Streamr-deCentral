@@ -355,9 +355,6 @@
   .top-14 {
     top: calc(var(--spacing) * 14);
   }
-  .top-\[44px\] {
-    top: 44px;
-  }
   .top-\[calc\(100\%\+8px\)\] {
     top: calc(100% + 8px);
   }
@@ -366,9 +363,6 @@
   }
   .-right-1\.5 {
     right: calc(var(--spacing) * -1.5);
-  }
-  .-right-3 {
-    right: calc(var(--spacing) * -3);
   }
   .right-0 {
     right: calc(var(--spacing) * 0);
@@ -552,6 +546,9 @@
   }
   .mr-2 {
     margin-right: calc(var(--spacing) * 2);
+  }
+  .mr-3 {
+    margin-right: calc(var(--spacing) * 3);
   }
   .\!mb-2 {
     margin-bottom: calc(var(--spacing) * 2) !important;
@@ -2725,13 +2722,6 @@
       }
     }
   }
-  .group-hover\/sidebar\:opacity-100 {
-    &:is(:where(.group\/sidebar):hover *) {
-      @media (hover: hover) {
-        opacity: 100%;
-      }
-    }
-  }
   .group-hover\/title\:translate-x-0\.5 {
     &:is(:where(.group\/title):hover *) {
       @media (hover: hover) {
@@ -3413,11 +3403,6 @@
     &:focus {
       --tw-outline-style: none;
       outline-style: none;
-    }
-  }
-  .focus-visible\:opacity-100 {
-    &:focus-visible {
-      opacity: 100%;
     }
   }
   .focus-visible\:outline-none {
@@ -4977,10 +4962,10 @@
     opacity: 1;
     visibility: visible;
   }
-  @media (hover: none) and (pointer: coarse) {
-    #sidebar-compact-toggle {
-      opacity: 1 !important;
-    }
+  .sidebar-toggle-chevron {
+    transform-box: fill-box;
+    transform-origin: center;
+    transition: transform 0.2s ease;
   }
   @media (min-width: 768px) {
     #desktop-header {
@@ -5011,7 +4996,22 @@
     html.sidebar-compact #sidebar-logo {
       padding-left: 0;
     }
-    html.sidebar-compact #sidebar-compact-toggle svg {
+    html.sidebar-compact #sidebar-compact-toggle {
+      position: absolute;
+      inset: 0;
+      margin: auto !important;
+      width: 44px !important;
+      height: 44px !important;
+      opacity: 0;
+      background: #1A1A1A !important;
+    }
+    html.sidebar-compact #sidebar-logo:hover #sidebar-compact-toggle, html.sidebar-compact #sidebar-compact-toggle:focus-visible {
+      opacity: 1;
+    }
+    html.sidebar-compact #sidebar-compact-toggle:hover {
+      background: #262626 !important;
+    }
+    html.sidebar-compact .sidebar-toggle-chevron {
       transform: rotate(180deg);
     }
     html.sidebar-compact #desktop-header {

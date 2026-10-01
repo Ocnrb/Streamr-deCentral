@@ -481,11 +481,10 @@
     visibility: visible;
   }
 
-  /* Touch-only screens: the compact toggle stays visible (no hover to show it) */
-  @media (hover: none) and (pointer: coarse) {
-    #sidebar-compact-toggle {
-      opacity: 1 !important;
-    }
+  .sidebar-toggle-chevron {
+    transform-box: fill-box;
+    transform-origin: center;
+    transition: transform 0.2s ease;
   }
 
   /* Desktop header adjustment for sidebar width */
@@ -530,7 +529,27 @@
       padding-left: 0;
     }
 
-    html.sidebar-compact #sidebar-compact-toggle svg {
+    /* The toggle sits on the logo and shows instead of it on hover (or keyboard focus) */
+    html.sidebar-compact #sidebar-compact-toggle {
+      position: absolute;
+      inset: 0;
+      margin: auto !important;
+      width: 44px !important;
+      height: 44px !important;
+      opacity: 0;
+      background: #1A1A1A !important;
+    }
+
+    html.sidebar-compact #sidebar-logo:hover #sidebar-compact-toggle,
+    html.sidebar-compact #sidebar-compact-toggle:focus-visible {
+      opacity: 1;
+    }
+
+    html.sidebar-compact #sidebar-compact-toggle:hover {
+      background: #262626 !important;
+    }
+
+    html.sidebar-compact .sidebar-toggle-chevron {
       transform: rotate(180deg);
     }
 
