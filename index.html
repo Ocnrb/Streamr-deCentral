@@ -3110,7 +3110,7 @@
                     </button>
                     <p class="text-xs font-semibold uppercase tracking-wider text-blue-400">The Streamr Network</p>
                     <h2 id="overview-hero-title" class="mt-2 pr-8 text-2xl sm:text-4xl font-bold tracking-tight text-white">Real-time data, peer to peer</h2>
-                    <p class="mt-3 max-w-2xl text-sm sm:text-base leading-relaxed text-gray-300">Streamr is a peer-to-peer pub/sub network for live data and media at scale. Open source, free and permissionless, anyone can publish or subscribe. No central servers or trackers, every node is a full peer, even a web browser, and each one that joins adds capacity.</p>
+                    <p class="mt-3 max-w-2xl text-sm sm:text-base leading-relaxed text-gray-300">Streamr is pub/sub without a broker. Every stream forms its own constellation of publishers and subscribers, a self-organizing overlay linked directly peer to peer, and thousands of them share one global mesh. No servers, no trackers, no permission needed. Free and open source, and every node that joins, even a browser, adds capacity.</p>
                     <p id="overview-hero-live" class="mt-4 flex items-center gap-2 text-sm text-gray-400 min-h-[1.25rem]"></p>
                     <button id="overview-hero-more-toggle" type="button" aria-expanded="false" aria-controls="overview-hero-more" class="md:hidden group/more mt-4 inline-flex items-center gap-1 text-sm font-semibold text-gray-300 hover:text-white transition-colors">How it works <svg class="w-4 h-4 transition-transform group-aria-expanded/more:rotate-180" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>
                     <!-- Phones: shown with How it works -->
@@ -3119,7 +3119,7 @@
                         <div class="rounded-lg border border-white/[0.06] bg-[#181818]/80 backdrop-blur-sm p-4">
                             <p class="text-[11px] font-semibold uppercase tracking-wider text-blue-400">Layer 0 · Global DHT</p>
                             <h3 class="mt-1.5 text-sm font-semibold text-white">A phone book for the whole network</h3>
-                            <p class="mt-1 text-xs sm:text-sm leading-relaxed text-gray-400">An r-Kademlia DHT spans every node. It brings new nodes in, keeps where each stream can be joined and routes messages to any node in a few hops.</p>
+                            <p class="mt-1 text-xs sm:text-sm leading-relaxed text-gray-400">An r-Kademlia DHT spans every node. It brings new nodes in, keeps where each stream can be joined and routes messages to any node in a few hops, including the signaling that opens direct links through firewalls and NATs.</p>
                         </div>
                         <div class="rounded-lg border border-white/[0.06] bg-[#181818]/80 backdrop-blur-sm p-4">
                             <p class="text-[11px] font-semibold uppercase tracking-wider text-blue-400">Layer 1 · Stream coordination</p>
@@ -3129,15 +3129,22 @@
                         <div class="rounded-lg border border-white/[0.06] bg-[#181818]/80 backdrop-blur-sm p-4">
                             <p class="text-[11px] font-semibold uppercase tracking-wider text-blue-400">Layer 2 · Data delivery</p>
                             <h3 class="mt-1.5 text-sm font-semibold text-white">A mesh that stays fast</h3>
-                            <p class="mt-1 text-xs sm:text-sm leading-relaxed text-gray-400">Subscribers connect directly to at least four peers, mostly close by, and messages spread across the mesh. In tests with 2 000 nodes they reached everyone in under 120 ms on average.</p>
+                            <p class="mt-1 text-xs sm:text-sm leading-relaxed text-gray-400">Subscribers link directly to at least four peers, mostly close by, over WebSocket where a node is reachable and WebRTC everywhere else, even in a browser. In tests with 2 000 nodes, messages reached everyone in under 120 ms on average.</p>
+                        </div>
+                    </div>
+                    <div class="mt-3 flex gap-3 rounded-lg border border-white/[0.06] bg-[#181818]/80 backdrop-blur-sm p-4">
+                        <svg class="w-5 h-5 flex-shrink-0 mt-0.5 text-blue-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+                        <div>
+                            <h3 class="text-sm font-semibold text-white">On-chain where it counts</h3>
+                            <p class="mt-1 text-xs sm:text-sm leading-relaxed text-gray-400">Streams, their permissions and the incentives live in smart contracts on Polygon, and identities are Ethereum keys that sign every message. Stream names can use ENS. The data itself flows off-chain, so creating a stream is one transaction and publishing or subscribing costs nothing.</p>
                         </div>
                     </div>
                     <!-- Scaling tests of the trackerless network (early 2025, about 2 000 nodes in 17 regions) -->
                     <div class="mt-5 flex flex-wrap items-end justify-between gap-x-8 gap-y-3">
-                        <dl class="grid grid-cols-2 sm:grid-cols-4 gap-x-8 gap-y-3">
+                        <dl class="grid grid-cols-2 sm:flex sm:flex-wrap gap-x-10 gap-y-3">
                             <div><dt class="text-[11px] font-semibold uppercase tracking-wider text-gray-500">Time to data</dt><dd class="mt-0.5 text-lg sm:text-xl font-bold text-white">~1 s</dd></div>
                             <div><dt class="text-[11px] font-semibold uppercase tracking-wider text-gray-500">Hops at 2 000 nodes</dt><dd class="mt-0.5 text-lg sm:text-xl font-bold text-white">&lt; 3</dd></div>
-                            <div><dt class="text-[11px] font-semibold uppercase tracking-wider text-gray-500">Delay vs a direct wire</dt><dd class="mt-0.5 text-lg sm:text-xl font-bold text-white">1.6×</dd></div>
+                            <div><dt class="text-[11px] font-semibold uppercase tracking-wider text-gray-500">Delivery at 2 000 nodes</dt><dd class="mt-0.5 text-lg sm:text-xl font-bold text-white">&lt; 120 ms</dd></div>
                             <div><dt class="text-[11px] font-semibold uppercase tracking-wider text-gray-500">Connections per node</dt><dd class="mt-0.5 text-lg sm:text-xl font-bold text-white">~4</dd></div>
                         </dl>
                         <div class="flex flex-col items-end gap-2">
