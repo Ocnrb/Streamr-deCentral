@@ -3100,6 +3100,81 @@
         <!-- Overview: the network at a glance (home page) -->
         <div id="overview-view" class="hidden p-4 md:p-6 space-y-4 md:space-y-6">
 
+            <!-- Intro: what Streamr is. It can be hidden for good (the text stays in the page for search engines) -->
+            <section id="overview-hero" class="detail-section relative overflow-hidden" aria-labelledby="overview-hero-title">
+                <canvas id="overview-hero-mesh" class="absolute inset-0 w-full h-full pointer-events-none" aria-hidden="true"></canvas>
+                <div class="absolute inset-0 pointer-events-none bg-gradient-to-r from-[#1E1E1E] via-[#1E1E1E]/80 to-[#1E1E1E]/10" aria-hidden="true"></div>
+                <div class="relative p-5 sm:p-8">
+                    <button id="overview-hero-close" type="button" class="absolute top-3 right-3 p-1.5 rounded-md text-gray-500 hover:text-white hover:bg-white/5 transition-colors" aria-label="Hide the introduction" data-tooltip-content="Hide the introduction">
+                        <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+                    </button>
+                    <p class="text-xs font-semibold uppercase tracking-wider text-blue-400">The Streamr Network</p>
+                    <h2 id="overview-hero-title" class="mt-2 pr-8 text-2xl sm:text-4xl font-bold tracking-tight text-white">Real-time data, peer to peer</h2>
+                    <p class="mt-3 max-w-2xl text-sm sm:text-base leading-relaxed text-gray-300">Streamr is an open-source, decentralized network that streams live data and media at scale. There are no central servers and no trackers. Every node is a full peer, even a web browser, and each one that joins adds capacity. Own your data, own your distribution.</p>
+                    <p id="overview-hero-live" class="mt-4 flex items-center gap-2 text-sm text-gray-400 min-h-[1.25rem]"></p>
+                    <button id="overview-hero-more-toggle" type="button" aria-expanded="false" aria-controls="overview-hero-more" class="md:hidden group/more mt-4 inline-flex items-center gap-1 text-sm font-semibold text-gray-300 hover:text-white transition-colors">How it works <svg class="w-4 h-4 transition-transform group-aria-expanded/more:rotate-180" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>
+                    <!-- Phones: shown with How it works -->
+                    <div id="overview-hero-more" class="max-md:hidden">
+                    <div class="mt-4 md:mt-6 grid gap-3 md:grid-cols-3">
+                        <div class="rounded-lg border border-white/[0.06] bg-[#181818]/80 backdrop-blur-sm p-4">
+                            <p class="text-[11px] font-semibold uppercase tracking-wider text-blue-400">Layer 0 · Global DHT</p>
+                            <h3 class="mt-1.5 text-sm font-semibold text-white">A phone book for the whole network</h3>
+                            <p class="mt-1 text-xs sm:text-sm leading-relaxed text-gray-400">An r-Kademlia DHT spans every node. It brings new nodes in, keeps where each stream can be joined and routes messages to any node in a few hops.</p>
+                        </div>
+                        <div class="rounded-lg border border-white/[0.06] bg-[#181818]/80 backdrop-blur-sm p-4">
+                            <p class="text-[11px] font-semibold uppercase tracking-wider text-blue-400">Layer 1 · Stream coordination</p>
+                            <h3 class="mt-1.5 text-sm font-semibold text-white">Every stream finds its peers</h3>
+                            <p class="mt-1 text-xs sm:text-sm leading-relaxed text-gray-400">Each stream has its own hybrid DHT, Kademlia for robustness and a locality-aware ring for closeness. It finds peers nearby for speed and farther away for resilience, with no connections of its own.</p>
+                        </div>
+                        <div class="rounded-lg border border-white/[0.06] bg-[#181818]/80 backdrop-blur-sm p-4">
+                            <p class="text-[11px] font-semibold uppercase tracking-wider text-blue-400">Layer 2 · Data delivery</p>
+                            <h3 class="mt-1.5 text-sm font-semibold text-white">A mesh that stays fast</h3>
+                            <p class="mt-1 text-xs sm:text-sm leading-relaxed text-gray-400">Subscribers connect directly to at least four peers, mostly close by, and messages spread across the mesh. In tests with 2 000 nodes they reached everyone in under 120 ms on average.</p>
+                        </div>
+                    </div>
+                    <!-- Scaling tests of the trackerless network (early 2025, about 2 000 nodes in 17 regions) -->
+                    <div class="mt-5 flex flex-wrap items-end justify-between gap-x-8 gap-y-3">
+                        <dl class="grid grid-cols-2 sm:grid-cols-4 gap-x-8 gap-y-3">
+                            <div><dt class="text-[11px] font-semibold uppercase tracking-wider text-gray-500">Time to data</dt><dd class="mt-0.5 text-lg sm:text-xl font-bold text-white">~1 s</dd></div>
+                            <div><dt class="text-[11px] font-semibold uppercase tracking-wider text-gray-500">Hops at 2 000 nodes</dt><dd class="mt-0.5 text-lg sm:text-xl font-bold text-white">&lt; 3</dd></div>
+                            <div><dt class="text-[11px] font-semibold uppercase tracking-wider text-gray-500">Delay vs a direct wire</dt><dd class="mt-0.5 text-lg sm:text-xl font-bold text-white">1.6×</dd></div>
+                            <div><dt class="text-[11px] font-semibold uppercase tracking-wider text-gray-500">Connections per node</dt><dd class="mt-0.5 text-lg sm:text-xl font-bold text-white">~4</dd></div>
+                        </dl>
+                        <a href="https://blog.streamr.network/leveling-up-streamr-the-trackerless-network-results-part-2/" target="_blank" rel="noopener noreferrer" class="text-xs font-medium text-gray-400 hover:text-white transition-colors" data-tooltip-content="Scaling tests in early 2025 with about 2 000 nodes in 17 regions">Tested across 17 regions ↗</a>
+                    </div>
+                    </div>
+                    <details id="overview-hero-data" class="group/data mt-4">
+                        <summary class="inline-flex items-center gap-1 cursor-pointer list-none [&::-webkit-details-marker]:hidden text-sm font-semibold text-gray-300 hover:text-white transition-colors">What is DATA <svg class="w-4 h-4 transition-transform group-open/data:rotate-180" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></summary>
+                        <div class="mt-3 grid gap-4 md:grid-cols-3">
+                            <div>
+                                <h3 class="text-sm font-semibold text-white">The token</h3>
+                                <p class="mt-1 text-xs sm:text-sm leading-relaxed text-gray-400">DATA is the ERC-20 utility token of the incentive and governance layers of Streamr.</p>
+                            </div>
+                            <div>
+                                <h3 class="text-sm font-semibold text-white">A market for bandwidth</h3>
+                                <p class="mt-1 text-xs sm:text-sm leading-relaxed text-gray-400">Sponsors fund streams through sponsorships, smart contracts that tie off-chain streaming to on-chain rewards. Operators stake DATA on them and earn for relaying the data, delegators back the operators, and nodes that fail their job are flagged and slashed. The result is a decentralized live CDN.</p>
+                            </div>
+                            <div>
+                                <h3 class="text-sm font-semibold text-white">Governance</h3>
+                                <p class="mt-1 text-xs sm:text-sm leading-relaxed text-gray-400">DATA is voting power. Its holders decide on the network and its economic parameters, for a healthy network.</p>
+                            </div>
+                        </div>
+                    </details>
+                </div>
+            </section>
+            <div id="overview-hero-reopen" class="hidden !mb-2 flex justify-end">
+                <button type="button" class="text-xs font-medium text-gray-500 hover:text-gray-300 transition-colors">What is Streamr</button>
+            </div>
+            <script>
+                // Hidden before it is drawn when the visitor closed it
+                try {
+                    if (localStorage.getItem('overview.hero.hidden')) {
+                        document.getElementById('overview-hero').classList.add('hidden');
+                        document.getElementById('overview-hero-reopen').classList.remove('hidden');
+                    }
+                } catch (e) { /* storage blocked: shown */ }
+            </script>
+
             <!-- Network numbers: the selected one opens its chart below -->
             <section class="detail-section overflow-hidden">
                 <div id="overview-stats" class="grid grid-cols-2 sm:grid-cols-3 2xl:grid-cols-9 gap-px bg-[#2a2a2a]"></div>

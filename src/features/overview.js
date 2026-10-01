@@ -1,6 +1,7 @@
 /**
  * Overview Feature Module
- * Home page: the Streamr Network at a glance. A row of network numbers (stake, delegations, APY,
+ * Home page: the Streamr Network at a glance. An introduction to Streamr on top (it can be hidden), with
+ * the network live in one line and a mesh of nodes passing messages drawn behind it. A row of network numbers (stake, delegations, APY,
  * operators, sponsorships, streams, DATA sponsored and slashed, DATA price); the selected one opens
  * its chart over time. Below: top operators, best sponsorships and the latest staking, delegation,
  * earnings and governance events.
@@ -921,6 +922,7 @@ function nodesRefreshButton() {
 }
 
 function renderStats() {
+    renderHero();
     const el = $('overview-stats');
     if (!el) return;
     const placeholder = '<span class="inline-block w-14 h-5 rounded bg-[#2C2C2C] animate-pulse align-middle"></span>';
@@ -1321,6 +1323,198 @@ function renderLists() {
 }
 
 // ============================================
+// Intro: hidden for good when closed, a live line and the mesh drawn behind it
+// ============================================
+
+const HERO_HIDDEN_KEY = 'overview.hero.hidden';
+const MESH_LINK = 120;            // px: nodes closer than this are neighbors
+const MESH_HOP_MS = 450;          // a message crossing one link
+const MESH_MAX_HOPS = 4;
+const MESH_MAX_MESSAGES = 40;
+
+const mesh = { canvas: null, ctx: null, nodes: [], messages: [], width: 0, height: 0, running: false, frame: 0, onScreen: true, nextMessage: 0 };
+
+function heroHidden() {
+    return !!$('overview-hero')?.classList.contains('hidden');
+}
+
+function setHeroHidden(hidden) {
+    try {
+        if (hidden) localStorage.setItem(HERO_HIDDEN_KEY, '1');
+        else localStorage.removeItem(HERO_HIDDEN_KEY);
+    } catch (e) { /* storage blocked: for this visit only */ }
+    $('overview-hero')?.classList.toggle('hidden', hidden);
+    $('overview-hero-reopen')?.classList.toggle('hidden', !hidden);
+    if (!hidden) meshResize();
+    meshUpdate();
+}
+
+/** The network right now, in one line */
+function renderHero() {
+    const el = $('overview-hero-live');
+    if (!el) return;
+    const t = state.totals;
+    if (!t) {
+        el.innerHTML = '';
+        return;
+    }
+    const nodes = nodesCount();
+    const n = (text) => `<span class="font-semibold text-white">${text}</span>`;
+    el.innerHTML = `
+        <span class="relative flex w-2 h-2 flex-shrink-0" aria-hidden="true">
+            <span class="absolute inline-flex w-full h-full rounded-full bg-green-400 opacity-60 animate-ping motion-reduce:animate-none"></span>
+            <span class="relative inline-flex w-2 h-2 rounded-full bg-green-400"></span>
+        </span>
+        <span>Right now ${n(full(t.operators))} operators stake ${n(compact(t.staked))} DATA in ${n(full(t.sponsorships))} sponsorships${nodes ? `, running ${n(full(nodes))} nodes` : ''}</span>`;
+}
+
+const reducedMotion = () => !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+
+function meshSetup() {
+    if (mesh.canvas) return;
+    const canvas = $('overview-hero-mesh');
+    if (!canvas?.getContext) return;
+    mesh.canvas = canvas;
+    mesh.ctx = canvas.getContext('2d');
+    if (window.ResizeObserver) new ResizeObserver(() => meshResize()).observe(canvas);
+    // Drawn only while it can be seen
+    if (window.IntersectionObserver) {
+        new IntersectionObserver(([entry]) => {
+            mesh.onScreen = entry.isIntersecting;
+            meshUpdate();
+        }).observe(canvas);
+    }
+}
+
+/** Canvas at the device's resolution; the nodes keep their places (scaled) */
+function meshResize() {
+    const { canvas, ctx } = mesh;
+    if (!canvas) return;
+    const width = canvas.clientWidth;
+    const height = canvas.clientHeight;
+    if (!width || !height) return;
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    canvas.width = Math.round(width * dpr);
+    canvas.height = Math.round(height * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const count = Math.max(24, Math.min(100, Math.round(width * height / 6500)));
+    const sx = mesh.width ? width / mesh.width : 1;
+    const sy = mesh.height ? height / mesh.height : 1;
+    mesh.nodes = Array.from({ length: count }, (_, i) => {
+        const old = mesh.nodes[i];
+        return old ? { ...old, x: old.x * sx, y: old.y * sy }
+            : { x: Math.random() * width, y: Math.random() * height, vx: (Math.random() - 0.5) * 0.24, vy: (Math.random() - 0.5) * 0.24 };
+    });
+    mesh.messages = [];
+    mesh.width = width;
+    mesh.height = height;
+    if (!mesh.running) meshDraw(performance.now(), false);
+}
+
+function meshNeighbors(index) {
+    const a = mesh.nodes[index];
+    const out = [];
+    mesh.nodes.forEach((b, j) => {
+        if (j !== index && (a.x - b.x) ** 2 + (a.y - b.y) ** 2 < MESH_LINK ** 2) out.push(j);
+    });
+    return out;
+}
+
+/** A message from one node to a neighbor; on arrival it goes on to two more, a few hops deep */
+function meshSend(from, to, time, hops) {
+    if (mesh.messages.length < MESH_MAX_MESSAGES) mesh.messages.push({ from, to, start: time, hops });
+}
+
+function meshDraw(time, animate) {
+    const { ctx, nodes, width, height } = mesh;
+    if (!ctx || !width) return;
+    ctx.clearRect(0, 0, width, height);
+    if (animate) {
+        for (const node of nodes) {
+            node.x += node.vx;
+            node.y += node.vy;
+            if (node.x < 0 || node.x > width) node.vx *= -1;
+            if (node.y < 0 || node.y > height) node.vy *= -1;
+        }
+    }
+    // Links
+    ctx.lineWidth = 1;
+    for (let i = 0; i < nodes.length; i++) {
+        for (let j = i + 1; j < nodes.length; j++) {
+            const d = Math.hypot(nodes[i].x - nodes[j].x, nodes[i].y - nodes[j].y);
+            if (d >= MESH_LINK) continue;
+            ctx.strokeStyle = `rgba(96, 165, 250, ${((1 - d / MESH_LINK) * 0.5).toFixed(3)})`;
+            ctx.beginPath();
+            ctx.moveTo(nodes[i].x, nodes[i].y);
+            ctx.lineTo(nodes[j].x, nodes[j].y);
+            ctx.stroke();
+        }
+    }
+    // Nodes
+    ctx.fillStyle = 'rgba(147, 197, 253, 0.75)';
+    for (const node of nodes) {
+        ctx.beginPath();
+        ctx.arc(node.x, node.y, 1.8, 0, Math.PI * 2);
+        ctx.fill();
+    }
+    if (!animate) return;
+    // Messages hopping through the mesh
+    if (time >= mesh.nextMessage) {
+        const from = Math.floor(Math.random() * nodes.length);
+        const next = meshNeighbors(from);
+        if (next.length) meshSend(from, next[Math.floor(Math.random() * next.length)], time, 0);
+        mesh.nextMessage = time + 700 + Math.random() * 900;
+    }
+    ctx.save();
+    ctx.shadowColor = 'rgba(96, 165, 250, 0.9)';
+    ctx.shadowBlur = 8;
+    ctx.fillStyle = '#dbeafe';
+    const arrived = [];
+    mesh.messages = mesh.messages.filter(message => {
+        const progress = (time - message.start) / MESH_HOP_MS;
+        if (progress >= 1) {
+            arrived.push(message);
+            return false;
+        }
+        const a = nodes[message.from];
+        const b = nodes[message.to];
+        if (!a || !b) return false;
+        ctx.beginPath();
+        ctx.arc(a.x + (b.x - a.x) * progress, a.y + (b.y - a.y) * progress, 2.2, 0, Math.PI * 2);
+        ctx.fill();
+        return true;
+    });
+    ctx.restore();
+    for (const message of arrived) {
+        if (message.hops >= MESH_MAX_HOPS) continue;
+        meshNeighbors(message.to).filter(j => j !== message.from)
+            .sort(() => Math.random() - 0.5).slice(0, 2)
+            .forEach(j => meshSend(message.to, j, time, message.hops + 1));
+    }
+}
+
+/** Runs the animation while the intro is on screen (one still frame for reduced motion) */
+function meshUpdate() {
+    meshSetup();
+    if (!mesh.canvas) return;
+    const visible = state.active && !document.hidden && mesh.onScreen && !heroHidden();
+    if (!visible || reducedMotion()) {
+        mesh.running = false;
+        cancelAnimationFrame(mesh.frame);
+        if (visible) meshDraw(performance.now(), false);
+        return;
+    }
+    if (mesh.running) return;
+    mesh.running = true;
+    const loop = (time) => {
+        if (!mesh.running) return;
+        meshDraw(time, true);
+        mesh.frame = requestAnimationFrame(loop);
+    };
+    mesh.frame = requestAnimationFrame(loop);
+}
+
+// ============================================
 // Lifecycle
 // ============================================
 
@@ -1390,7 +1584,15 @@ function init() {
     // Back on the tab: fresh numbers right away
     document.addEventListener('visibilitychange', () => {
         if (!document.hidden && state.active) refresh();
+        meshUpdate();
     });
+    $('overview-hero-close')?.addEventListener('click', () => setHeroHidden(true));
+    $('overview-hero-more-toggle')?.addEventListener('click', (e) => {
+        const open = $('overview-hero-more').classList.toggle('max-md:hidden') === false;
+        e.currentTarget.setAttribute('aria-expanded', String(open));
+        meshResize();
+    });
+    $('overview-hero-reopen')?.querySelector('button')?.addEventListener('click', () => setHeroHidden(false));
     Services.onHistoricalDataLoaded(setPriceHistory);
     readNodesCache();
 }
@@ -1401,6 +1603,7 @@ function show() {
     setPriceHistory({ priceMap: Services.getHistoricalDataPriceMap() });
     refresh();   // first: the histories wait for its totals
     renderStats();
+    meshUpdate();
     renderLists();
     renderChart();
     loadStreams();
@@ -1422,6 +1625,7 @@ function stop() {
     clearTimeout(state.timer);
     clearInterval(state.streamsTimer);
     stopNodesScan();
+    meshUpdate();
 }
 
 export const OverviewLogic = { show, stop };
