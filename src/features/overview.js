@@ -96,7 +96,8 @@ const METRICS = {
     price: { label: 'DATA price', kind: 'price', source: 'price',
         info: 'DATA/USD from the app\'s price feed: the daily history, then the latest price.' }
 };
-const METRIC_ORDER = ['staked', 'delegated', 'apy', 'operators', 'sponsorships', 'streams', 'sponsored', 'slashed', 'price'];
+// The network first (streams, sponsorships, operators), then its economy
+const METRIC_ORDER = ['streams', 'sponsorships', 'operators', 'apy', 'staked', 'sponsored', 'delegated', 'slashed', 'price'];
 
 const BADGES = {
     flagged: { label: 'Flagged', badge: 'bg-amber-500/10 text-amber-400 border-amber-500/30' },
