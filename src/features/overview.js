@@ -1473,19 +1473,19 @@ const feedTab = (name, render, what) => ({
 });
 
 const PANELS = {
-    // The network: streams, their permissions and storage, sponsorships
+    // The network: streams, sponsorships, permissions and storage
     network: {
         list: 'overview-network',
         tabs: {
             streams: { rows: () => state.newStreams, render: newStreamRow, error: 'Streams could not be loaded.', empty: 'No new streams.' },
-            permissions: feedTab('permissions', permissionRow, 'Permission changes'),
-            storage: feedTab('storage', storageRow, 'Storage changes'),
             // Created (factory events) and sponsored (subgraph), newest first
             sponsorships: { rows: () => [...state.feeds.sponsorships.rows, ...state.latestSponsoring].sort((a, b) => b.time - a.time).slice(0, LIST_SIZE),
                 render: sponsorshipEventRow, error: 'Sponsorship events could not be loaded.', empty: 'No sponsorship events.',
                 loaded: () => state.loaded && (state.feeds.sponsorships.loaded || state.feeds.sponsorships.error),
                 failed: () => state.error && state.feeds.sponsorships.error,
-                load: () => loadFeed('sponsorships'), at: () => state.feeds.sponsorships.at }
+                load: () => loadFeed('sponsorships'), at: () => state.feeds.sponsorships.at },
+            permissions: feedTab('permissions', permissionRow, 'Permission changes'),
+            storage: feedTab('storage', storageRow, 'Storage changes')
         }
     },
     // Operators and delegators: staking, delegations, earnings, flags and votes
