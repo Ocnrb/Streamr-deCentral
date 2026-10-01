@@ -13,7 +13,7 @@
 import * as Utils from '../core/utils.js';
 import * as UI from '../ui/ui.js';
 import * as Services from '../core/services.js';
-import { DATA_TOKEN_ADDRESS_POLYGON, POLYGONSCAN_NETWORK, getEtherscanApiKey } from '../core/constants.js';
+import { DATA_TOKEN_ADDRESS_POLYGON, POLYGONSCAN_NETWORK, getEtherscanApiKey, ETHEREUM_RPC_URLS } from '../core/constants.js';
 
 const { logger } = Utils;
 
@@ -32,11 +32,7 @@ const ROOT_CHAIN = '0x86E4Dc95c7FBdBf52e33D563BbDB00823894C287';
 const STATE_SENDER = '0x28e4F3a7f651294B9564800b2D01f35189A5bFbE';
 const STATE_RECEIVER = '0x0000000000000000000000000000000000001001';
 
-const ETHEREUM_RPCS = [
-    'https://ethereum-rpc.publicnode.com',
-    'https://eth.drpc.org',
-    'https://1rpc.io/eth'
-];
+const ETHEREUM_RPCS = ETHEREUM_RPC_URLS;
 const PROOF_API = 'https://proof-generator.polygon.technology/api/v1/matic/exit-payload/';
 const TRANSFER_TOPIC = ethers.utils.id('Transfer(address,address,uint256)');
 const STATE_SYNCED_TOPIC = ethers.utils.id('StateSynced(uint256,address,bytes)');

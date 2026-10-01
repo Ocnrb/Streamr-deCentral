@@ -1,9 +1,9 @@
 /**
  * Swap page market panel: the DATA/USD chart and the latest trades of the DATA pools.
- * - Trades: Swap events of every DATA pool with liquidity (the main one, Uniswap v4 DATA/USDC 0.3%, and
- *   the others the swap page finds: Uniswap v4 / v3, QuickSwap V2 / V3, SushiSwap), read with the
- *   explorer's log API. A trade's price is its USD value over its DATA amount: USD stablecoins as is,
- *   POL at the Chainlink POL/USD price of the hour. Buy / sell: the amounts' signs (v2 / v3), the move of
+ * - Trades: Swap events of every DATA pool with liquidity, on Polygon (the main one, Uniswap v4 DATA/USDC
+ *   0.3%, and the others the swap page finds: Uniswap v4 / v3, QuickSwap V2 / V3, SushiSwap) and on
+ *   Ethereum (Uniswap v2 / v3 / v4, SushiSwap; found here), read with the explorer's log API. A trade's price is its USD value over its DATA amount: USD stablecoins as is,
+ *   POL and ETH at the Chainlink POL/USD and ETH/USD prices of the hour. Buy / sell: the amounts' signs (v2 / v3), the move of
  *   the pool price for v4 (only swaps move it).
  * - Chart: the main pool's price. 24H and 7D follow it trade by trade; longer ranges use the daily
  *   DATA/USD history (DATA_History stream, CSV fallback). Every range ends at the pool's current price.
@@ -14,13 +14,17 @@
 
 import * as Utils from '../core/utils.js';
 import * as Services from '../core/services.js';
-import { DATA_TOKEN_ADDRESS_POLYGON, POLYGONSCAN_NETWORK, getEtherscanApiKey, DEX_SUBGRAPH_IDS, getDexSubgraphUrl } from '../core/constants.js';
+import { DATA_TOKEN_ADDRESS_POLYGON, DATA_TOKEN_ADDRESS_ETHEREUM, ETHEREUM_RPC_URLS, POLYGONSCAN_NETWORK, getEtherscanApiKey, DEX_SUBGRAPH_IDS, getDexSubgraphUrl } from '../core/constants.js';
 
 const { logger } = Utils;
 
 const DATA = DATA_TOKEN_ADDRESS_POLYGON.toLowerCase();
 const USDC = '0x3c499c542cef5e3811e1192ce70d8cc03d5c3359';
 const POOL_MANAGER = '0x67366782805870060151383f4bbff9dab53e5cd6';
+const CHAINS = {
+    137: { name: 'Polygon', blocksPerDay: 43200, poolManager: POOL_MANAGER, explorer: 'https://polygonscan.com/tx/' },
+    1: { name: 'Ethereum', blocksPerDay: 7200, poolManager: '0x000000000004444c5dc75cb358380d2e3de08a90', explorer: 'https://etherscan.io/tx/' }
+};
 const SWAP_TOPICS = {
     v4: ethers.utils.id('Swap(bytes32,address,int128,int128,uint160,uint128,int24,uint24)'),
     v3: ethers.utils.id('Swap(address,address,int256,int256,uint160,uint128,int24)'),   // Uniswap v3 and QuickSwap V3 (Algebra)
@@ -37,7 +41,8 @@ const USD_STABLES = ['USDC', 'USDC.e', 'USDT', 'DAI'];
 function makePool(desc) {
     return {
         ...desc,
-        key: desc.kind === 'v4' ? `v4:${desc.id.toLowerCase()}` : `${desc.kind}:${desc.address.toLowerCase()}`,
+        chain: desc.chain || 137,
+        key: `${desc.chain || 137}:${desc.kind === 'v4' ? `v4:${desc.id.toLowerCase()}` : `${desc.kind}:${desc.address.toLowerCase()}`}`,
         nextFromBlock: null,
         oldestBlock: null,
         firstTradeBlock: undefined,
@@ -46,9 +51,8 @@ function makePool(desc) {
 }
 
 // The main pool: the chart, the price and the change follow it
-const MAIN = makePool({ kind: 'v4', venue: 'v4', id: POOL_ID, dataIs0: DATA_IS_CURRENCY0, counterSymbol: 'USDC', counterDecimals: 6, label: 'Uniswap v4 0.3%' });
+const MAIN = makePool({ chain: 137, kind: 'v4', venue: 'v4', id: POOL_ID, dataIs0: DATA_IS_CURRENCY0, counterSymbol: 'USDC', counterDecimals: 6, label: 'Uniswap v4 0.3%' });
 
-const BLOCKS_PER_DAY = 43200;        // Polygon: about 2 s per block
 const TRADE_DAYS = 7;
 const MAX_LOGS = 1000;               // the explorer returns at most 1000 logs (the oldest first)
 const TRADES_PAGE = 50;              // rows shown at first, and added by Load More
@@ -67,10 +71,12 @@ const state = {
     trades: [],            // every pool's, oldest first
     seen: new Set(),       // txHash:logIndex
     pools: [MAIN],         // the DATA pools read (the main one first)
-    filter: 'all',         // trades list: 'all' pools or 'main'
+    filter: 'all',         // trades list: 'all', 'polygon', 'ethereum' or 'main'
     polUsdAt: null,        // (times in s) -> POL/USD prices, from the swap page (Chainlink)
     tokenChip: (symbol) => Utils.escapeHtml(symbol),   // token chip with its logo, from the swap page
     polUsd: new Map(),     // hour (ms) -> POL/USD
+    ethUsd: new Map(),     // hour (ms) -> ETH/USD
+    ethDiscovery: null,    // the Ethereum DATA pools lookup (once)
     windowStart: null,     // time from which the main pool's trades are complete
     loaded: false,
     error: false,
@@ -125,9 +131,9 @@ const EXPLORER_BUSY = /rate limit|max calls|too many|timeout|temporarily|busy/i;
 /** Swap logs of a pool from a block on; a busy explorer (rate limit: the app's default key is shared) is asked again shortly */
 async function fetchLogs(pool, fromBlock, page = 1, toBlock = 'latest', offset = MAX_LOGS) {
     const filter = pool.kind === 'v4'
-        ? `address=${POOL_MANAGER}&topic0=${SWAP_TOPICS.v4}&topic0_1_opr=and&topic1=${pool.id}`
+        ? `address=${CHAINS[pool.chain].poolManager}&topic0=${SWAP_TOPICS.v4}&topic0_1_opr=and&topic1=${pool.id}`
         : `address=${pool.address}&topic0=${SWAP_TOPICS[pool.kind]}`;
-    const url = `${POLYGONSCAN_NETWORK.apiUrl}?chainid=137&module=logs&action=getLogs&${filter}`
+    const url = `${POLYGONSCAN_NETWORK.apiUrl}?chainid=${pool.chain}&module=logs&action=getLogs&${filter}`
         + `&fromBlock=${fromBlock}&toBlock=${toBlock}&page=${page}&offset=${offset}&apikey=${getEtherscanApiKey()}`;
     let lastError = null;
     for (let attempt = 0; attempt < 4; attempt++) {
@@ -190,34 +196,37 @@ function parseLog(pool, log) {
 }
 
 const hourOf = (ms) => Math.floor(ms / HOUR) * HOUR;
+const isPol = (pool) => pool.counterSymbol === 'POL' || pool.counterSymbol === 'WPOL';
+const isEth = (pool) => pool.counterSymbol === 'ETH' || pool.counterSymbol === 'WETH';
 
 /** USD value and price per DATA: stablecoins as is, POL at the hour's POL/USD (filled in once read) */
 function setUsd(pool, trade) {
     let usd = null;
     if (USD_STABLES.includes(pool.counterSymbol)) usd = trade.counter;
-    else if (pool.counterSymbol === 'POL' || pool.counterSymbol === 'WPOL') {
-        const polUsd = state.polUsd.get(hourOf(trade.time));
-        if (polUsd) usd = trade.counter * polUsd;
+    else if (isPol(pool) || isEth(pool)) {
+        const rate = (isPol(pool) ? state.polUsd : state.ethUsd).get(hourOf(trade.time));
+        if (rate) usd = trade.counter * rate;
     }
     trade.usd = usd;
     trade.price = usd !== null && trade.data > 0 ? usd / trade.data : null;
 }
 
-/** POL/USD of the hours of the POL trades still without a USD value */
-async function fillPolUsd() {
-    if (!state.polUsdAt) return;
-    const polPools = new Set(state.pools.filter(p => p.counterSymbol === 'POL' || p.counterSymbol === 'WPOL').map(p => p.key));
-    const hours = [...new Set(state.trades.filter(t => t.usd === null && polPools.has(t.pool)).map(t => hourOf(t.time)))]
-        .filter(h => !state.polUsd.has(h));
-    if (!hours.length) return;
-    try {
-        const prices = await state.polUsdAt(hours.map(h => Math.floor((h + HOUR / 2) / 1000)));
-        hours.forEach((h, i) => { if (prices[i]) state.polUsd.set(h, prices[i]); });
-        const byKey = new Map(state.pools.map(p => [p.key, p]));
-        for (const trade of state.trades) if (trade.usd === null && polPools.has(trade.pool)) setUsd(byKey.get(trade.pool), trade);
-    } catch (e) {
-        logger.warn('Swap market: POL/USD for the POL pools not read', e);
+/** POL/USD and ETH/USD of the hours of the POL / ETH trades still without a USD value */
+async function fillUsdRates() {
+    const byKey = new Map(state.pools.map(p => [p.key, p]));
+    const missing = state.trades.filter(t => t.usd === null && byKey.get(t.pool));
+    for (const [test, map, source] of [[isPol, state.polUsd, state.polUsdAt], [isEth, state.ethUsd, ethUsdAt]]) {
+        if (!source) continue;
+        const hours = [...new Set(missing.filter(t => test(byKey.get(t.pool))).map(t => hourOf(t.time)))].filter(h => !map.has(h));
+        if (!hours.length) continue;
+        try {
+            const prices = await source(hours.map(h => Math.floor((h + HOUR / 2) / 1000)));
+            hours.forEach((h, i) => { if (prices[i]) map.set(h, prices[i]); });
+        } catch (e) {
+            logger.warn('Swap market: USD rate (Chainlink) not read', e);
+        }
     }
+    for (const trade of missing) setUsd(byKey.get(trade.pool), trade);
 }
 
 /** Buy / sell of a v4 pool's trades: the pool price goes up when DATA is bought (only swaps move it) */
@@ -256,7 +265,7 @@ async function fetchRange(pool, fromBlock, toBlock) {
 /** The trades of up to `days` before toBlock; a range too busy for MAX_PAGES pages is narrowed, so the newest are there */
 async function fetchNewest(pool, toBlock, days, floorBlock = 0) {
     for (;;) {
-        const fromBlock = Math.max(floorBlock, toBlock - Math.round(days * BLOCKS_PER_DAY));
+        const fromBlock = Math.max(floorBlock, toBlock - Math.round(days * CHAINS[pool.chain].blocksPerDay));
         const { logs, complete } = await fetchRange(pool, fromBlock, toBlock);
         if (complete || days <= 0.25) return { logs, fromBlock };
         days /= 4;
@@ -286,7 +295,7 @@ async function loadPool(pool, latest) {
     if (pool.nextFromBlock === null) {
         const { logs, fromBlock } = await fetchNewest(pool, latest, TRADE_DAYS);
         pool.oldestBlock = fromBlock;
-        if (pool === MAIN) state.windowStart = Date.now() - (latest - fromBlock) * (DAY / BLOCKS_PER_DAY);
+        if (pool === MAIN) state.windowStart = Date.now() - (latest - fromBlock) * (DAY / CHAINS[pool.chain].blocksPerDay);
         added = addTrades(pool, logs);
     } else {
         added = addTrades(pool, await fetchLogs(pool, pool.nextFromBlock));
@@ -300,31 +309,49 @@ async function loadPool(pool, latest) {
 
 /** New trades of every pool: the main one first (it alone decides whether the trades loaded), the others after it */
 async function loadTrades() {
-    const latest = await Services.readWithFallback(() => Services.getReadOnlyProvider().getBlockNumber());
-    let added = await loadPool(MAIN, latest);
+    const latest = { 137: await Services.readWithFallback(() => Services.getReadOnlyProvider().getBlockNumber()) };
+    let added = await loadPool(MAIN, latest[137]);
     state.loaded = true;
     state.error = false;
     for (const pool of state.pools) {
         if (pool === MAIN) continue;
         await pause(PAGE_PAUSE_MS);
         try {
-            added += await loadPool(pool, latest);
+            if (latest[pool.chain] === undefined) latest[pool.chain] = await getEthProvider().getBlockNumber();
+            added += await loadPool(pool, latest[pool.chain]);
         } catch (e) {
             logger.warn(`Swap market: trades of ${pool.label} not loaded`, e);
         }
     }
-    await fillPolUsd();
+    await fillUsdRates();
     return added;
 }
 
 const allReachedStart = () => state.pools.every(p => p.reachedStart);
 
+/** New pools (from the swap page or the Ethereum lookup): their trades and subgraph days are read right away */
+function addPools(descs) {
+    const known = new Set(state.pools.map(p => p.key));
+    let added = false;
+    for (const desc of descs) {
+        const pool = makePool(desc);
+        if (known.has(pool.key)) continue;
+        known.add(pool.key);
+        state.pools.push(pool);
+        added = true;
+    }
+    if (!added) return;
+    if (state.active) loadDays(); else state.daysAt = 0;
+    if (state.active && state.loaded) refresh();
+}
+
 /** Trades before each pool's oldest loaded: 7 days back, further (a doubling window) over quiet weeks, until its first trade */
 async function loadOlder() {
     let added = 0;
     let days = TRADE_DAYS;
-    while (!added && !allReachedStart()) {
-        for (const pool of state.pools) {
+    const pools = filteredPools();
+    while (!added && !pools.every(p => p.reachedStart)) {
+        for (const pool of pools) {
             if (pool.reachedStart || pool.oldestBlock === null) continue;
             if (pool.firstTradeBlock === undefined) {
                 const first = await fetchLogs(pool, 0, 1, 'latest', 1);
@@ -345,8 +372,149 @@ async function loadOlder() {
     // The main pool's trades are complete from its oldest one loaded on
     const main = mainTrades();
     if (main.length) state.windowStart = Math.min(state.windowStart, main[0].time);
-    await fillPolUsd();
+    await fillUsdRates();
     return added;
+}
+
+// ============================================
+// Ethereum DATA pools (found here: the swap page works on Polygon only)
+// ============================================
+
+const ETH = {
+    DATA: DATA_TOKEN_ADDRESS_ETHEREUM.toLowerCase(),
+    counters: [
+        { address: '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2', symbol: 'WETH', decimals: 18 },
+        { address: '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48', symbol: 'USDC', decimals: 6 },
+        { address: '0xdac17f958d2ee523a2206206994597c13d831ec7', symbol: 'USDT', decimals: 6 },
+        { address: '0x6b175474e89094c44da98b954eedeac495271d0f', symbol: 'DAI', decimals: 18 }
+    ],
+    v2Factories: [
+        { address: '0x5c69bee701ef814a2b6a3edd4b1652cb9cc5aa6f', label: 'Uniswap v2', subgraph: 'ethUniV2' },
+        { address: '0xc0aee478e3658e2610c5f7a4a2e1777ce9e4f2ac', label: 'SushiSwap V2' }
+    ],
+    v3Factory: '0x1f98431c8ad98523631ae4a59f267346ea31f984',
+    v3Fees: [100, 500, 3000, 10000],
+    v4Tiers: [[100, 1], [500, 10], [3000, 60], [10000, 200]],
+    v4PoolsSlot: 6,
+    ethUsdFeed: '0x5f4ec3df9cbd43714fe2740f5e3616155c5b8419'   // Chainlink ETH/USD
+};
+const MULTICALL3 = '0xcA11bde05977b3631167028862bE2a173976CA11';
+const ETH_POOL_MIN_DATA = ethers.utils.parseUnits('10000', 18);
+const ETH_IFACES = {
+    multicall: new ethers.utils.Interface(['function aggregate3((address target, bool allowFailure, bytes callData)[] calls) payable returns ((bool success, bytes returnData)[] returnData)']),
+    v2Factory: new ethers.utils.Interface(['function getPair(address, address) view returns (address)']),
+    v3Factory: new ethers.utils.Interface(['function getPool(address, address, uint24) view returns (address)']),
+    erc20: new ethers.utils.Interface(['function balanceOf(address) view returns (uint256)']),
+    v4Manager: new ethers.utils.Interface(['function extsload(bytes32 slot) view returns (bytes32)']),
+    feed: new ethers.utils.Interface([
+        'function latestRoundData() view returns (uint80 roundId, int256 answer, uint256 startedAt, uint256 updatedAt, uint80 answeredInRound)',
+        'function getRoundData(uint80 roundId) view returns (uint80 roundId, int256 answer, uint256 startedAt, uint256 updatedAt, uint80 answeredInRound)'
+    ])
+};
+
+let ethProvider = null;
+function getEthProvider() {
+    if (!ethProvider) ethProvider = new Services.FailoverRpcProvider(ETHEREUM_RPC_URLS, 1, 'ethereum_rpc_index');
+    return ethProvider;
+}
+
+/** Ethereum reads through Multicall3: [{ target, iface, fn, args }] -> decoded results (null for a failed call) */
+async function ethMulticall(calls) {
+    const results = [];
+    for (let i = 0; i < calls.length; i += 60) {
+        const batch = calls.slice(i, i + 60);
+        const encoded = batch.map(c => ({ target: c.target, allowFailure: true, callData: c.iface.encodeFunctionData(c.fn, c.args) }));
+        const raw = await new ethers.Contract(MULTICALL3, ETH_IFACES.multicall, getEthProvider()).callStatic.aggregate3(encoded);
+        raw.forEach((r, j) => {
+            try {
+                results.push(r.success ? batch[j].iface.decodeFunctionResult(batch[j].fn, r.returnData) : null);
+            } catch (e) {
+                results.push(null);
+            }
+        });
+    }
+    return results;
+}
+
+/** ETH/USD at each time (s): the last Chainlink round before it, by a binary search over the current phase's rounds */
+async function ethUsdAt(times) {
+    const feed = ETH.ethUsdFeed;
+    const price = (round) => (round && round.answer.gt(0) && round.updatedAt.gt(0) ? Number(round.answer.toString()) / 1e8 : null);
+    const [latest] = await ethMulticall([{ target: feed, iface: ETH_IFACES.feed, fn: 'latestRoundData', args: [] }]);
+    if (!latest) return times.map(() => null);
+    const phase = latest.roundId.shr(64);
+    const roundId = (n) => phase.shl(64).or(n);
+    const getRound = (n) => ({ target: feed, iface: ETH_IFACES.feed, fn: 'getRoundData', args: [roundId(n)] });
+    const [first] = await ethMulticall([getRound(1)]);
+    const results = times.map(t => (t >= latest.updatedAt.toNumber() ? price(latest) : undefined));
+    const searches = results.flatMap((r, i) => (r === undefined && first && times[i] >= first.updatedAt.toNumber()
+        ? [{ i, lo: 1, hi: latest.roundId.mask(64).toNumber(), round: first }] : []));
+    for (let open = searches; open.length; open = searches.filter(s => s.lo < s.hi)) {
+        const mids = open.map(s => Math.ceil((s.lo + s.hi) / 2));
+        const rounds = await ethMulticall(mids.map(getRound));
+        open.forEach((s, j) => {
+            if (!price(rounds[j])) s.lo = s.hi = 0;
+            else if (rounds[j].updatedAt.toNumber() <= times[s.i]) [s.lo, s.round] = [mids[j], rounds[j]];
+            else s.hi = mids[j] - 1;
+        });
+    }
+    searches.forEach(s => { results[s.i] = s.lo ? price(s.round) : null; });
+    return results.map(r => r ?? null);
+}
+
+/** DATA pools on Ethereum with liquidity: Uniswap v2 / SushiSwap pairs, Uniswap v3 pools (every fee), hookless Uniswap v4 pools */
+async function discoverEthereumPools() {
+    const zero = ethers.constants.AddressZero;
+    const v2 = ETH.v2Factories.flatMap(f => ETH.counters.map(c => ({ f, c })));
+    const v3 = ETH.v3Fees.flatMap(fee => ETH.counters.map(c => ({ fee, c })));
+    const found = await ethMulticall([
+        ...v2.map(({ f, c }) => ({ target: f.address, iface: ETH_IFACES.v2Factory, fn: 'getPair', args: [ETH.DATA, c.address] })),
+        ...v3.map(({ fee, c }) => ({ target: ETH.v3Factory, iface: ETH_IFACES.v3Factory, fn: 'getPool', args: [ETH.DATA, c.address, fee] }))
+    ]);
+    const candidates = [];
+    v2.forEach(({ f, c }, i) => {
+        const address = found[i]?.[0];
+        if (address && address !== zero) candidates.push({ chain: 1, kind: 'v2', venue: 'v2', address: address.toLowerCase(), counter: c, label: f.label, subgraph: f.subgraph });
+    });
+    v3.forEach(({ fee, c }, i) => {
+        const address = found[v2.length + i]?.[0];
+        if (address && address !== zero) candidates.push({ chain: 1, kind: 'v3', venue: 'v3', address: address.toLowerCase(), counter: c, label: `Uniswap v3 ${fee / 10000}%`, subgraph: 'ethUniV3' });
+    });
+    const balances = await ethMulticall(candidates.map(p => ({ target: ETH.DATA, iface: ETH_IFACES.erc20, fn: 'balanceOf', args: [p.address] })));
+    const pools = candidates.filter((p, i) => balances[i]?.[0]?.gte(ETH_POOL_MIN_DATA));
+
+    // v4: the pools of the standard tiers, against native ETH and the counters; liquidity from the PoolManager's storage
+    const v4Counters = [{ address: zero, symbol: 'ETH', decimals: 18 }, ...ETH.counters];
+    const v4 = v4Counters.flatMap(c => ETH.v4Tiers.map(([fee, tickSpacing]) => {
+        const [currency0, currency1] = ETH.DATA < c.address.toLowerCase() ? [ETH.DATA, c.address] : [c.address, ETH.DATA];
+        const id = ethers.utils.keccak256(ethers.utils.defaultAbiCoder.encode(['address', 'address', 'uint24', 'int24', 'address'], [currency0, currency1, fee, tickSpacing, zero]));
+        const slot = ethers.utils.keccak256(ethers.utils.defaultAbiCoder.encode(['bytes32', 'uint256'], [id, ETH.v4PoolsSlot]));
+        const liquiditySlot = ethers.utils.hexZeroPad(ethers.BigNumber.from(slot).add(3).toHexString(), 32);
+        return { id, fee, c, dataIs0: currency0 === ETH.DATA, liquiditySlot };
+    }));
+    const liquidity = await ethMulticall(v4.map(p => ({ target: CHAINS[1].poolManager, iface: ETH_IFACES.v4Manager, fn: 'extsload', args: [p.liquiditySlot] })));
+    v4.forEach((p, i) => {
+        const word = liquidity[i]?.[0];
+        if (word && !ethers.BigNumber.from(word).mask(128).isZero()) {
+            pools.push({ chain: 1, kind: 'v4', venue: 'v4', id: p.id, counter: p.c, label: `Uniswap v4 ${p.fee / 10000}%`, v4DataIs0: p.dataIs0, subgraph: 'ethUniV4' });
+        }
+    });
+    return pools.map(p => ({
+        chain: 1, kind: p.kind, venue: p.venue, subgraph: p.subgraph || null, label: p.label,
+        ...(p.kind === 'v4' ? { id: p.id, dataIs0: p.v4DataIs0 } : { address: p.address, dataIs0: ETH.DATA < p.counter.address.toLowerCase() }),
+        counterSymbol: p.counter.symbol, counterDecimals: p.counter.decimals
+    }));
+}
+
+/** Ethereum pools once per session, added to the trades once found */
+function loadEthereumPools() {
+    if (state.ethDiscovery) return;
+    state.ethDiscovery = discoverEthereumPools()
+        .then(pools => addPools(pools))
+        .catch(e => {
+            logger.warn('Swap market: Ethereum DATA pools not found', e);
+            state.ethDiscovery = null;   // asked again next time the page opens
+        });
 }
 
 // ============================================
@@ -354,9 +522,13 @@ async function loadOlder() {
 // ============================================
 
 /** One DEX subgraph's days for its pools (one query, an alias per pool) */
-async function fetchDays(venue, pools) {
-    const query = `{ ${pools.map((p, i) => `p${i}: poolDayDatas(first: 1000, orderBy: date, orderDirection: desc, where: { pool: "${(p.kind === 'v4' ? p.id : p.address).toLowerCase()}" }) { date volumeUSD txCount }`).join(' ')} }`;
-    const json = await fetch(getDexSubgraphUrl(venue), {
+async function fetchDays(subgraph, pools) {
+    // Uniswap v2 schema: pairDayDatas by pair address, daily* fields; the others: poolDayDatas by pool
+    const v2 = subgraph === 'ethUniV2';
+    const query = `{ ${pools.map((p, i) => (v2
+        ? `p${i}: pairDayDatas(first: 1000, orderBy: date, orderDirection: desc, where: { pairAddress: "${p.address.toLowerCase()}" }) { date volumeUSD: dailyVolumeUSD txCount: dailyTxns }`
+        : `p${i}: poolDayDatas(first: 1000, orderBy: date, orderDirection: desc, where: { pool: "${(p.kind === 'v4' ? p.id : p.address).toLowerCase()}" }) { date volumeUSD txCount }`)).join(' ')} }`;
+    const json = await fetch(getDexSubgraphUrl(subgraph), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ query })
@@ -371,8 +543,10 @@ async function loadDays() {
     state.daysAt = Date.now();
     const byVenue = new Map();
     for (const pool of state.pools) {
-        if (!DEX_SUBGRAPH_IDS[pool.venue]) continue;
-        byVenue.set(pool.venue, [...(byVenue.get(pool.venue) || []), pool]);
+        // Polygon pools: their DEX's subgraph (Uniswap v4 / v3, QuickSwap V3); Ethereum pools: the one set when found
+        const subgraph = pool.chain === 137 ? pool.venue : pool.subgraph;
+        if (!subgraph || !DEX_SUBGRAPH_IDS[subgraph]) continue;
+        byVenue.set(subgraph, [...(byVenue.get(subgraph) || []), pool]);
     }
     const results = await Promise.allSettled([...byVenue].map(([venue, pools]) => fetchDays(venue, pools)));
     const rows = results.flatMap(r => (r.status === 'fulfilled' ? r.value : []));
@@ -478,13 +652,29 @@ function renderStats() {
 // Trades table
 // ============================================
 
-const counterName = (pool) => (pool.counterSymbol === 'WPOL' ? 'POL' : pool.counterSymbol);
+const counterName = (pool) => ({ WPOL: 'POL', WETH: 'ETH' }[pool.counterSymbol] || pool.counterSymbol);
+
+/** Trades and pools of the list's filter: all, one network, or the main pool */
+function filteredPools() {
+    if (state.filter === 'main') return [MAIN];
+    if (state.filter === 'polygon') return state.pools.filter(p => p.chain === 137);
+    if (state.filter === 'ethereum') return state.pools.filter(p => p.chain === 1);
+    return state.pools;
+}
+function listedTrades() {
+    if (state.filter === 'all') return state.trades;
+    const keys = new Set(filteredPools().map(p => p.key));
+    return state.trades.filter(t => keys.has(t.pool));
+}
+
+// Small Ethereum logo beside the trades of Ethereum pools
+const ETHEREUM_MARK = '<svg class="w-3.5 h-3.5 flex-shrink-0" viewBox="0 0 32 32" aria-label="Ethereum" role="img"><circle cx="16" cy="16" r="16" fill="#627EEA"/><path fill="#fff" fill-opacity=".6" d="M16.5 4v8.87l7.5 3.35z"/><path fill="#fff" d="M16.5 4 9 16.22l7.5-3.35z"/><path fill="#fff" fill-opacity=".6" d="M16.5 21.97v6.03L24 17.62z"/><path fill="#fff" d="M16.5 28v-6.03L9 17.62z"/></svg>';
 /** The swap page's token chip, a size smaller for the trades list */
 const compactChip = (symbol) => state.tokenChip(symbol)
     .replace('gap-1.5 pl-1 pr-2', 'gap-1 pl-0.5 pr-1.5')
     .replace('text-xs', 'text-[11px]')
     .replaceAll('w-4 h-4', 'w-3.5 h-3.5');
-const poolFullName = (pool) => (pool ? `${pool.label} · DATA/${counterName(pool)}` : '');
+const poolFullName = (pool) => (pool ? `${pool.label} · DATA/${counterName(pool)} · ${CHAINS[pool.chain].name}` : '');
 
 function renderFilter() {
     document.querySelectorAll('#swap-trades-filter button').forEach(btn => {
@@ -505,8 +695,8 @@ function renderTrades() {
         body.innerHTML = row(`<span class="inline-flex items-center gap-2">${spinner}${state.error ? 'The explorer is busy, trying again...' : 'Loading market trades...'}</span>`);
         return;
     }
-    const listed = state.filter === 'main' ? mainTrades() : state.trades;
-    const reachedStart = state.filter === 'main' ? MAIN.reachedStart : allReachedStart();
+    const listed = listedTrades();
+    const reachedStart = filteredPools().every(p => p.reachedStart);
     // Load More stays until every trade since the pools' first ones is shown
     $('swap-trades-more')?.classList.toggle('hidden', listed.length <= state.shown && reachedStart);
     const recent = listed.slice(-state.shown).reverse();
@@ -528,13 +718,13 @@ function renderTrades() {
         const [paid, received] = ownSwap?.pay && ownSwap?.receive
             ? [ownSwap.pay, ownSwap.receive]
             : trade.buy ? [counter, 'DATA'] : ['DATA', counter];
-        const tradeCell = `<span class="inline-flex items-center gap-2.5 whitespace-nowrap" data-tooltip-content="${Utils.escapeHtml(poolFullName(pool))}">${side}<span class="inline-flex items-center gap-1">${compactChip(paid)}<span class="text-gray-400 text-xs">→</span>${compactChip(received)}</span></span>`;
+        const tradeCell = `<span class="inline-flex items-center gap-2.5 whitespace-nowrap" data-tooltip-content="${Utils.escapeHtml(poolFullName(pool))}">${side}<span class="inline-flex items-center gap-1">${pool?.chain === 1 ? ETHEREUM_MARK : ''}${compactChip(paid)}<span class="text-gray-400 text-xs">→</span>${compactChip(received)}</span></span>`;
         const own = ownSwap
             ? '<span class="ml-2 px-1.5 py-0.5 rounded bg-[#2C2C2C] text-[10px] font-semibold text-gray-300">You</span>'
             : '';
         return `
             <tr class="border-b border-[#2a2a2a] last:border-0">
-                <td class="py-2 pr-2 whitespace-nowrap"><a href="https://polygonscan.com/tx/${hash}" target="_blank" rel="noopener noreferrer" class="text-gray-300 hover:text-blue-300" data-tooltip-content="${Utils.escapeHtml(new Date(trade.time).toLocaleString())}">${formatTime(trade.time)}</a>${own}</td>
+                <td class="py-2 pr-2 whitespace-nowrap"><a href="${CHAINS[pool?.chain || 137].explorer}${hash}" target="_blank" rel="noopener noreferrer" class="text-gray-300 hover:text-blue-300" data-tooltip-content="${Utils.escapeHtml(new Date(trade.time).toLocaleString())}">${formatTime(trade.time)}</a>${own}</td>
                 <td class="py-2 pr-2">${tradeCell}</td>
                 <td class="py-2 pr-2 text-right whitespace-nowrap text-white font-medium">${formatPrice(trade.price)}</td>
                 <td class="py-2 pr-2 text-right whitespace-nowrap text-gray-200">${formatData(trade.data)}</td>
@@ -746,7 +936,7 @@ function schedule() {
 /** Next 50 rows: from the loaded trades, else older ones from the explorer */
 async function loadMore() {
     const btn = $('swap-trades-more');
-    const listed = state.filter === 'main' ? mainTrades() : state.trades;
+    const listed = listedTrades();
     if (state.shown < listed.length) {
         state.shown += TRADES_PAGE;
         renderTrades();
@@ -804,6 +994,7 @@ export const SwapMarket = {
         renderAll();
         if (Date.now() - state.daysAt > DAYS_REFRESH_MS) loadDays();
         refresh().finally(schedule);
+        loadEthereumPools();
     },
 
     stop() {
@@ -822,18 +1013,7 @@ export const SwapMarket = {
      * { kind: 'v3' | 'v2', address }, with dataIs0, counterSymbol, counterDecimals and label
      */
     setPools(descs) {
-        const known = new Set(state.pools.map(p => p.key));
-        let added = false;
-        for (const desc of descs) {
-            const pool = makePool(desc);
-            if (known.has(pool.key)) continue;
-            known.add(pool.key);
-            state.pools.push(pool);
-            added = true;
-        }
-        if (!added) return;
-        if (state.active) loadDays(); else state.daysAt = 0;   // the subgraph's days again, with the new v4 pools
-        if (state.active && state.loaded) refresh();
+        addPools(descs.map(desc => ({ ...desc, chain: 137 })));
     },
 
     /** Token chip (logo + ticker) of the swap page, for the trades list */

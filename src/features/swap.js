@@ -130,6 +130,7 @@ const DATA_LOGO_PATH = 'M32.9091 10.2118V9.08164C32.9091 8.69418 32.5861 8.38241
 const ICONS = {
     DATA: `<svg class="w-7 h-7 flex-shrink-0" viewBox="0 0 56 56" aria-hidden="true"><circle cx="28" cy="28" r="28" fill="#F7600A"/><path fill-rule="evenodd" clip-rule="evenodd" d="${DATA_LOGO_PATH}" fill="white"/></svg>`,
     POL: '<svg class="w-7 h-7 flex-shrink-0" viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="16" fill="#8247E5"/><path fill="#fff" d="M21.1 13.1a1.3 1.3 0 0 0-1.3 0l-2.9 1.7-2 1.1-2.9 1.7a1.3 1.3 0 0 1-1.3 0l-2.3-1.3a1.3 1.3 0 0 1-.6-1.1v-2.6c0-.4.2-.9.6-1.1l2.2-1.3a1.3 1.3 0 0 1 1.3 0l2.2 1.3c.4.2.6.7.6 1.1v1.7l2-1.2v-1.7c0-.4-.2-.9-.6-1.1l-4.2-2.4a1.3 1.3 0 0 0-1.3 0l-4.3 2.5c-.4.2-.6.6-.6 1v4.9c0 .4.2.9.6 1.1l4.3 2.4c.4.2.9.2 1.3 0l2.9-1.6 2-1.2 2.9-1.6a1.3 1.3 0 0 1 1.3 0l2.2 1.3c.4.2.6.7.6 1.1v2.6c0 .4-.2.9-.6 1.1l-2.2 1.3a1.3 1.3 0 0 1-1.3 0l-2.2-1.3a1.3 1.3 0 0 1-.6-1.1v-1.7l-2 1.2v1.7c0 .4.2.9.6 1.1l4.3 2.4c.4.2.9.2 1.3 0l4.3-2.4c.4-.2.6-.7.6-1.1v-4.9c0-.4-.2-.9-.6-1.1z"/></svg>',
+    ETH: '<svg class="w-7 h-7 flex-shrink-0" viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="16" fill="#627EEA"/><path fill="#fff" fill-opacity=".6" d="M16.5 4v8.87l7.5 3.35z"/><path fill="#fff" d="M16.5 4 9 16.22l7.5-3.35z"/><path fill="#fff" fill-opacity=".6" d="M16.5 21.97v6.03L24 17.62z"/><path fill="#fff" d="M16.5 28v-6.03L9 17.62z"/><path fill="#fff" fill-opacity=".2" d="m16.5 20.57 7.5-4.35-7.5-3.35z"/><path fill="#fff" fill-opacity=".6" d="m9 16.22 7.5 4.35v-7.7z"/></svg>',
     USDC: '<svg class="w-7 h-7 flex-shrink-0" viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="16" fill="#2775CA"/><path fill="#fff" d="M20.2 18.1c0-2.2-1.3-3-4-3.3-1.9-.3-2.3-.8-2.3-1.7s.7-1.4 1.9-1.4c1.1 0 1.8.4 2.1 1.3.1.2.3.3.4.3h1c.3 0 .5-.2.5-.5v-.1a3.2 3.2 0 0 0-2.8-2.6V8.9c0-.3-.2-.5-.6-.5h-.9c-.3 0-.5.2-.6.5v1.2c-1.9.3-3.1 1.5-3.1 3.1 0 2.1 1.3 2.9 4 3.2 1.8.3 2.3.7 2.3 1.7s-.9 1.7-2.1 1.7c-1.6 0-2.2-.7-2.4-1.6-.1-.2-.3-.4-.5-.4h-1c-.3 0-.5.2-.5.5v.1c.3 1.6 1.3 2.7 3.3 3v1.2c0 .3.2.5.6.5h.9c.3 0 .5-.2.6-.5v-1.2c1.9-.3 3.2-1.6 3.2-3.3z"/><path fill="#fff" d="M12.8 24.6a9 9 0 0 1 0-17.2c.3-.1.5-.4.5-.7V5.8c0-.3-.2-.5-.4-.5h-.2a10.9 10.9 0 0 0 0 21.4c.3.1.5 0 .6-.3v-1.1c0-.3-.2-.6-.5-.7zm6.6-19.3c-.3-.1-.5 0-.6.3v.9c0 .3.2.6.5.7a9 9 0 0 1 0 17.2c-.3.1-.5.4-.5.7v.9c0 .3.2.5.4.5h.2a10.9 10.9 0 0 0 0-21.4z"/></svg>'
 };
 
@@ -1492,7 +1493,7 @@ const HISTORY_BADGES = {
 
 /** Token chip: logo + ticker */
 function tokenChip(symbol) {
-    const icon = (ICONS[symbol === 'WPOL' ? 'POL' : symbol === 'USDC.e' ? 'USDC' : symbol] || '').replace('w-7 h-7', 'w-4 h-4');
+    const icon = (ICONS[{ WPOL: 'POL', 'USDC.e': 'USDC', WETH: 'ETH' }[symbol] || symbol] || '').replace('w-7 h-7', 'w-4 h-4');
     const fallback = `<span class="w-4 h-4 rounded-full bg-[#444] text-[9px] font-bold text-white flex items-center justify-center flex-shrink-0">${Utils.escapeHtml(symbol.slice(0, 1))}</span>`;
     return `<span class="inline-flex items-center gap-1.5 pl-1 pr-2 py-0.5 rounded-full bg-[#2C2C2C] text-xs font-semibold text-gray-200 whitespace-nowrap">${icon || fallback}${Utils.escapeHtml(symbol)}</span>`;
 }
