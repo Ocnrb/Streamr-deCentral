@@ -26,7 +26,7 @@ jobs:
         run: npx playwright install --with-deps chromium
 
       - name: Tests
-        run: npm test
+        run: npx vite build && npx playwright test tests/login.spec.mjs --project app --repeat-each 8   # TEMP: catch the login failure
 
       - name: Test report
         if: failure()
