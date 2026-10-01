@@ -80,6 +80,7 @@
     --container-md: 28rem;
     --container-xl: 36rem;
     --container-2xl: 42rem;
+    --container-3xl: 48rem;
     --container-6xl: 72rem;
     --text-xs: 0.75rem;
     --text-xs--line-height: calc(1 / 0.75);
@@ -870,6 +871,9 @@
   }
   .max-w-2xl {
     max-width: var(--container-2xl);
+  }
+  .max-w-3xl {
+    max-width: var(--container-3xl);
   }
   .max-w-6xl {
     max-width: var(--container-6xl);
@@ -2343,6 +2347,9 @@
     --tw-tracking: var(--tracking-widest);
     letter-spacing: var(--tracking-widest);
   }
+  .text-balance {
+    text-wrap: balance;
+  }
   .\[overflow-wrap\:anywhere\] {
     overflow-wrap: anywhere;
   }
@@ -3799,6 +3806,12 @@
     @media (width >= 40rem) {
       font-size: var(--text-xs);
       line-height: var(--tw-leading, var(--text-xs--line-height));
+    }
+  }
+  .sm\:leading-tight {
+    @media (width >= 40rem) {
+      --tw-leading: var(--leading-tight);
+      line-height: var(--leading-tight);
     }
   }
   .sm\:tracking-wider {
