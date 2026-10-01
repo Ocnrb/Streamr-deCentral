@@ -1,0 +1,101 @@
+<!-- Race View -->
+<div id="race-view" class="hidden p-4 md:p-6 space-y-4 md:space-y-8">
+
+    <!-- Main Card Container -->
+    <div class="w-full bg-[#1E1E1E] rounded-xl border border-[#333333] shadow-2xl flex flex-col relative h-auto">
+
+        <!-- HEADER PANEL - scrolls with content -->
+        <div class="flex flex-col px-4 sm:px-6 py-4 border-b border-[#333333] bg-[#1E1E1E] gap-4 rounded-t-xl">
+
+            <!-- First Row: Title and Controls -->
+            <div class="flex items-center justify-between gap-4 flex-wrap">
+
+                <!-- LEFT -->
+                <div class="flex flex-col min-w-[140px]">
+                    <h2 class="text-xl font-bold text-white flex items-center gap-2">
+                        <svg class="w-5 h-5 text-yellow-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"></path><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"></path><path d="M4 22h16"></path><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"></path><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"></path><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"></path></svg>
+                        <span id="header-title">Operator Race</span>
+                    </h2>
+                    <p class="text-xs text-gray-500">Since Nov '23</p>
+                </div>
+
+                <!-- CENTER-LEFT: Metric Toggle -->
+                <div class="flex bg-[#121212] rounded-lg p-1 border border-[#333333]">
+                    <button id="btn-metric-stake" class="toggle-btn active px-4 py-1.5 text-xs font-semibold rounded text-gray-400 hover:text-white min-w-[70px]">
+                        Stake
+                    </button>
+                    <button id="btn-metric-earnings" class="toggle-btn px-4 py-1.5 text-xs font-semibold rounded text-gray-400 hover:text-white min-w-[70px]">
+                        Earnings
+                    </button>
+                </div>
+
+                <!-- RIGHT - Legacy Toggle and Loading -->
+                <div class="flex items-center gap-4 ml-auto">
+
+                    <label class="flex items-center gap-2 cursor-pointer group select-none">
+                        <div class="relative">
+                            <input type="checkbox" id="toggle-filter" class="sr-only peer">
+                            <div class="w-8 h-4 bg-[#333333] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-blue-800"></div>
+                        </div>
+                        <span class="text-xs font-medium text-gray-500 group-hover:text-gray-300 transition-colors whitespace-nowrap">Hide Legacy</span>
+                    </label>
+
+                    <div id="loading-mini" class="hidden">
+                        <svg class="w-4 h-4 animate-spin text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="2" x2="12" y2="6"></line><line x1="12" y1="18" x2="12" y2="22"></line><line x1="4.93" y1="4.93" x2="7.76" y2="7.76"></line><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"></line><line x1="2" y1="12" x2="6" y2="12"></line><line x1="18" y1="12" x2="22" y2="12"></line><line x1="4.93" y1="19.07" x2="7.76" y2="16.24"></line><line x1="16.24" y1="7.76" x2="19.07" y2="4.93"></line></svg>
+                    </div>
+                </div>
+            </div>
+
+            <div class="flex items-center gap-2 sm:gap-4 bg-[#151515] px-3 sm:px-4 py-2 rounded-full border border-[#333] shadow-inner w-full">
+
+                <button id="btn-play" class="w-6 h-6 flex items-center justify-center bg-white/10 hover:bg-white/20 text-white rounded-full transition shadow-sm group shrink-0">
+                    <i data-lucide="play" class="w-3 h-3 ml-0.5 fill-current"></i>
+                </button>
+
+                <input type="range" id="timeline-slider" min="0" value="0" step="1" class="w-full h-1.5 cursor-pointer">
+
+                <button id="btn-speed" class="icon-btn text-gray-400 hover:text-white p-1 rounded-full shrink-0" title="Speed">
+                    <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 19 22 12 13 5 13 19"></polygon><polygon points="2 19 11 12 2 5 2 19"></polygon></svg>
+                </button>
+
+                <span id="lbl-current-date" class="text-xs font-mono text-gray-400 min-w-[60px] sm:min-w-[70px] text-center border-l border-[#333] pl-2 sm:pl-3">
+                    --
+                </span>
+            </div>
+        </div>
+
+        <!-- MAIN CONTENT -->
+        <div class="relative w-full bg-[#1E1E1E] rounded-b-xl min-h-[400px]">
+
+            <!-- LOADING STATE -->
+            <div id="loading-state" class="absolute inset-0 flex flex-col items-center justify-center bg-[#1E1E1E] z-20 h-full rounded-b-xl">
+                <div class="w-12 h-12 border-4 border-[#555555] border-t-transparent rounded-full animate-spin mb-4"></div>
+                <p id="loading-text" class="text-gray-300 font-medium text-sm">Initializing...</p>
+                <div class="w-56 mt-4 bg-[#333333] rounded-full h-2 overflow-hidden">
+                    <div id="loading-bar" class="bg-blue-800 h-full w-0 transition-all duration-300"></div>
+                </div>
+            </div>
+
+            <!-- ERROR STATE -->
+            <div id="error-state" class="hidden absolute inset-0 flex flex-col items-center justify-center bg-[#1E1E1E] z-20 text-red-400 p-6 text-center h-full rounded-b-xl">
+                <svg class="w-10 h-10 mb-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+                <p id="error-msg" class="font-semibold text-sm">Unknown error</p>
+                <button id="btn-try-again" class="mt-4 px-6 py-2 bg-[#333333] hover:bg-[#444444] text-white rounded text-sm font-bold border border-[#444444]">Try Again</button>
+            </div>
+
+            <!-- CHART AREA -->
+            <div id="chart-area" class="hidden w-full px-4 sm:px-6 md:px-8 py-4 sm:py-6 relative overflow-x-hidden">
+
+                <div class="absolute bottom-3 right-4 sm:bottom-4 sm:right-6 md:right-8 text-right pointer-events-none z-0 select-none opacity-60">
+                    <div id="bg-year-display" class="text-4xl sm:text-5xl md:text-6xl font-black text-[#333] tracking-tighter transition-colors leading-none">----</div>
+                    <div id="bg-day-display" class="text-2xl sm:text-3xl md:text-4xl font-bold text-[#444] tracking-tight mt-1">-- --</div>
+                </div>
+
+                <!-- Bars Container -->
+                <div id="bars-container" class="chart-container z-10 w-full transition-all duration-300">
+                    <!-- Bars injected via JS -->
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

@@ -1,0 +1,200 @@
+<!-- Create Stream Modal -->
+<div id="createStreamModal" class="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-3 sm:p-4 z-50 hidden">
+    <div class="bg-[#1E1E1E] rounded-xl max-w-2xl w-full text-gray-300 border border-[#333333] shadow-2xl max-h-[92vh] flex flex-col">
+        <!-- Header -->
+        <div class="flex items-center justify-between px-5 sm:px-6 py-4 border-b border-[#333] flex-shrink-0">
+            <h2 id="create-stream-title" class="text-xl font-bold text-white">Create Stream</h2>
+            <button id="create-stream-close" class="p-1.5 text-gray-500 hover:text-white hover:bg-[#333] rounded-lg transition-colors" title="Close">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+            </button>
+        </div>
+
+        <!-- Form (scrollable) -->
+        <div id="create-stream-form" class="px-5 sm:px-6 py-5 space-y-6 overflow-y-auto">
+
+            <!-- Stream ID -->
+            <section class="space-y-3">
+                <h3 class="text-sm font-semibold text-gray-200">Stream ID</h3>
+                <div id="create-stream-id-inputs" class="space-y-3">
+                <div class="grid sm:grid-cols-2 gap-3">
+                    <div>
+                        <label for="create-stream-domain" class="block text-xs text-gray-400 mb-1">Domain</label>
+                        <select id="create-stream-domain" class="w-full p-2.5 bg-[#121212] border border-[#333] rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50">
+                            <!-- Populated by JS -->
+                        </select>
+                    </div>
+                    <div id="create-stream-ens-wrapper" class="hidden">
+                        <label for="create-stream-ens" class="block text-xs text-gray-400 mb-1">ENS name</label>
+                        <input id="create-stream-ens" type="text" placeholder="yourname.eth" autocomplete="off" spellcheck="false"
+                            class="w-full p-2.5 bg-[#121212] border border-[#333] rounded-lg text-white text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500/50">
+                    </div>
+                </div>
+                <p id="create-stream-ens-status" class="hidden text-xs"></p>
+                <div>
+                    <label for="create-stream-name" class="block text-xs text-gray-400 mb-1">Stream name</label>
+                    <div class="flex items-center bg-[#121212] border border-[#333] rounded-lg focus-within:ring-2 focus-within:ring-blue-500/50">
+                        <span class="pl-3 text-gray-500 font-mono text-sm">/</span>
+                        <input id="create-stream-name" type="text" placeholder="my-stream" autocomplete="off" spellcheck="false"
+                            class="flex-1 min-w-0 p-2.5 pl-1 bg-transparent text-white text-sm font-mono focus:outline-none">
+                    </div>
+                    <p class="mt-1 text-xs text-gray-500">Letters, numbers and <span class="font-mono">- _ . /</span></p>
+                </div>
+                </div>
+                <div class="p-3 bg-[#121212] border border-[#333] rounded-lg">
+                    <p class="text-xs text-gray-500 mb-1">Full stream ID</p>
+                    <p id="create-stream-id-preview" class="font-mono text-sm text-white break-all">--</p>
+                    <p id="create-stream-name-status" class="hidden mt-1 text-xs"></p>
+                </div>
+            </section>
+
+            <!-- Description + Partitions -->
+            <section class="grid sm:grid-cols-[1fr_140px] gap-3">
+                <div>
+                    <label for="create-stream-description" class="block text-xs text-gray-400 mb-1">Description <span class="text-gray-600">(optional)</span></label>
+                    <textarea id="create-stream-description" rows="2" placeholder="What is published on this stream?"
+                        class="w-full p-2.5 bg-[#121212] border border-[#333] rounded-lg text-white text-sm resize-y focus:outline-none focus:ring-2 focus:ring-blue-500/50"></textarea>
+                </div>
+                <div>
+                    <label for="create-stream-partitions" class="block text-xs text-gray-400 mb-1">Partitions</label>
+                    <input id="create-stream-partitions" type="number" min="1" max="100" step="1" value="1"
+                        class="w-full p-2.5 bg-[#121212] border border-[#333] rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50">
+                    <p class="mt-1 text-xs text-gray-500">1 to 100</p>
+                </div>
+            </section>
+
+            <!-- Access control -->
+            <section class="space-y-3">
+                <h3 class="text-sm font-semibold text-gray-200">Access</h3>
+                <p id="create-stream-perms-note" class="hidden p-2.5 bg-yellow-500/10 border border-yellow-500/30 rounded-lg text-xs text-yellow-400"></p>
+                <div id="create-stream-access" class="grid grid-cols-2 sm:grid-cols-4 gap-1 bg-[#121212] p-1 rounded-lg border border-[#333]">
+                    <button type="button" data-access="private" class="px-2 py-2 text-xs font-medium rounded-md text-gray-400 hover:text-white transition-colors">Private</button>
+                    <button type="button" data-access="public-subscribe" class="px-2 py-2 text-xs font-medium rounded-md text-gray-400 hover:text-white transition-colors">Public read</button>
+                    <button type="button" data-access="public-publish" class="px-2 py-2 text-xs font-medium rounded-md text-gray-400 hover:text-white transition-colors">Public write</button>
+                    <button type="button" data-access="public-all" class="px-2 py-2 text-xs font-medium rounded-md text-gray-400 hover:text-white transition-colors">Public read &amp; write</button>
+                </div>
+                <p id="create-stream-access-hint" class="text-xs text-gray-500"></p>
+
+                <div class="border border-[#333] rounded-lg overflow-x-auto">
+                    <table class="w-full text-sm min-w-[520px]">
+                        <thead class="text-xs text-gray-500 uppercase bg-[#252525]">
+                            <tr>
+                                <th class="px-3 py-2 text-left">Address</th>
+                                <th class="px-2 py-2 text-center">Pub</th>
+                                <th class="px-2 py-2 text-center">Sub</th>
+                                <th class="px-2 py-2 text-center">Edit</th>
+                                <th class="px-2 py-2 text-center">Del</th>
+                                <th class="px-2 py-2 text-center">Grant</th>
+                                <th class="px-2 py-2"></th>
+                            </tr>
+                        </thead>
+                        <tbody id="create-stream-perms-tbody" class="divide-y divide-[#333]">
+                            <!-- Rows rendered by JS -->
+                        </tbody>
+                    </table>
+                </div>
+                <button id="create-stream-add-perm" type="button" class="flex items-center gap-1.5 text-sm text-blue-400 hover:text-blue-300 font-medium">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/></svg>
+                    Add address
+                </button>
+            </section>
+
+            <!-- Storage -->
+            <section class="space-y-3">
+                <h3 class="text-sm font-semibold text-gray-200">Storage <span class="text-gray-600 font-normal">(optional)</span></h3>
+                <p class="text-xs text-gray-500">Storage nodes keep the stream's history so it can be fetched later (resend).</p>
+                <div class="flex gap-2">
+                    <select id="create-stream-storage-select" class="flex-1 min-w-0 p-2.5 bg-[#121212] border border-[#333] rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50">
+                        <option value="">Loading storage nodes...</option>
+                    </select>
+                    <button id="create-stream-storage-add-select" type="button" class="px-3 bg-[#333] hover:bg-[#444] text-white text-sm font-medium rounded-lg transition-colors flex-shrink-0">Add</button>
+                </div>
+                <div class="flex gap-2">
+                    <input id="create-stream-storage-custom" type="text" placeholder="Or paste a storage node address (0x...)" autocomplete="off" spellcheck="false"
+                        class="flex-1 min-w-0 p-2.5 bg-[#121212] border border-[#333] rounded-lg text-white text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500/50">
+                    <button id="create-stream-storage-add-custom" type="button" class="px-3 bg-[#333] hover:bg-[#444] text-white text-sm font-medium rounded-lg transition-colors flex-shrink-0">Add</button>
+                </div>
+                <div id="create-stream-storage-list" class="space-y-2">
+                    <!-- Selected nodes rendered by JS -->
+                </div>
+                <div id="create-stream-ttl-wrapper" class="hidden">
+                    <label for="create-stream-ttl" class="block text-xs text-gray-400 mb-1">TTL (days to keep data)</label>
+                    <input id="create-stream-ttl" type="number" min="1" step="1" value="365"
+                        class="w-40 p-2.5 bg-[#121212] border border-[#333] rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50">
+                </div>
+            </section>
+
+            <!-- Cost estimate -->
+            <section class="p-4 bg-[#121212] border border-[#333] rounded-lg space-y-2">
+                <h3 class="text-sm font-semibold text-gray-200">Estimated cost</h3>
+                <ul id="create-stream-tx-list" class="text-xs text-gray-400 space-y-1">
+                    <!-- Transactions rendered by JS -->
+                </ul>
+                <div class="flex justify-between items-baseline pt-2 border-t border-[#333]">
+                    <span class="text-sm text-gray-400">Total</span>
+                    <span id="create-stream-cost" class="text-lg font-semibold text-white">--</span>
+                </div>
+                <div class="flex justify-between items-baseline text-xs">
+                    <span class="text-gray-500">Your balance</span>
+                    <span id="create-stream-balance" class="text-gray-400">--</span>
+                </div>
+                <p id="create-stream-cost-note" class="text-xs text-gray-500"></p>
+            </section>
+
+            <!-- Progress (shown while submitting) -->
+            <section id="create-stream-progress" class="hidden p-4 bg-[#121212] border border-[#333] rounded-lg">
+                <h3 class="text-sm font-semibold text-gray-200 mb-3">Progress</h3>
+                <ol id="create-stream-progress-list" class="space-y-2 text-sm">
+                    <!-- Steps rendered by JS -->
+                </ol>
+            </section>
+
+            <p id="create-stream-error" class="hidden p-3 bg-red-500/10 border border-red-500/30 rounded-lg text-sm text-red-400 break-words"></p>
+
+            <!-- Danger zone (edit mode, wallet with DELETE permission) -->
+            <section id="create-stream-danger-zone" class="hidden p-4 border border-red-500/30 rounded-lg flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                    <h3 class="text-sm font-semibold text-red-400">Delete this stream</h3>
+                    <p class="text-xs text-gray-500 mt-0.5">Removes the stream from the Stream Registry. This cannot be undone.</p>
+                </div>
+                <button id="create-stream-delete-open" type="button" class="px-4 py-2 border border-red-500/50 text-red-400 hover:bg-red-500/10 text-sm font-semibold rounded-lg transition-colors flex-shrink-0">Delete Stream</button>
+            </section>
+        </div>
+
+        <!-- Delete confirmation (replaces the form) -->
+        <div id="create-stream-delete-panel" class="hidden px-5 sm:px-6 py-5 space-y-4 overflow-y-auto">
+            <div class="p-4 bg-red-500/10 border border-red-500/40 rounded-lg space-y-2">
+                <div class="flex items-center gap-2 text-red-400 font-semibold">
+                    <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>
+                    This action is irreversible
+                </div>
+                <ul class="text-sm text-gray-300 list-disc pl-5 space-y-1">
+                    <li>The stream, its metadata and all permissions are removed on-chain.</li>
+                    <li>Publishers and subscribers stop working immediately.</li>
+                    <li>Stored data can no longer be accessed through this stream.</li>
+                    <li>The same stream ID can be created again later, but as a new, empty stream.</li>
+                </ul>
+            </div>
+            <div class="p-3 bg-[#121212] border border-[#333] rounded-lg">
+                <p class="text-xs text-gray-500 mb-1">Stream to delete</p>
+                <p id="create-stream-delete-id" class="font-mono text-sm text-white break-all">--</p>
+            </div>
+            <p id="create-stream-delete-sponsorships" class="hidden p-3 bg-yellow-500/10 border border-yellow-500/30 rounded-lg text-xs text-yellow-400"></p>
+            <div class="flex justify-between items-baseline text-sm">
+                <span class="text-gray-400">Estimated cost</span>
+                <span id="create-stream-delete-cost" class="font-mono text-white">--</span>
+            </div>
+            <button id="create-stream-delete-hold" type="button" class="relative w-full overflow-hidden select-none touch-none bg-red-500/15 border border-red-500/60 text-red-300 font-bold py-3 px-4 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed">
+                <span id="create-stream-delete-fill" class="absolute inset-y-0 left-0 w-0 bg-red-600"></span>
+                <span id="create-stream-delete-label" class="relative flex items-center justify-center gap-2">Hold 2s to delete</span>
+            </button>
+            <p id="create-stream-delete-error" class="hidden p-3 bg-red-500/10 border border-red-500/30 rounded-lg text-sm text-red-400 break-words"></p>
+            <button id="create-stream-delete-back" type="button" class="w-full bg-[#444444] hover:bg-[#555555] text-white font-bold py-3 px-4 rounded-lg transition-colors">Back</button>
+        </div>
+
+        <!-- Footer -->
+        <div id="create-stream-footer" class="flex gap-3 px-5 sm:px-6 py-4 border-t border-[#333] flex-shrink-0">
+            <button id="create-stream-cancel" type="button" class="w-full bg-[#444444] hover:bg-[#555555] text-white font-bold py-3 px-4 rounded-lg transition-colors">Cancel</button>
+            <button id="create-stream-submit" type="button" class="w-full bg-blue-800 hover:bg-blue-900 text-white font-bold py-3 px-4 rounded-lg transition-colors flex justify-center items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-blue-800">Create Stream</button>
+        </div>
+    </div>
+</div>

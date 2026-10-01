@@ -1,0 +1,112 @@
+<!-- Sponsorship Modal: New Sponsorship (Stream Details) / Add Funds (Sponsorship Details) -->
+<div id="sponsorshipFormModal" class="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-3 sm:p-4 z-50 hidden">
+    <div class="bg-[#1E1E1E] rounded-xl max-w-xl w-full text-gray-300 border border-[#333333] shadow-2xl max-h-[92vh] flex flex-col">
+        <div class="flex items-center justify-between px-5 sm:px-6 py-4 border-b border-[#333] flex-shrink-0">
+            <h2 id="sponsorship-form-title" class="text-xl font-bold text-white">New Sponsorship</h2>
+            <button id="sponsorship-form-close" class="p-1.5 text-gray-500 hover:text-white hover:bg-[#333] rounded-lg transition-colors" title="Close">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+            </button>
+        </div>
+
+        <div id="sponsorship-form-body" class="px-5 sm:px-6 py-5 space-y-5 overflow-y-auto">
+            <!-- Target: stream (create) or sponsorship (fund) -->
+            <div class="p-3 bg-[#121212] border border-[#333] rounded-lg text-sm space-y-1">
+                <div>
+                    <span class="block text-xs text-gray-500">Stream</span>
+                    <span id="sponsorship-form-stream" class="block font-mono text-gray-200 [overflow-wrap:anywhere]">--</span>
+                </div>
+                <div id="sponsorship-form-target-fund" class="hidden space-y-1">
+                    <div class="flex justify-between gap-3"><span class="text-gray-500">Sponsorship</span><span id="sponsorship-form-sponsorship" class="font-mono text-gray-200">--</span></div>
+                    <div class="flex justify-between gap-3"><span class="text-gray-500">Remaining</span><span id="sponsorship-form-remaining" class="text-gray-200">--</span></div>
+                    <div class="flex justify-between gap-3"><span class="text-gray-500">Payout</span><span id="sponsorship-form-payout" class="text-gray-200">--</span></div>
+                    <div class="flex justify-between gap-3"><span class="text-gray-500">Expires</span><span id="sponsorship-form-expires" class="text-gray-200">--</span></div>
+                </div>
+            </div>
+
+            <!-- Amount (both modes) -->
+            <div>
+                <div class="flex justify-between items-baseline mb-1">
+                    <label for="sponsorship-form-amount" id="sponsorship-form-amount-label" class="block text-xs text-gray-400">Initial funding</label>
+                    <span class="text-xs text-gray-500">Balance: <button id="sponsorship-form-max" type="button" class="text-gray-300 hover:text-white underline-offset-2 hover:underline" title="Use the whole balance"><span id="sponsorship-form-data-balance">--</span> DATA</button></span>
+                </div>
+                <div class="flex items-center bg-[#121212] border border-[#333] rounded-lg focus-within:ring-2 focus-within:ring-blue-500/50">
+                    <input id="sponsorship-form-amount" type="number" min="0" step="any" placeholder="0" class="flex-1 min-w-0 p-2.5 bg-transparent text-white text-sm focus:outline-none disabled:opacity-50">
+                    <span class="pr-3 text-gray-500 text-sm">DATA</span>
+                </div>
+                <p id="sponsorship-form-amount-status" class="hidden mt-1 text-xs"></p>
+            </div>
+
+            <!-- Create mode -->
+            <section id="sponsorship-form-create" class="space-y-4">
+                <div>
+                    <label for="sponsorship-form-rate" class="block text-xs text-gray-400 mb-1">Payout rate</label>
+                    <div class="flex items-center bg-[#121212] border border-[#333] rounded-lg focus-within:ring-2 focus-within:ring-blue-500/50">
+                        <input id="sponsorship-form-rate" type="number" min="0" step="any" placeholder="0" class="flex-1 min-w-0 p-2.5 bg-transparent text-white text-sm focus:outline-none disabled:opacity-50">
+                        <span class="pr-3 text-gray-500 text-sm whitespace-nowrap">DATA / day</span>
+                    </div>
+                    <p class="mt-1 text-xs text-gray-500">Paid to the staked operators, split by stake.</p>
+                </div>
+                <div class="grid sm:grid-cols-3 gap-3">
+                    <div>
+                        <label for="sponsorship-form-min-stake" class="block text-xs text-gray-400 mb-1">Min stake duration</label>
+                        <div class="flex items-center bg-[#121212] border border-[#333] rounded-lg focus-within:ring-2 focus-within:ring-blue-500/50">
+                            <input id="sponsorship-form-min-stake" type="number" min="0" step="1" value="0" class="flex-1 min-w-0 p-2.5 bg-transparent text-white text-sm focus:outline-none disabled:opacity-50">
+                            <span class="pr-3 text-gray-500 text-sm">days</span>
+                        </div>
+                    </div>
+                    <div>
+                        <label for="sponsorship-form-min-ops" class="block text-xs text-gray-400 mb-1">Min operators</label>
+                        <input id="sponsorship-form-min-ops" type="number" min="1" step="1" value="1" class="w-full p-2.5 bg-[#121212] border border-[#333] rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 disabled:opacity-50">
+                    </div>
+                    <div>
+                        <label for="sponsorship-form-max-ops" class="block text-xs text-gray-400 mb-1">Max operators <span class="text-gray-600">(optional)</span></label>
+                        <input id="sponsorship-form-max-ops" type="number" min="1" step="1" placeholder="No limit" class="w-full p-2.5 bg-[#121212] border border-[#333] rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 disabled:opacity-50">
+                    </div>
+                </div>
+                <p class="text-xs text-gray-500">Operators who leave before the minimum stake duration are penalized. Payouts start once the minimum number of operators has joined.</p>
+            </section>
+
+            <!-- Effect of the amount -->
+            <p id="sponsorship-form-effect" class="hidden p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg text-sm text-blue-200"></p>
+
+            <p class="flex gap-2 p-3 bg-yellow-500/10 border border-yellow-500/30 rounded-lg text-xs text-yellow-300">
+                <svg class="w-4 h-4 flex-shrink-0 mt-px" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v3.75m0 3.75h.008M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/></svg>
+                <span>Sponsoring is final: the DATA can't be withdrawn. It is paid out to the staked operators over time.</span>
+            </p>
+
+            <!-- Cost estimate -->
+            <section class="p-4 bg-[#121212] border border-[#333] rounded-lg space-y-2">
+                <div class="flex justify-between items-baseline">
+                    <span class="text-sm text-gray-400">Network fee</span>
+                    <span id="sponsorship-form-cost" class="text-lg font-semibold text-white">--</span>
+                </div>
+                <div class="flex justify-between items-baseline text-xs">
+                    <span class="text-gray-500">Your POL balance</span>
+                    <span id="sponsorship-form-balance" class="text-gray-400">--</span>
+                </div>
+                <p id="sponsorship-form-cost-note" class="text-xs text-gray-500"></p>
+            </section>
+
+            <section id="sponsorship-form-progress" class="hidden p-4 bg-[#121212] border border-[#333] rounded-lg">
+                <h3 class="text-sm font-semibold text-gray-200 mb-3">Progress</h3>
+                <ol id="sponsorship-form-progress-list" class="space-y-2 text-sm"></ol>
+            </section>
+
+            <section id="sponsorship-form-success" class="hidden p-4 bg-green-500/10 border border-green-500/30 rounded-lg space-y-2">
+                <p id="sponsorship-form-success-title" class="text-sm font-semibold text-green-400"></p>
+                <p id="sponsorship-form-success-text" class="text-xs text-gray-300"></p>
+                <a id="sponsorship-form-success-link" href="#" class="hidden inline-flex items-center gap-1.5 text-sm font-semibold text-blue-400 hover:text-blue-300">
+                    Open sponsorship
+                    <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+                </a>
+            </section>
+
+            <p id="sponsorship-form-error" class="hidden p-3 bg-red-500/10 border border-red-500/30 rounded-lg text-sm text-red-400 break-words"></p>
+        </div>
+
+        <div class="flex gap-3 px-5 sm:px-6 py-4 border-t border-[#333] flex-shrink-0">
+            <button id="sponsorship-form-cancel" type="button" class="w-full bg-[#444444] hover:bg-[#555555] text-white font-bold py-3 px-4 rounded-lg transition-colors">Cancel</button>
+            <button id="sponsorship-form-submit" type="button" class="w-full bg-blue-800 hover:bg-blue-900 text-white font-bold py-3 px-4 rounded-lg transition-colors flex justify-center items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-blue-800">Create Sponsorship</button>
+        </div>
+    </div>
+</div>

@@ -1,0 +1,69 @@
+<!-- ===== DELEGATOR DATA MODAL ===== -->
+<div id="delegator-data-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 md:p-8">
+    <div class="bg-[#1E1E1E] w-full h-full max-w-6xl rounded-xl border border-[#333] flex flex-col shadow-2xl overflow-hidden relative">
+        <!-- Header -->
+        <div class="p-5 border-b border-[#333] flex justify-between items-center bg-[#1E1E1E] shrink-0">
+            <div class="flex items-center gap-3">
+                <div class="h-9 w-9 rounded-lg bg-[#2a2a2a] flex items-center justify-center">
+                    <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16"/>
+                    </svg>
+                </div>
+                <div>
+                    <h2 id="delegator-modal-title" class="text-lg font-bold text-white">Data Table</h2>
+                    <p class="text-xs text-gray-500">Detailed records</p>
+                </div>
+            </div>
+            <button data-delegators-action="closeDataModal" class="p-2 hover:bg-[#2a2a2a] rounded-lg text-gray-400 hover:text-white transition-colors">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                </svg>
+            </button>
+        </div>
+
+        <!-- Content -->
+        <div class="flex-1 overflow-y-auto bg-[#121212] p-6">
+            <!-- History Content -->
+            <div id="delegator-modal-content-history" class="hidden">
+                <div class="flex justify-between items-center mb-4">
+                    <span id="delegator-tx-count" class="text-[10px] font-mono text-gray-400 bg-[#1E1E1E] border border-[#333] px-2 py-1 rounded">0 txs</span>
+                </div>
+                <div class="overflow-x-auto border border-[#333] rounded-lg">
+                    <table class="w-full text-xs text-left">
+                        <thead class="text-[10px] text-gray-500 uppercase bg-[#1E1E1E] font-semibold tracking-wider">
+                            <tr>
+                                <th class="px-6 py-3">Date</th>
+                                <th class="px-6 py-3">Action</th>
+                                <th class="px-6 py-3">Operator</th>
+                                <th class="px-6 py-3 text-right">Value</th>
+                                <th class="px-6 py-3 text-center">Hash</th>
+                            </tr>
+                        </thead>
+                        <tbody id="delegator-history-table-body" class="bg-[#1E1E1E]/30 text-gray-300"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Delegations Content -->
+            <div id="delegator-modal-content-delegations" class="hidden">
+                <div class="flex justify-between items-center mb-4">
+                    <span class="text-xs font-medium text-gray-500 uppercase tracking-wider">Source: The Graph</span>
+                </div>
+                <div class="overflow-x-auto border border-[#333] rounded-lg">
+                    <table class="w-full text-xs text-left">
+                        <thead class="text-[10px] text-gray-500 uppercase bg-[#1E1E1E] font-semibold tracking-wider">
+                            <tr>
+                                <th class="px-6 py-3">Operator</th>
+                                <th class="px-6 py-3 text-right">Current Stake</th>
+                                <th class="px-6 py-3 text-right">Latest Action</th>
+                                <th class="px-6 py-3 text-right text-gray-500">Share %</th>
+                                <th class="px-6 py-3 text-center">Link</th>
+                            </tr>
+                        </thead>
+                        <tbody id="delegator-delegations-table-body" class="bg-[#1E1E1E]/30 text-gray-300"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

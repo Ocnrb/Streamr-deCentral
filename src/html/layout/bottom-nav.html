@@ -1,0 +1,148 @@
+<!-- ===== BOTTOM NAVIGATION (Mobile) - hidden until login ===== -->
+<nav id="bottom-nav" class="hidden fixed bottom-0 left-0 right-0 z-40 bg-[#1A1A1A]/95 backdrop-blur-md border-t border-[#2a2a2a] safe-area-bottom">
+    <div class="flex justify-around items-center h-16 px-2">
+        <!-- Overview -->
+        <a href="/" data-nav="overview" class="bottom-nav-item flex flex-col items-center justify-center gap-1 px-1 py-2 min-w-[48px] text-gray-400 transition-colors">
+            <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg>
+            <span class="text-[10px] font-medium">Overview</span>
+        </a>
+
+        <!-- Streams -->
+        <a href="/streams" data-nav="streams" class="bottom-nav-item flex flex-col items-center justify-center gap-1 px-1 py-2 min-w-[48px] text-gray-400 transition-colors">
+            <span aria-hidden="true" class="icon-mask w-6 h-6" style="--icon: url(/assets/stream_icon.png)"></span>
+            <span class="text-[10px] font-medium">Streams</span>
+        </a>
+
+        <!-- Operators -->
+        <a href="/operators" data-nav="operators" class="bottom-nav-item flex flex-col items-center justify-center gap-1 px-1 py-2 min-w-[48px] text-gray-400 transition-colors">
+            <span aria-hidden="true" class="icon-mask w-6 h-6" style="--icon: url(/assets/operator_icon.png)"></span>
+            <span class="text-[10px] font-medium">Operators</span>
+        </a>
+
+        <!-- Delegators --> 
+        <a href="/delegators" data-nav="delegators" class="bottom-nav-item flex flex-col items-center justify-center gap-1 px-1 py-2 min-w-[48px] text-gray-400 transition-colors">
+            <span aria-hidden="true" class="icon-mask w-6 h-6" style="--icon: url(/assets/delegator_icon.png)"></span>
+            <span class="text-[10px] font-medium">Delegators</span>
+        </a>
+
+        <!-- Autostaker -->
+        <button id="bottom-nav-autostaker" class="bottom-nav-item flex flex-col items-center justify-center gap-1 px-1 py-2 min-w-[48px] text-gray-400 transition-colors">
+            <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
+                <path d="M13 10V3L4 14h7v7l9-11h-7z"/>
+            </svg>
+            <span class="text-[10px] font-medium">Autostaker</span>
+        </button>
+
+        <!-- More -->
+        <div class="relative">
+            <button id="bottom-nav-more" class="bottom-nav-item flex flex-col items-center justify-center gap-1 px-1 py-2 min-w-[48px] text-gray-400 transition-colors">
+                <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="1"/>
+                    <circle cx="19" cy="12" r="1"/>
+                    <circle cx="5" cy="12" r="1"/>
+                </svg>
+                <span class="text-[10px] font-medium">More</span>
+            </button>
+
+            <!-- More Dropdown Menu -->
+            <div id="bottom-nav-more-menu" class="hidden absolute bottom-full right-0 mb-2 w-48 bg-[#1E1E1E] border border-[#333] rounded-lg shadow-xl overflow-hidden">
+                <!-- Operator Profile (hidden by default) -->
+                <a id="mobile-operator-profile-link" href="#" class="hidden items-center gap-3 px-4 py-2.5 text-gray-300 hover:bg-[#2a2a2a] transition-colors">
+                    <img id="mobile-operator-profile-avatar" src="" alt="" class="w-8 h-8 rounded-full border border-blue-500/50 object-cover">
+                    <div class="flex-1 min-w-0">
+                        <span class="text-[8px] font-semibold text-blue-400 uppercase tracking-wider">Operator</span>
+                        <p id="mobile-operator-profile-name" class="text-xs font-medium text-white truncate"></p>
+                    </div>
+                </a>
+
+                <!-- Delegator Profile (hidden by default) -->
+                <a id="mobile-delegator-profile-link" href="#" class="hidden items-center gap-3 px-4 py-2.5 text-gray-300 hover:bg-[#2a2a2a] transition-colors border-b border-[#333]">
+                    <img id="mobile-delegator-profile-avatar" src="" alt="" class="w-8 h-8 rounded-full border border-purple-500/50 object-cover">
+                    <div class="flex-1 min-w-0">
+                        <span class="text-[8px] font-semibold text-purple-400 uppercase tracking-wider">Delegator</span>
+                        <p id="mobile-delegator-profile-name" class="text-xs font-medium text-white truncate"></p>
+                    </div>
+                </a>
+
+                <div class="px-4 pt-3 pb-1 text-[10px] font-semibold text-gray-500 uppercase tracking-widest">Explore</div>
+                <!-- Governance -->
+                <a href="/governance" data-nav="governance" class="flex items-center gap-3 px-4 py-3 text-gray-300 hover:bg-[#2a2a2a] transition-colors">
+                    <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="m16 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z"/>
+                        <path d="m2 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z"/>
+                        <path d="M7 21h10"/>
+                        <path d="M12 3v18"/>
+                        <path d="M3 7h2c2 0 5-1 7-2 2 1 5 2 7 2h2"/>
+                    </svg>
+                    <span class="text-sm font-medium">Governance</span>
+                </a>
+                <div class="px-4 pt-3 pb-1 text-[10px] font-semibold text-gray-500 uppercase tracking-widest">Visualize</div>
+                <!-- Network Map -->
+                <a href="/visual" data-nav="visual" class="flex items-center gap-3 px-4 py-3 text-gray-300 hover:bg-[#2a2a2a] transition-colors">
+                    <svg class="w-6 h-6" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2.33">
+                        <circle cx="16" cy="16" r="5"/>
+                        <circle cx="25" cy="9" r="2"/>
+                        <circle cx="7" cy="7" r="2"/>
+                        <circle cx="7" cy="25" r="2"/>
+                        <circle cx="25" cy="25" r="2"/>
+                        <line x1="20" y1="13" x2="23" y2="11"/>
+                        <line x1="12" y1="13" x2="9" y2="9"/>
+                        <line x1="12" y1="19" x2="9" y2="23"/>
+                        <line x1="20" y1="19" x2="23" y2="23"/>
+                    </svg>
+                    <span class="text-sm font-medium">Network Map</span>
+                </a>
+                <!-- Leaderboard -->
+                <a href="/race" data-nav="race" class="flex items-center gap-3 px-4 py-3 text-gray-300 hover:bg-[#2a2a2a] transition-colors">
+                    <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
+                        <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/>
+                        <path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/>
+                        <path d="M4 22h16"/>
+                        <path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/>
+                        <path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/>
+                        <path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/>
+                    </svg>
+                    <span class="text-sm font-medium">Leaderboard</span>
+                </a>
+                <div class="px-4 pt-3 pb-1 text-[10px] font-semibold text-gray-500 uppercase tracking-widest">Tools</div>
+                <!-- Swap -->
+                <a href="/swap" data-nav="swap" class="flex items-center gap-3 px-4 py-3 text-gray-300 hover:bg-[#2a2a2a] transition-colors">
+                    <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="m16 3 4 4-4 4"/><path d="M20 7H4"/><path d="m8 21-4-4 4-4"/><path d="M4 17h16"/></svg>
+                    <span class="text-sm font-medium">Swap</span>
+                </a>
+                <!-- Bridge -->
+                <a href="/bridge" data-nav="bridge" class="flex items-center gap-3 px-4 py-3 text-gray-300 hover:bg-[#2a2a2a] transition-colors">
+                    <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M2 8h20"/><path d="M4 8v10"/><path d="M20 8v10"/><path d="M4 18a8 8 0 0 1 16 0"/><path d="M8 8v3"/><path d="M12 8v2"/><path d="M16 8v3"/></svg>
+                    <span class="text-sm font-medium">Bridge</span>
+                </a>
+                <div class="px-4 pt-3 pb-1 text-[10px] font-semibold text-gray-500 uppercase tracking-widest">For Developers</div>
+                <!-- Subgraph -->
+                <a href="/subgraph" data-nav="subgraph" class="flex items-center gap-3 px-4 py-3 text-gray-300 hover:bg-[#2a2a2a] transition-colors">
+                    <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M14 2v4a2 2 0 0 0 2 2h4"/>
+                        <path d="M4.268 21a2 2 0 0 0 1.727 1H18a2 2 0 0 0 2-2V7l-5-5H6a2 2 0 0 0-2 2v3"/>
+                        <path d="m9 18-1.5-1.5"/>
+                        <circle cx="5" cy="14" r="3"/>
+                    </svg>
+                    <span class="text-sm font-medium">Subgraph</span>
+                </a>
+
+                <!-- Divider -->
+                <div class="border-t border-[#333]"></div>
+
+                <!-- Settings -->
+                <button id="bottom-nav-settings" class="w-full flex items-center gap-3 px-4 py-3 text-gray-300 hover:bg-[#2a2a2a] transition-colors">
+                    <svg class="w-6 h-6 p-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="3"/>
+                        <path d="M12 1v2m0 18v2M4.22 4.22l1.42 1.42m12.72 12.72l1.42 1.42M1 12h2m18 0h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>
+                    </svg>
+                    <span class="text-sm font-medium">Settings</span>
+                </button>
+
+            </div>
+        </div>
+    </div>
+</nav>
+
+<!-- Overlay to capture clicks when More menu is open (above content, below nav) -->
+<div id="bottom-nav-overlay" class="hidden fixed inset-0 z-30"></div>

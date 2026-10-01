@@ -1,0 +1,154 @@
+<!-- Autostaker Panel (Side Panel with Overlay) -->
+<div id="autostakerOverlay" class="fixed inset-0 bg-black/50 z-40" style="display: none !important;"></div>
+<div id="autostakerModal" class="fixed top-0 right-0 h-full w-full sm:w-96 bg-[#1E1E1E] border-l border-[#333333] shadow-2xl flex flex-col z-50 overflow-hidden" style="display: none !important;">
+    <!-- Panel Header -->
+    <div class="px-4 py-3 border-b border-[#333333] flex items-center justify-between bg-[#1E1E1E] flex-shrink-0 safe-area-top">
+        <div class="flex items-center gap-2 min-w-0">
+            <svg class="w-5 h-5 text-blue-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+            </svg>
+            <h2 class="text-lg font-bold text-white truncate">Autostaker</h2>
+            <span id="autostaker-panel-status" class="ml-2 px-3 sm:px-4 py-1 sm:py-1.5 text-xs rounded-full bg-gray-700 text-gray-400 flex-shrink-0">Stopped</span>
+        </div>
+        <button id="autostaker-modal-close" class="text-gray-400 hover:text-white transition-colors p-2 -mr-1 flex-shrink-0">
+            <svg class="w-6 h-6 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+            </svg>
+        </button>
+    </div>
+
+    <!-- Tabs -->
+    <div class="flex border-b border-[#333333] text-xs flex-shrink-0">
+        <button id="autostaker-tab-settings" class="flex-1 px-3 py-2 font-medium text-white bg-[#2C2C2C] border-b-2 border-blue-500 transition-colors">Settings</button>
+        <button id="autostaker-tab-sponsorships" class="flex-1 px-3 py-2 font-medium text-gray-400 hover:text-white transition-colors">Sponsorships</button>
+        <button id="autostaker-tab-preview" class="flex-1 px-3 py-2 font-medium text-gray-400 hover:text-white transition-colors">Log</button>
+    </div>
+
+    <!-- Tab Content -->
+    <div class="flex-1 overflow-y-auto min-h-0 text-gray-300">
+            <!-- Settings Tab -->
+            <div id="autostaker-content-settings" class="p-4 space-y-4 max-w-full overflow-x-hidden">
+                <!-- Warning Alert (compact) -->
+                <div class="bg-amber-900/30 border border-amber-600/50 rounded-lg p-3">
+                    <div class="flex items-start gap-2">
+                        <svg class="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+                        </svg>
+                        <p class="text-amber-200/80 text-xs">Keep this app open for the bot to work. Works while minimized.</p>
+                    </div>
+                </div>
+
+                <!-- Bot Status & Control -->
+                <div id="autostaker-status" class="bg-[#2C2C2C] rounded-lg p-3 border border-[#333333]">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-sm text-gray-400">Bot Status</span>
+                        <span id="autostaker-status-text" class="text-sm font-medium text-gray-400">
+                            <span class="inline-block w-2 h-2 bg-gray-500 rounded-full mr-1"></span>Stopped
+                        </span>
+                    </div>
+                    <div class="text-xs text-gray-500 mb-3">
+                        <span id="autostaker-last-run">Last run: Never</span>
+                        <span class="mx-2">•</span>
+                        <span id="autostaker-next-run">Next: -</span>
+                    </div>
+                    <button id="autostaker-start-bot" class="w-full px-3 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm font-medium">
+                        Start Bot
+                    </button>
+                </div>
+
+                <!-- Settings -->
+                <div class="space-y-3">
+                    <div>
+                        <label for="autostaker-run-interval" class="block text-xs font-medium text-gray-400 mb-1">
+                            Run Interval (minutes)
+                        </label>
+                        <input type="number" id="autostaker-run-interval" value="5" min="1" max="60" class="w-full p-2 text-sm bg-[#121212] border border-[#333333] rounded-lg text-white focus:outline-none focus:ring-1 focus:ring-blue-500">
+                    </div>
+
+                    <div>
+                        <label for="autostaker-max-sponsorships" class="block text-xs font-medium text-gray-400 mb-1">
+                            Max Sponsorships
+                        </label>
+                        <input type="number" id="autostaker-max-sponsorships" value="20" min="1" max="100" class="w-full p-2 text-sm bg-[#121212] border border-[#333333] rounded-lg text-white focus:outline-none focus:ring-1 focus:ring-blue-500">
+                    </div>
+
+                    <div>
+                        <label for="autostaker-min-transaction" class="block text-xs font-medium text-gray-400 mb-1">
+                            Min Transaction (DATA)
+                        </label>
+                        <input type="number" id="autostaker-min-transaction" value="100" min="1" class="w-full p-2 text-sm bg-[#121212] border border-[#333333] rounded-lg text-white focus:outline-none focus:ring-1 focus:ring-blue-500">
+                    </div>
+
+                    <div>
+                        <label for="autostaker-max-min-operators" class="block text-xs font-medium text-gray-400 mb-1">
+                            Max Min Operators
+                        </label>
+                        <input type="number" id="autostaker-max-min-operators" value="4" min="1" max="50" class="w-full p-2 text-sm bg-[#121212] border border-[#333333] rounded-lg text-white focus:outline-none focus:ring-1 focus:ring-blue-500">
+                    </div>
+
+                    <!-- Auto Collect Section -->
+                    <div class="pt-6 mt-6 border-t border-[#333333]">
+                        <div class="flex items-center justify-between mb-2">
+                            <label class="flex items-center gap-2 cursor-pointer group select-none">
+                                <span class="text-xs font-medium text-gray-400 group-hover:text-gray-300 transition-colors">Auto-Collect Earnings</span>
+                                <div class="relative">
+                                    <input type="checkbox" id="autostaker-auto-collect-enabled" class="sr-only peer" checked>
+                                    <div class="w-8 h-4 bg-[#333333] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-green-600"></div>
+                                </div>
+                            </label>
+                        </div>
+                        <div class="flex items-center justify-between mb-2">
+                            <label class="flex items-center gap-2 cursor-pointer group select-none">
+                                <span class="text-xs font-medium text-gray-400 group-hover:text-gray-300 transition-colors">Skip auto-collect on start</span>
+                                <div class="relative">
+                                    <input type="checkbox" id="autostaker-ignore-first-collect" class="sr-only peer" checked>
+                                    <div class="w-8 h-4 bg-[#333333] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-green-600"></div>
+                                </div>
+                            </label>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <label for="autostaker-collect-interval" class="text-xs text-gray-500 whitespace-nowrap">
+                                Interval:
+                            </label>
+                            <input type="number" id="autostaker-collect-interval" value="24" min="1" max="168" class="flex-1 p-2 text-sm bg-[#121212] border border-[#333333] rounded-lg text-white focus:outline-none focus:ring-1 focus:ring-green-500">
+                            <span class="text-xs text-gray-500">hours</span>
+                        </div>
+                        <div id="autostaker-collect-status" class="text-xs text-gray-500 mt-2">
+                            Next collect: -
+                        </div>
+                    </div>
+                </div>
+
+                <button id="autostaker-save-settings" class="w-full bg-blue-800 hover:bg-blue-900 text-white font-medium py-2 px-3 rounded-lg transition-colors text-sm">
+                    Save Settings
+                </button>
+            </div>
+
+            <!-- Sponsorships Tab -->
+            <div id="autostaker-content-sponsorships" class="p-4 hidden max-w-full overflow-x-hidden">
+                <div class="mb-4">
+                    <input type="text" id="autostaker-sponsorship-search" placeholder="Search sponsorships..." class="w-full p-2.5 text-sm bg-[#121212] border border-[#2a2a2a] rounded-lg text-white placeholder-gray-600 focus:outline-none focus:ring-1 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all">
+                </div>
+
+                <div id="autostaker-sponsorships-list" class="space-y-3 pb-4">
+                    <div class="text-center py-8 text-gray-500 text-sm">
+                        Loading sponsorships...
+                    </div>
+                </div>
+            </div>
+
+            <!-- Log Tab -->
+            <div id="autostaker-content-preview" class="p-4 hidden max-w-full overflow-x-hidden">
+                <div class="flex items-center justify-between mb-3">
+                    <span class="text-xs text-gray-400">Recent Activity</span>
+                    <button id="autostaker-clear-log" class="text-xs text-gray-500 hover:text-gray-300">Clear</button>
+                </div>
+
+                <div id="autostaker-log-list" class="space-y-1 text-xs pb-4">
+                    <div class="text-center py-6 text-gray-500">
+                        No activity yet. Start the bot to see logs.
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
