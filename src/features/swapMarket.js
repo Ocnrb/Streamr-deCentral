@@ -696,8 +696,11 @@ function filteredPools() {
 }
 function listedTrades() {
     const keys = state.filter === 'all' ? null : new Set(filteredPools().map(p => p.key));
-    return state.trades.filter(t => !t.outlier && (!keys || keys.has(t.pool)));
+    return state.trades.filter(t => !keys || keys.has(t.pool));
 }
+
+// Beside the price of an off-market trade (kept out of the volume and the chart)
+const OUTLIER_INFO = '<button type="button" class="inline-flex text-gray-300 hover:text-white cursor-help" aria-label="Off-market price" data-tooltip-content="Price far from the main pool, usually a round trip in a single transaction.<br>Left out of the volume and the chart."><svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg></button>';
 
 // Small Ethereum logo beside the trades of Ethereum pools
 const ETHEREUM_MARK = '<svg class="w-3.5 h-3.5 flex-shrink-0" viewBox="0 0 32 32" aria-label="Ethereum" role="img"><circle cx="16" cy="16" r="16" fill="#627EEA"/><path fill="#fff" fill-opacity=".6" d="M16.5 4v8.87l7.5 3.35z"/><path fill="#fff" d="M16.5 4 9 16.22l7.5-3.35z"/><path fill="#fff" fill-opacity=".6" d="M16.5 21.97v6.03L24 17.62z"/><path fill="#fff" d="M16.5 28v-6.03L9 17.62z"/></svg>';
@@ -755,10 +758,10 @@ function renderTrades() {
             ? '<span class="ml-2 px-1.5 py-0.5 rounded bg-[#2C2C2C] text-[10px] font-semibold text-gray-300">You</span>'
             : '';
         return `
-            <tr class="border-b border-[#2a2a2a] last:border-0">
+            <tr class="border-b border-[#2a2a2a] last:border-0${trade.outlier ? ' opacity-50' : ''}">
                 <td class="py-2 pr-2 whitespace-nowrap"><a href="${CHAINS[pool?.chain || 137].explorer}${hash}" target="_blank" rel="noopener noreferrer" class="text-gray-300 hover:text-blue-300" data-tooltip-content="${Utils.escapeHtml(new Date(trade.time).toLocaleString())}">${formatTime(trade.time)}</a>${own}</td>
                 <td class="py-2 pr-2">${tradeCell}</td>
-                <td class="py-2 pr-2 text-right whitespace-nowrap text-white font-medium">${formatPrice(trade.price)}</td>
+                <td class="py-2 pr-2 text-right whitespace-nowrap text-white font-medium">${trade.outlier ? `<span class="inline-flex items-center gap-1">${OUTLIER_INFO}${formatPrice(trade.price)}</span>` : formatPrice(trade.price)}</td>
                 <td class="py-2 pr-2 text-right whitespace-nowrap text-gray-200">${formatData(trade.data)}</td>
                 <td class="py-2 text-right whitespace-nowrap text-gray-200">${trade.usd === null ? '--' : formatUsd(trade.usd)}</td>
             </tr>`;
