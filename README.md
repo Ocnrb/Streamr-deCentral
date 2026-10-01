@@ -58,7 +58,7 @@ main.js         Entry point: wires the app modules and global events
 src/app/        Routes, sign-in and saved key, page loading, autostaker panel, PWA install
 src/core/       Router, services (RPC, subgraph), constants, utils
 src/features/   One module per page or tool
-src/ui/         Navigation and shared UI
+src/ui/         Navigation and shared UI (toasts, tooltip, operator page, node map, autostaker panel, profile shortcut)
 src/input.css   Tailwind source
 public/         Served as they are: early.js (before the first paint), sw.js, libs/ (Streamr SDK and
                 MapLibre, pinned, no CDNs), workers/, assets/, favicon/, data/
