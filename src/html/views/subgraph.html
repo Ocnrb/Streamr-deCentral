@@ -1,0 +1,134 @@
+<!-- ===== SUBGRAPH VIEW ===== -->
+<!-- Query builder for every subgraph entity; the entity navigation is a fixed panel on the right.
+     From xl the view fills the viewport (no page scroll): builder and result scroll independently. -->
+<div id="subgraph-view" class="hidden xl:h-[calc(100dvh-5rem)] xl:overflow-hidden">
+    <div id="sg-content" class="flex-1 min-w-0 p-4 md:p-6 lg:mr-64 xl:h-full transition-[margin] duration-300">
+        <div class="grid grid-cols-1 xl:grid-cols-12 xl:grid-rows-[minmax(0,1fr)] gap-6 xl:h-full">
+
+            <!-- Query Configuration (own scroll from xl) -->
+            <div class="xl:col-span-5 space-y-6 xl:h-full xl:overflow-y-auto xl:overscroll-contain xl:pr-1">
+                <section class="detail-section p-4 sm:p-6">
+                    <p id="sg-entity-description" class="text-[15px] leading-snug text-gray-400"></p>
+
+                    <div class="space-y-4 mt-3">
+                        <!-- Entity Selector (mobile/tablet; the right panel replaces it on desktop) -->
+                        <div class="lg:hidden">
+                            <label for="sg-entity-select" class="block text-xs font-medium text-gray-400 mb-1.5">Entity</label>
+                            <select id="sg-entity-select" class="w-full p-3 bg-[#121212] border border-[#333333] rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all"></select>
+                        </div>
+
+                        <!-- Pagination & Sorting (list queries only) -->
+                        <div id="sg-list-options" class="grid grid-cols-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_5.5rem] xl:grid-cols-2 2xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_5.5rem] gap-3">
+                            <div class="col-span-2 sm:col-span-1 xl:col-span-2 2xl:col-span-1">
+                                <label for="sg-order-by" class="block text-xs font-medium text-gray-400 mb-1.5">Order by</label>
+                                <select id="sg-order-by" class="w-full p-2.5 bg-[#121212] border border-[#333333] rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all"></select>
+                            </div>
+                            <div>
+                                <label for="sg-order-direction" class="block text-xs font-medium text-gray-400 mb-1.5">Direction</label>
+                                <select id="sg-order-direction" class="w-full p-2.5 bg-[#121212] border border-[#333333] rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all">
+                                    <option value="desc">Descending</option>
+                                    <option value="asc">Ascending</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label for="sg-limit" class="block text-xs font-medium text-gray-400 mb-1.5" title="Results per page (max 1000)">Limit</label>
+                                <input type="number" id="sg-limit" value="10" min="1" max="1000" title="Results per page (max 1000)" class="w-full p-2.5 bg-[#121212] border border-[#333333] rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all">
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Filters -->
+                <section class="detail-section p-4 sm:p-6">
+                    <div class="flex items-center justify-between mb-4">
+                        <h2 class="text-lg font-semibold text-white">Filters <span id="sg-filter-count" class="ml-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-blue-500/15 text-blue-400 hidden"></span></h2>
+                        <button id="sg-clear-filters" class="text-xs font-medium text-gray-400 hover:text-white transition-colors hidden">Clear all</button>
+                    </div>
+                    <!-- Active filter rows (or info text for meta/no-filter entities) -->
+                    <div id="sg-filters" class="space-y-3"></div>
+
+                    <!-- Add filter: searchable menu of the entity's remaining filters -->
+                    <div id="sg-add-filter-wrap" class="relative mt-3">
+                        <button id="sg-add-filter" type="button" aria-haspopup="true" aria-expanded="false"
+                                class="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-dashed border-[#444] text-sm font-medium text-gray-400 hover:text-white hover:border-[#666] transition-colors">
+                            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
+                            Add filter
+                        </button>
+                        <div id="sg-add-filter-menu" class="hidden absolute z-30 left-0 mt-2 w-full max-w-sm bg-[#1E1E1E] border border-[#333333] rounded-lg shadow-2xl overflow-hidden">
+                            <div class="p-2 border-b border-[#333333]">
+                                <input id="sg-add-filter-search" type="text" autocomplete="off" placeholder="Search filters..."
+                                       class="w-full p-2 bg-[#121212] border border-[#333333] rounded-md text-white text-sm placeholder:text-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50">
+                            </div>
+                            <div id="sg-add-filter-list" class="max-h-72 overflow-y-auto overscroll-contain py-1"></div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- GraphQL (auto-generated, editable) -->
+                <section class="detail-section p-4 sm:p-6">
+                    <div class="flex items-center justify-between mb-3">
+                        <label for="sg-query" class="text-lg font-semibold text-white">GraphQL</label>
+                        <button id="sg-reset-query" class="text-xs font-medium text-gray-400 hover:text-white transition-colors hidden">Reset to form</button>
+                    </div>
+                    <textarea id="sg-query" rows="8" spellcheck="false"
+                              class="w-full p-3 bg-[#121212] border border-[#333333] rounded-lg text-gray-200 font-mono text-xs sm:text-sm placeholder:text-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all"
+                              placeholder="Paste your GraphQL query here or edit the preview."></textarea>
+                    <p id="sg-manual-hint" class="text-xs text-amber-500 mt-2 hidden">Manual query active: form filters are ignored.</p>
+                </section>
+            </div>
+
+            <!-- Result (fills the column height from xl; the JSON scrolls inside) -->
+            <div class="xl:col-span-7 xl:h-full xl:min-h-0">
+                <section class="detail-section p-4 sm:p-6 xl:h-full xl:flex xl:flex-col">
+                    <div class="flex items-center justify-between mb-4 gap-3 flex-shrink-0">
+                        <button id="sg-execute" title="Execute query (Ctrl/Cmd + Enter)" class="inline-flex items-center gap-2 whitespace-nowrap bg-blue-800 hover:bg-blue-900 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-semibold py-2 px-4 rounded-lg transition-colors">
+                            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.14v13.72a1 1 0 0 0 1.52.85l10.9-6.86a1 1 0 0 0 0-1.7L9.52 4.29A1 1 0 0 0 8 5.14z"/></svg>
+                            Execute Query
+                        </button>
+                        <button id="sg-copy" title="Copy JSON" aria-label="Copy JSON" class="hidden p-2 rounded-lg text-gray-400 hover:text-white hover:bg-white/5 transition-colors">
+                            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                            </svg>
+                        </button>
+                    </div>
+                    <div id="sg-output" class="bg-[#121212] border border-[#333333] rounded-lg p-4 text-sm text-gray-300 overflow-auto overscroll-contain min-h-[300px] max-h-[70vh] xl:flex-1 xl:min-h-0 xl:max-h-none">
+                        <p class="text-gray-400">Waiting for query execution...</p>
+                    </div>
+                    <p id="sg-error" class="mt-4 p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-sm text-red-400 font-mono whitespace-pre-wrap break-all max-h-40 overflow-auto flex-shrink-0 hidden"></p>
+
+                    <!-- Footer: result count + pagination -->
+                    <div class="flex items-center justify-between mt-3 flex-shrink-0">
+                        <span id="sg-result-meta" class="text-xs text-gray-400"></span>
+                        <div id="sg-pager" class="flex items-center gap-1">
+                            <button id="sg-prev" title="Previous page" aria-label="Previous page" class="p-2 rounded-lg text-gray-400 hover:text-white hover:bg-white/5 disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-gray-400 disabled:cursor-not-allowed transition-colors" disabled>
+                                <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5"/><path d="m12 19-7-7 7-7"/></svg>
+                            </button>
+                            <button id="sg-next" title="Next page" aria-label="Next page" class="p-2 rounded-lg text-gray-400 hover:text-white hover:bg-white/5 disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-gray-400 disabled:cursor-not-allowed transition-colors" disabled>
+                                <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+                            </button>
+                        </div>
+                    </div>
+                </section>
+            </div>
+        </div>
+    </div>
+
+    <!-- Entity Navigation (right panel, desktop) - collapsible to an icon rail -->
+    <aside id="sg-entity-panel" class="hidden lg:flex flex-col w-64 fixed top-14 right-0 bottom-0 z-20 bg-[#1A1A1A] border-l border-[#2a2a2a] transition-[width] duration-300">
+        <div class="h-12 flex items-center border-b border-[#2a2a2a] flex-shrink-0 px-2">
+            <button id="sg-panel-toggle" type="button" aria-expanded="true" title="Collapse panel"
+                    class="p-2 rounded-md text-gray-400 hover:text-white hover:bg-white/5 transition-colors flex-shrink-0">
+                <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <rect width="18" height="18" x="3" y="3" rx="2"/>
+                    <path d="M15 3v18"/>
+                    <path data-panel-icon-collapse d="m8 9 3 3-3 3"/>
+                    <path data-panel-icon-expand class="hidden" d="m10 15-3-3 3-3"/>
+                </svg>
+            </button>
+            <span data-panel-expanded class="ml-1 text-sm font-semibold text-white whitespace-nowrap">Entities</span>
+        </div>
+        <nav id="sg-entity-nav" data-panel-expanded class="flex-1 py-3 overflow-y-auto overscroll-contain"></nav>
+        <nav id="sg-entity-rail" data-panel-collapsed class="hidden flex-1 py-3 overflow-y-auto overscroll-contain flex-col items-center gap-1"></nav>
+    </aside>
+</div>

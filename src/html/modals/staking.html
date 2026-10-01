@@ -1,0 +1,63 @@
+<!-- Transaction Modal -->
+<div id="transactionModal" class="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-3 sm:p-4 z-50 hidden">
+    <div class="bg-[#1E1E1E] rounded-lg p-5 sm:p-8 max-w-md w-full text-gray-300 border border-[#333333] shadow-2xl max-h-[90vh] overflow-y-auto">
+        <h2 id="tx-modal-title" class="text-xl sm:text-2xl font-bold mb-3 sm:mb-4 text-white">Delegate to Operator</h2>
+
+        <div id="tx-modal-input-section">
+            <p id="tx-modal-description" class="mb-4 text-gray-400">Enter the amount of DATA to delegate.</p>
+            <div class="relative">
+                <input 
+                    type="number" 
+                    id="tx-modal-amount" 
+                    placeholder="0.0" 
+                    class="w-full p-3 pr-16 bg-[#121212] border border-[#333333] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-[#555555] transition-colors"
+                >
+                <button id="tx-modal-max-btn" class="absolute inset-y-0 right-0 flex items-center pr-3 text-sm font-bold text-blue-500 hover:text-blue-400">MAX</button>
+            </div>
+            <div class="flex justify-between mt-2 text-sm">
+                 <span id="tx-modal-balance-label" class="text-gray-400">Your Balance:</span>
+                 <span id="tx-modal-balance-value" class="text-gray-300">Loading...</span>
+            </div>
+            <div class="flex justify-between mt-1 text-sm text-gray-500">
+                 <span>Minimum to delegate:</span>
+                 <span id="tx-modal-minimum-value">Loading...</span>
+            </div>
+            <div class="mt-6 flex gap-4">
+                <button id="tx-modal-cancel" class="w-full bg-[#444444] hover:bg-[#555555] text-white font-bold py-3 px-4 rounded-lg transition-colors">Cancel</button>
+                <button id="tx-modal-confirm" class="w-full bg-[#333333] hover:bg-[#444444] text-white font-bold py-3 px-4 rounded-lg transition-colors flex justify-center items-center" disabled:opacity-50>Confirm</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Stake Management Modal -->
+<div id="stakeModal" class="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-3 sm:p-4 z-50 hidden">
+    <div class="bg-[#1E1E1E] rounded-lg p-5 sm:p-8 max-w-md w-full text-gray-300 border border-[#333333] shadow-2xl max-h-[90vh] overflow-y-auto">
+        <h2 id="stake-modal-title" class="text-xl sm:text-2xl font-bold mb-3 sm:mb-4 text-white">Manage Stake</h2>
+
+        <div id="stake-modal-input-section">
+            <p id="stake-modal-description" class="mb-4 text-gray-400">Enter the new total stake amount for this sponsorship.</p>
+            <div class="relative">
+                <input 
+                    type="number" 
+                    id="stake-modal-amount" 
+                    placeholder="0.0" 
+                    class="w-full p-3 pr-16 bg-[#121212] border border-[#333333] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-[#555555] transition-colors"
+                >
+                <button id="stake-modal-max-btn" class="absolute inset-y-0 right-0 flex items-center pr-3 text-sm font-bold text-blue-500 hover:text-blue-400">MAX</button>
+            </div>
+            <div class="flex justify-between mt-2 text-sm">
+                 <span class="text-gray-400">Your Current Stake:</span>
+                 <span id="stake-modal-current-stake" class="text-gray-300">Loading...</span>
+            </div>
+            <div class="flex justify-between mt-1 text-sm">
+                 <span class="text-gray-400">Operator's Free Funds:</span>
+                 <span id="stake-modal-free-funds" class="text-gray-300">Loading...</span>
+            </div>
+            <div class="mt-6 flex gap-4">
+                <button id="stake-modal-cancel" class="w-full bg-[#444444] hover:bg-[#555555] text-white font-bold py-3 px-4 rounded-lg transition-colors">Cancel</button>
+                <button id="stake-modal-confirm" class="w-full bg-[#333333] hover:bg-[#444444] text-white font-bold py-3 px-4 rounded-lg transition-colors flex justify-center items-center" disabled:opacity-50>Confirm</button>
+            </div>
+        </div>
+    </div>
+</div>

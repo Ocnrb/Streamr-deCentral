@@ -1,0 +1,195 @@
+<!-- Login Modal (visible by default until user logs in) -->
+<div id="loginModal" class="fixed inset-0 bg-[#121212] flex items-center justify-center p-4 z-50">
+    <!-- Main Login Panel (centered) -->
+    <div class="bg-[#1E1E1E] rounded-lg p-8 max-w-sm w-full text-gray-300 text-center shadow-2xl border border-[#333333]">
+
+        <div id="walletLoginView">
+            <h2 class="text-2xl font-bold mb-4 text-white">Streamr deCentral</h2>
+            <p class="mb-6 text-gray-400">Connect your wallet for full functionality, or continue as a guest to explore.</p>
+            <button id="connectWalletBtn" class="w-full bg-blue-800 hover:bg-blue-900 text-white font-bold py-3 px-4 rounded-lg transition-colors mb-4 flex items-center justify-center gap-2">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"></path></svg>
+                Connect Wallet
+            </button>
+            <button id="guestBtn" class="w-full bg-[#444444] hover:bg-[#555555] text-white font-bold py-3 px-4 rounded-lg transition-colors">
+                Continue as Guest
+            </button>
+            <button id="privateKeyBtn" class="text-gray-500 hover:text-gray-400 text-sm mt-4 transition-colors">
+                Connect with private key
+            </button>
+        </div>
+
+        <div id="loadingContent" class="hidden">
+            <div class="flex justify-center items-center mb-4">
+                <div class="loader rounded-full border-4 border-t-4 border-[#555555] border-t-transparent h-8 w-8"></div>
+            </div>
+            <p id="loading-main-text" class="text-lg text-white">Connecting...</p>
+            <p id="loading-sub-text" class="text-sm text-gray-400 mt-2">Please follow the instructions in your wallet.</p>
+        </div>
+    </div>
+
+    <!-- Install App Panel (bottom) - hidden by default, shown by JS if not installed -->
+    <div id="installAppSection" class="hidden absolute bottom-4 left-1/2 -translate-x-1/2 bg-[#1E1E1E] rounded-lg p-4 max-w-sm w-[calc(100%-2rem)] text-gray-300 text-center shadow-2xl border border-[#333333]">
+        <p class="text-xs text-gray-500 mb-3">Install App</p>
+        <div class="flex justify-center gap-4">
+            <!-- Android Button -->
+            <button id="installAndroidBtn" class="install-platform-btn" title="Install on Android">
+                <svg class="w-6 h-6" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M17.523 15.341a.749.749 0 1 0 1.497 0 .749.749 0 0 0-1.497 0zm-12.543 0a.749.749 0 1 0 1.498 0 .749.749 0 0 0-1.498 0zm12.635-7.719 1.937-3.355a.405.405 0 0 0-.147-.552.405.405 0 0 0-.552.147L16.87 7.262a9.525 9.525 0 0 0-4.87-1.318 9.525 9.525 0 0 0-4.87 1.318L5.147 3.862a.405.405 0 0 0-.552-.147.405.405 0 0 0-.147.552l1.937 3.355A8.927 8.927 0 0 0 3 15.153V21h18v-5.847a8.927 8.927 0 0 0-3.385-7.531z"/>
+                </svg>
+                <span class="text-xs mt-1">Android</span>
+            </button>
+            <!-- Windows Button -->
+            <button id="installWindowsBtn" class="install-platform-btn" title="Install on Windows">
+                <svg class="w-6 h-6" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M3 5.548l7.129-0.973v6.881l-7.121 0.04V5.548zm0 12.9l7.129 0.972v-6.842l-7.121-0.04v5.91zm7.921 1.048l9.875 1.354V13.54l-9.875-0.057v5.963zm0-13.992v5.97l9.875-0.057V3.15l-9.875 1.354z"/>
+                </svg>
+                <span class="text-xs mt-1">Windows</span>
+            </button>
+            <!-- iOS Button -->
+            <button id="installIOSBtn" class="install-platform-btn" title="Install on iOS">
+                <svg class="w-6 h-6" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/>
+                </svg>
+                <span class="text-xs mt-1">iOS</span>
+            </button>
+            <!-- macOS Button -->
+            <button id="installMacOSBtn" class="install-platform-btn" title="Install on macOS">
+                <svg class="w-6 h-6" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/>
+                </svg>
+                <span class="text-xs mt-1">macOS</span>
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Private Key Modal -->
+<div id="privateKeyModal" class="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4 z-50 hidden">
+    <div class="bg-[#1E1E1E] rounded-lg p-8 max-w-md w-full text-gray-300 border border-[#333333] shadow-2xl">
+        <h2 class="text-2xl font-bold mb-4 text-white">Connect with Private Key</h2>
+
+        <!-- Security Warning -->
+        <div class="bg-amber-900/30 border border-amber-600/50 rounded-lg p-4 mb-6">
+            <div class="flex items-start gap-3">
+                <svg class="w-6 h-6 text-amber-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+                </svg>
+                <div>
+                    <p class="text-amber-500 font-semibold mb-1">Security Warning</p>
+                    <p class="text-amber-200/80 text-sm">Only use an <strong>Agent Wallet</strong> with limited funds and permissions. Never enter the private key of your main wallet.</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="space-y-4">
+            <div>
+                <label for="privateKeyInput" class="block text-sm font-medium text-gray-400 mb-2">Private Key</label>
+                <div class="relative">
+                    <input type="password" id="privateKeyInput" placeholder="Enter your private key" class="w-full p-3 pr-12 bg-[#121212] border border-[#333333] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-[#555555] font-mono text-sm">
+                    <button type="button" id="togglePrivateKeyVisibility" class="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-500 hover:text-gray-300 transition-colors">
+                        <svg id="eyeIcon" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
+                        </svg>
+                        <svg id="eyeOffIcon" class="w-5 h-5 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"></path>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+
+            <div class="flex items-center gap-2">
+                <input type="checkbox" id="rememberPrivateKey" class="w-4 h-4 rounded border-[#333333] bg-[#121212] text-blue-600 focus:ring-blue-500 focus:ring-offset-0">
+                <label for="rememberPrivateKey" class="text-sm text-gray-400">Remember this key for future sessions</label>
+            </div>
+
+            <!-- Password fields (shown when Remember is checked) -->
+            <div id="encryptionPasswordSection" class="hidden space-y-3 pt-2 border-t border-[#333333]">
+                <p class="text-xs text-gray-500">Create a password to encrypt your key locally. You'll need this password to unlock your wallet in future sessions.</p>
+                <div>
+                    <label for="encryptionPassword" class="block text-sm font-medium text-gray-400 mb-2">Encryption Password</label>
+                    <input type="password" id="encryptionPassword" placeholder="Create a password" class="w-full p-3 bg-[#121212] border border-[#333333] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-[#555555] text-sm">
+                </div>
+                <div>
+                    <label for="encryptionPasswordConfirm" class="block text-sm font-medium text-gray-400 mb-2">Confirm Password</label>
+                    <input type="password" id="encryptionPasswordConfirm" placeholder="Confirm password" class="w-full p-3 bg-[#121212] border border-[#333333] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-[#555555] text-sm">
+                </div>
+            </div>
+        </div>
+
+        <div class="mt-6 flex gap-4">
+            <button id="pkModalCancel" class="w-full bg-[#444444] hover:bg-[#555555] text-white font-bold py-3 px-4 rounded-lg transition-colors">Cancel</button>
+            <button id="pkModalConnect" class="w-full bg-blue-800 hover:bg-blue-900 text-white font-bold py-3 px-4 rounded-lg transition-colors flex justify-center items-center">Connect</button>
+        </div>
+    </div>
+</div>
+
+<!-- Unlock Wallet Modal -->
+<div id="unlockWalletModal" class="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4 z-50 hidden">
+    <div class="bg-[#1E1E1E] rounded-lg p-8 max-w-sm w-full text-gray-300 border border-[#333333] shadow-2xl">
+        <div class="flex items-center justify-center mb-4">
+            <img src="assets/locked_icon.png" alt="Unlock" class="w-24 h-24">
+        </div>
+        <h2 class="text-xl font-bold mb-2 text-white text-center">Unlock Streamr deCentral</h2>
+        <p class="text-sm text-gray-400 text-center mb-6">Enter your password to unlock.</p>
+
+        <div class="space-y-4">
+            <div>
+                <input type="password" id="unlockPassword" placeholder="Enter your password" class="w-full p-3 bg-[#121212] border border-[#333333] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-[#555555] text-sm">
+                <p id="unlockError" class="text-red-400 text-xs mt-2 hidden">Incorrect password. Please try again.</p>
+            </div>
+        </div>
+
+        <div class="mt-6 flex gap-4">
+            <button id="unlockCancel" class="w-full bg-[#444444] hover:bg-[#555555] text-white font-bold py-3 px-4 rounded-lg transition-colors">Cancel</button>
+            <button id="unlockConfirm" class="w-full bg-blue-800 hover:bg-blue-900 text-white font-bold py-3 px-4 rounded-lg transition-colors flex justify-center items-center">Unlock</button>
+        </div>
+
+        <button id="unlockForget" class="w-full text-gray-500 hover:text-gray-400 text-sm mt-4 transition-colors">Forget saved wallet</button>
+    </div>
+</div>
+
+<!-- iOS Install Instructions Modal -->
+<div id="iosInstallModal" class="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4 z-50 hidden">
+    <div class="bg-[#1E1E1E] rounded-lg p-6 max-w-sm w-full text-gray-300 border border-[#333333] shadow-2xl">
+        <h2 class="text-xl font-bold mb-4 text-white text-center">Install on iOS</h2>
+
+        <div class="space-y-4">
+            <div class="flex items-start gap-3">
+                <div class="flex-shrink-0 w-8 h-8 bg-blue-800 rounded-full flex items-center justify-center text-white font-bold">1</div>
+                <div>
+                    <p class="text-white font-medium">Tap the Share button</p>
+                    <p class="text-gray-400 text-sm">Located at the bottom of Safari</p>
+                    <div class="mt-2 flex justify-center">
+                        <svg class="w-8 h-8 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"></path>
+                        </svg>
+                    </div>
+                </div>
+            </div>
+
+            <div class="flex items-start gap-3">
+                <div class="flex-shrink-0 w-8 h-8 bg-blue-800 rounded-full flex items-center justify-center text-white font-bold">2</div>
+                <div>
+                    <p class="text-white font-medium">Select "Add to Home Screen"</p>
+                    <p class="text-gray-400 text-sm">Scroll down in the menu if needed</p>
+                    <div class="mt-2 flex justify-center">
+                        <svg class="w-8 h-8 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+                        </svg>
+                    </div>
+                </div>
+            </div>
+
+            <div class="flex items-start gap-3">
+                <div class="flex-shrink-0 w-8 h-8 bg-blue-800 rounded-full flex items-center justify-center text-white font-bold">3</div>
+                <div>
+                    <p class="text-white font-medium">Tap "Add"</p>
+                    <p class="text-gray-400 text-sm">The app will appear on your home screen</p>
+                </div>
+            </div>
+        </div>
+
+        <button id="iosInstallModalClose" class="w-full mt-6 bg-[#444444] hover:bg-[#555555] text-white font-bold py-3 px-4 rounded-lg transition-colors">Got it</button>
+    </div>
+</div>

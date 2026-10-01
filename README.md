@@ -53,7 +53,8 @@ Default API keys are included. You can use your own The Graph and Etherscan keys
 ## Structure
 
 ```
-index.html      Markup of every page and modal
+index.html      Page shell: head, the containers and where each part of src/html/ goes
+src/html/       Markup of the views, modals and layout, included in index.html by the build (vite.config.mjs)
 main.js         Entry point: wires the app modules and global events
 src/app/        Routes, sign-in and saved key, page loading, autostaker panel, PWA install
 src/core/       Router, constants, utils and the services (RPC, subgraph, Polygonscan, prices, Streamr client,

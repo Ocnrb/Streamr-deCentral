@@ -1,0 +1,396 @@
+<!-- ===== STREAM DETAIL VIEW ===== -->
+<div id="stream-detail-view" class="hidden p-3 md:p-6 space-y-4 md:space-y-6 overflow-x-hidden">
+
+    <!-- Operator Stake Action Button (top left, outside tiles) -->
+    <div id="stream-operator-stake-action" class="hidden">
+        <button id="stream-stake-btn" class="px-4 py-2.5 bg-blue-800 hover:bg-blue-900 text-white text-sm font-bold rounded-lg transition-colors flex items-center gap-2 shadow-lg">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
+            </svg>
+            <span id="stream-stake-btn-text">Join as Operator</span>
+        </button>
+    </div>
+
+    <!-- Header Panel - Consistent with Operator Detail -->
+    <div class="bg-[#1E1E1E] border border-[#333] rounded-xl p-4 md:p-6">
+        <div class="flex items-start gap-4 md:gap-6">
+            <!-- Stream Icon (shown for non-sponsored) -->
+            <div id="stream-icon-normal" class="flex items-center justify-center w-12 h-12 md:w-16 md:h-16 rounded-full bg-gradient-to-br from-blue-500/20 to-purple-500/20 border-2 border-[#333] flex-shrink-0">
+                <svg class="w-6 h-6 md:w-8 md:h-8 text-blue-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                    <path d="M4.9 19.1C1 15.2 1 8.8 4.9 4.9"/>
+                    <path d="M7.8 16.2c-2.3-2.3-2.3-6.1 0-8.5"/>
+                    <circle cx="12" cy="12" r="2"/>
+                    <path d="M16.2 7.8c2.3 2.3 2.3 6.1 0 8.5"/>
+                    <path d="M19.1 4.9C23 8.8 23 15.1 19.1 19"/>
+                </svg>
+            </div>
+            <!-- DATA Icon (shown for sponsored/sponsorship) -->
+            <div id="stream-icon-sponsorship" class="hidden flex items-center justify-center w-12 h-12 md:w-16 md:h-16 flex-shrink-0">
+                <svg class="w-12 h-12 md:w-16 md:h-16 rounded-full" viewBox="0 0 56 56" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <circle cx="28" cy="28" r="28" fill="#F7600A"/>
+                    <path fill-rule="evenodd" clip-rule="evenodd" d="M32.9091 10.2118V9.08164C32.9091 8.69418 32.5861 8.38241 32.199 8.4008C24.6009 8.76169 18.5119 14.8843 18.2056 22.4955C18.2219 22.9725 18.608 23.0974 18.8351 23.0974H19.983C20.3463 23.0974 20.6441 22.8122 20.6629 22.4495C20.989 16.1879 26.0134 11.1697 32.278 10.8522C32.7558 10.7908 32.9091 10.5297 32.9091 10.2118ZM22.5761 23.0974H23.6747C24.0313 23.0974 24.3221 22.8195 24.348 22.4638C24.6586 18.2097 28.0701 14.8164 32.3324 14.5336C32.523 14.521 32.9091 14.3783 32.9091 13.8844V12.7659C32.9091 12.3707 32.5739 12.0603 32.1795 12.0861C26.6654 12.4459 22.256 16.8547 21.8961 22.3679C21.8704 22.7623 22.1808 23.0974 22.5761 23.0974ZM37.1763 32.9026C37.4035 32.9026 37.7895 33.0275 37.8058 33.5045C37.4995 41.1158 31.4105 47.2383 23.8124 47.5993C23.4253 47.6176 23.1023 47.3059 23.1023 46.9183V45.7883C23.1023 45.4704 23.2556 45.2093 23.7333 45.1479C29.9981 44.8304 35.0224 39.8121 35.3485 33.5505C35.3673 33.1878 35.6651 32.9026 36.0284 32.9026H37.1763ZM33.4353 32.9026C33.8306 32.9026 34.141 33.2377 34.1153 33.6321C33.7554 39.1454 29.346 43.5542 23.8319 43.914C23.4375 43.9398 23.1023 43.6293 23.1023 43.2341V42.1155C23.1023 41.6217 23.4884 41.4791 23.679 41.4664C27.9413 41.1837 31.3529 37.7903 31.6633 33.5362C31.6893 33.1805 31.9801 32.9026 32.3367 32.9026H33.4353ZM29.7445 32.9026C30.1445 32.9026 30.463 33.246 30.4231 33.6441C30.0758 37.1151 27.3154 39.8751 23.8438 40.2224C23.4458 40.2623 23.1023 39.9438 23.1023 39.5438V38.4201C23.1023 37.9604 23.5015 37.795 23.6961 37.7715C25.9261 37.5025 27.6953 35.7373 27.9703 33.5095C28.0129 33.1647 28.2999 32.9026 28.6474 32.9026H29.7445ZM10.212 23.0945C10.53 23.0945 10.7911 23.2477 10.8525 23.7254C11.1701 29.9892 16.189 35.0129 22.4516 35.3389C22.8143 35.3577 23.0996 35.6555 23.0996 36.0187V37.1666C23.0996 37.3936 22.9746 37.7796 22.4976 37.7959C14.8853 37.4896 8.76181 31.4015 8.4008 23.8045C8.3824 23.4174 8.69423 23.0945 9.0818 23.0945H10.212ZM13.8853 23.0945C14.3792 23.0945 14.5219 23.4805 14.5346 23.6711C14.8173 27.9328 18.2111 31.3439 22.4659 31.6543C22.8216 31.6803 23.0996 31.971 23.0996 32.3276V33.426C23.0996 33.8212 22.7644 34.1316 22.3699 34.1059C16.8559 33.746 12.4464 29.3373 12.0866 23.824C12.0608 23.4296 12.3713 23.0945 12.7666 23.0945H13.8853ZM33.5024 18.1729C41.1148 18.4792 47.2382 24.5673 47.5993 32.1644C47.6176 32.5514 47.3058 32.8744 46.9183 32.8744H45.788C45.4701 32.8744 45.2089 32.7211 45.1475 32.2434C44.8299 25.9795 39.811 20.956 33.5485 20.6299C33.1857 20.6111 32.9005 20.3133 32.9005 19.9501V18.8023C32.9005 18.5752 33.0253 18.1892 33.5024 18.1729ZM33.6301 21.8629C39.1442 22.2227 43.5536 26.6315 43.9135 32.1448C43.9392 32.5392 43.6288 32.8744 43.2335 32.8744H42.1148C41.6208 32.8744 41.4782 32.4883 41.4655 32.2977C41.1828 28.036 37.7889 24.6249 33.5342 24.3145C33.1784 24.2886 32.9005 23.9978 32.9005 23.6412V22.5428C32.9005 22.1476 33.2357 21.8372 33.6301 21.8629ZM33.642 25.5545C37.1136 25.9019 39.874 28.6619 40.2213 32.1329C40.2612 32.5309 39.9427 32.8744 39.5427 32.8744H38.4188C37.959 32.8744 37.7936 32.4752 37.7701 32.2806C37.501 30.0509 35.7356 28.282 33.5075 28.0071C33.1626 27.9645 32.9005 27.6775 32.9005 27.33V26.2331C32.9005 25.8331 33.244 25.5147 33.642 25.5545ZM17.5812 23.0945C18.0411 23.0945 18.2064 23.4936 18.2299 23.6882C18.4991 25.9179 20.2644 27.6868 22.4926 27.9618C22.8374 28.0043 23.0996 28.2913 23.0996 28.6388V29.7357C23.0996 30.1357 22.7561 30.4541 22.358 30.4144C18.8865 30.0669 16.1261 27.3069 15.7786 23.8359C15.7388 23.4379 16.0573 23.0945 16.4574 23.0945H17.5812ZM32.9091 16.4562V17.5798C32.9091 18.0396 32.51 18.205 32.3152 18.2285C30.0853 18.4976 28.3161 20.2627 28.0411 22.4905C27.9985 22.8353 27.7115 23.0974 27.364 23.0974H26.2669C25.8669 23.0974 25.5484 22.7539 25.5882 22.3559C25.9357 18.885 28.6961 16.125 32.1675 15.7776C32.5656 15.7378 32.9091 16.0562 32.9091 16.4562Z" fill="white"/>
+                </svg>
+            </div>
+            <!-- Stream/Sponsorship Info -->
+            <div class="flex-1 min-w-0">
+                <div class="flex items-start justify-between gap-4 flex-wrap">
+                    <div class="min-w-0 flex-1">
+                        <!-- Stream title (non-sponsored) -->
+                        <div id="stream-header-normal" class="block">
+                            <h2 class="text-xl md:text-2xl font-bold text-white mb-1">Stream</h2>
+                            <a id="stream-detail-link" href="#" target="_blank" rel="noopener noreferrer" class="font-mono text-sm md:text-base text-gray-400 hover:text-white transition-colors block break-all">
+                                <span id="stream-detail-id">--</span>
+                            </a>
+                        </div>
+                        <!-- Sponsorship title (sponsored) -->
+                        <div id="stream-header-sponsorship" class="hidden">
+                            <h2 class="text-xl md:text-2xl font-bold text-white mb-1">Sponsorship</h2>
+                            <a id="sponsorship-stream-link" href="#" class="font-mono text-sm md:text-base text-gray-400 hover:text-white transition-colors block break-all mb-1">
+                                <span id="sponsorship-stream-id">--</span>
+                            </a>
+                            <a id="sponsorship-contract-link" href="#" target="_blank" rel="noopener noreferrer" class="font-mono text-sm md:text-base text-gray-400 hover:text-white transition-colors block break-all">
+                                <span id="sponsorship-contract-address">--</span>
+                            </a>
+                        </div>
+                    </div>
+                    <!-- Edit Stream button (stream view, shown when the connected wallet has EDIT permission) -->
+                    <button id="stream-edit-btn" class="hidden flex-shrink-0 h-10 px-3 md:px-4 flex items-center gap-2 bg-blue-800 hover:bg-blue-900 text-white text-sm font-semibold rounded-xl transition-colors">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+                        </svg>
+                        <span class="hidden sm:inline">Edit Stream</span>
+                    </button>
+                    <!-- Sponsored Badge + APY (for sponsored streams) -->
+                    <div id="stream-sponsored-badge" class="hidden flex-shrink-0 text-right">
+                        <p class="text-xs md:text-sm text-gray-400 font-semibold mb-1">APY</p>
+                        <p id="stream-header-apy" class="text-2xl md:text-3xl lg:text-4xl font-extrabold text-green-400 whitespace-nowrap">--%</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Stats Grid - Stream Details (non-sponsored) -->
+        <div id="stream-stats-grid" class="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-6 mt-4 md:mt-6">
+            <div>
+                <p class="text-xs md:text-sm text-gray-400">Access</p>
+                <div id="stream-access-control" class="mt-1">
+                    <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gray-500/20 text-gray-400 text-sm font-medium">
+                        Loading...
+                    </span>
+                </div>
+            </div>
+            <div>
+                <p class="text-xs md:text-sm text-gray-400">Partitions</p>
+                <p id="stream-partitions" class="text-lg md:text-2xl font-semibold text-white">--</p>
+            </div>
+            <div>
+                <p class="text-xs md:text-sm text-gray-400">Created</p>
+                <p id="stream-created" class="text-lg md:text-2xl font-semibold text-white">--</p>
+            </div>
+            <div>
+                <p class="text-xs md:text-sm text-gray-400">Last Updated</p>
+                <p id="stream-updated" class="text-lg md:text-2xl font-semibold text-white">--</p>
+            </div>
+        </div>
+
+        <!-- Stats Grid - Sponsorship Details (sponsored) -->
+        <div id="sponsorship-stats-grid" class="hidden grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-6 mt-4 md:mt-6">
+            <div>
+                <p class="text-xs md:text-sm text-gray-400">Status</p>
+                <div id="stream-sponsorship-status" class="mt-1">
+                    <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gray-500/20 text-gray-400 text-sm font-medium">
+                        Loading...
+                    </span>
+                </div>
+            </div>
+            <div>
+                <p class="text-xs md:text-sm text-gray-400">Operators</p>
+                <p id="stream-header-operators" class="text-lg md:text-2xl font-semibold text-white">--</p>
+            </div>
+            <div>
+                <p class="text-xs md:text-sm text-gray-400">Payout (DATA/day)</p>
+                <p id="stream-header-payout" class="text-lg md:text-2xl font-semibold text-white">--</p>
+            </div>
+            <div>
+                <p class="text-xs md:text-sm text-gray-400">Expires</p>
+                <p id="stream-header-expires" class="text-lg md:text-2xl font-semibold text-white">--</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Description (if available) -->
+    <div id="stream-description-panel" class="hidden bg-[#1E1E1E] border border-[#333] rounded-xl p-4 md:p-6">
+        <h3 class="text-sm font-semibold text-gray-400 mb-2">Description</h3>
+        <p id="stream-description" class="text-gray-300"></p>
+    </div>
+
+    <!-- Two Column Layout for Sponsored Streams -->
+    <div id="stream-sponsorship-panel" class="hidden overflow-x-hidden">
+
+        <!-- Two Column Grid -->
+        <div class="grid lg:grid-cols-2 gap-4 md:gap-6 items-start overflow-hidden">
+
+            <!-- ROW 1: Sponsorship Details + Staked Operators -->
+            <!-- Sponsorship Stats - fixed height based on content -->
+            <div id="sponsorship-details-tile" class="bg-[#1E1E1E] border border-[#333] rounded-xl p-4 md:p-6 overflow-hidden">
+                <h3 class="text-sm md:text-base font-bold text-gray-200 flex items-center gap-2 mb-4">
+                    <svg class="w-4 h-4 md:w-5 md:h-5" viewBox="0 0 56 56" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <circle cx="28" cy="28" r="28" fill="#F7600A"/>
+                        <path fill-rule="evenodd" clip-rule="evenodd" d="M32.9091 10.2118V9.08164C32.9091 8.69418 32.5861 8.38241 32.199 8.4008C24.6009 8.76169 18.5119 14.8843 18.2056 22.4955C18.2219 22.9725 18.608 23.0974 18.8351 23.0974H19.983C20.3463 23.0974 20.6441 22.8122 20.6629 22.4495C20.989 16.1879 26.0134 11.1697 32.278 10.8522C32.7558 10.7908 32.9091 10.5297 32.9091 10.2118ZM22.5761 23.0974H23.6747C24.0313 23.0974 24.3221 22.8195 24.348 22.4638C24.6586 18.2097 28.0701 14.8164 32.3324 14.5336C32.523 14.521 32.9091 14.3783 32.9091 13.8844V12.7659C32.9091 12.3707 32.5739 12.0603 32.1795 12.0861C26.6654 12.4459 22.256 16.8547 21.8961 22.3679C21.8704 22.7623 22.1808 23.0974 22.5761 23.0974ZM37.1763 32.9026C37.4035 32.9026 37.7895 33.0275 37.8058 33.5045C37.4995 41.1158 31.4105 47.2383 23.8124 47.5993C23.4253 47.6176 23.1023 47.3059 23.1023 46.9183V45.7883C23.1023 45.4704 23.2556 45.2093 23.7333 45.1479C29.9981 44.8304 35.0224 39.8121 35.3485 33.5505C35.3673 33.1878 35.6651 32.9026 36.0284 32.9026H37.1763ZM33.4353 32.9026C33.8306 32.9026 34.141 33.2377 34.1153 33.6321C33.7554 39.1454 29.346 43.5542 23.8319 43.914C23.4375 43.9398 23.1023 43.6293 23.1023 43.2341V42.1155C23.1023 41.6217 23.4884 41.4791 23.679 41.4664C27.9413 41.1837 31.3529 37.7903 31.6633 33.5362C31.6893 33.1805 31.9801 32.9026 32.3367 32.9026H33.4353ZM29.7445 32.9026C30.1445 32.9026 30.463 33.246 30.4231 33.6441C30.0758 37.1151 27.3154 39.8751 23.8438 40.2224C23.4458 40.2623 23.1023 39.9438 23.1023 39.5438V38.4201C23.1023 37.9604 23.5015 37.795 23.6961 37.7715C25.9261 37.5025 27.6953 35.7373 27.9703 33.5095C28.0129 33.1647 28.2999 32.9026 28.6474 32.9026H29.7445ZM10.212 23.0945C10.53 23.0945 10.7911 23.2477 10.8525 23.7254C11.1701 29.9892 16.189 35.0129 22.4516 35.3389C22.8143 35.3577 23.0996 35.6555 23.0996 36.0187V37.1666C23.0996 37.3936 22.9746 37.7796 22.4976 37.7959C14.8853 37.4896 8.76181 31.4015 8.4008 23.8045C8.3824 23.4174 8.69423 23.0945 9.0818 23.0945H10.212ZM13.8853 23.0945C14.3792 23.0945 14.5219 23.4805 14.5346 23.6711C14.8173 27.9328 18.2111 31.3439 22.4659 31.6543C22.8216 31.6803 23.0996 31.971 23.0996 32.3276V33.426C23.0996 33.8212 22.7644 34.1316 22.3699 34.1059C16.8559 33.746 12.4464 29.3373 12.0866 23.824C12.0608 23.4296 12.3713 23.0945 12.7666 23.0945H13.8853ZM33.5024 18.1729C41.1148 18.4792 47.2382 24.5673 47.5993 32.1644C47.6176 32.5514 47.3058 32.8744 46.9183 32.8744H45.788C45.4701 32.8744 45.2089 32.7211 45.1475 32.2434C44.8299 25.9795 39.811 20.956 33.5485 20.6299C33.1857 20.6111 32.9005 20.3133 32.9005 19.9501V18.8023C32.9005 18.5752 33.0253 18.1892 33.5024 18.1729ZM33.6301 21.8629C39.1442 22.2227 43.5536 26.6315 43.9135 32.1448C43.9392 32.5392 43.6288 32.8744 43.2335 32.8744H42.1148C41.6208 32.8744 41.4782 32.4883 41.4655 32.2977C41.1828 28.036 37.7889 24.6249 33.5342 24.3145C33.1784 24.2886 32.9005 23.9978 32.9005 23.6412V22.5428C32.9005 22.1476 33.2357 21.8372 33.6301 21.8629ZM33.642 25.5545C37.1136 25.9019 39.874 28.6619 40.2213 32.1329C40.2612 32.5309 39.9427 32.8744 39.5427 32.8744H38.4188C37.959 32.8744 37.7936 32.4752 37.7701 32.2806C37.501 30.0509 35.7356 28.282 33.5075 28.0071C33.1626 27.9645 32.9005 27.6775 32.9005 27.33V26.2331C32.9005 25.8331 33.244 25.5147 33.642 25.5545ZM17.5812 23.0945C18.0411 23.0945 18.2064 23.4936 18.2299 23.6882C18.4991 25.9179 20.2644 27.6868 22.4926 27.9618C22.8374 28.0043 23.0996 28.2913 23.0996 28.6388V29.7357C23.0996 30.1357 22.7561 30.4541 22.358 30.4144C18.8865 30.0669 16.1261 27.3069 15.7786 23.8359C15.7388 23.4379 16.0573 23.0945 16.4574 23.0945H17.5812ZM32.9091 16.4562V17.5798C32.9091 18.0396 32.51 18.205 32.3152 18.2285C30.0853 18.4976 28.3161 20.2627 28.0411 22.4905C27.9985 22.8353 27.7115 23.0974 27.364 23.0974H26.2669C25.8669 23.0974 25.5484 22.7539 25.5882 22.3559C25.9357 18.885 28.6961 16.125 32.1675 15.7776C32.5656 15.7378 32.9091 16.0562 32.9091 16.4562Z" fill="white"/>
+                    </svg>
+                    Details
+                </h3>
+
+                <div class="space-y-4">
+                    <div class="flex justify-between items-center py-2 border-b border-[#333]">
+                        <span class="text-xs md:text-sm text-gray-400">Total Sponsored</span>
+                        <div class="text-right">
+                            <span id="stream-total-sponsored" class="text-sm md:text-lg font-semibold text-white cursor-pointer" data-tooltip-value="0">--</span>
+                        </div>
+                    </div>
+                    <div class="flex justify-between items-center py-2 border-b border-[#333]">
+                        <span class="text-xs md:text-sm text-gray-400">Remaining Balance</span>
+                        <div class="text-right">
+                            <span id="stream-remaining" class="text-sm md:text-lg font-semibold text-white cursor-pointer" data-tooltip-value="0">--</span>
+                        </div>
+                    </div>
+                    <div class="flex justify-between items-center py-2 border-b border-[#333]">
+                        <span class="text-xs md:text-sm text-gray-400">Total Staked</span>
+                        <div class="text-right">
+                            <span id="stream-total-staked" class="text-sm md:text-lg font-semibold text-white cursor-pointer" data-tooltip-value="0">--</span>
+                        </div>
+                    </div>
+                    <div class="flex justify-between items-center py-2 border-b border-[#333]">
+                        <span class="text-xs md:text-sm text-gray-400">Payout Rate</span>
+                        <div class="text-right">
+                            <span id="stream-payout-rate" class="text-sm md:text-lg font-semibold text-white">--</span>
+                            <span class="text-sm md:text-lg font-semibold text-white ml-1">DATA/day</span>
+                        </div>
+                    </div>
+                    <div class="flex justify-between items-center py-2 border-b border-[#333]">
+                        <span class="text-xs md:text-sm text-gray-400">Min Stake Duration</span>
+                        <span id="stream-min-stake-duration" class="text-sm md:text-lg font-semibold text-white">--</span>
+                    </div>
+                    <div class="flex justify-between items-center py-2">
+                        <span class="text-xs md:text-sm text-gray-400">Projected Insolvency</span>
+                        <span id="stream-insolvency" class="text-sm md:text-lg font-semibold text-white">--</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Staked Operators - matches height of Sponsorship Details via JS -->
+            <div id="staked-operators-tile" class="bg-[#1E1E1E] border border-[#333] rounded-xl p-4 md:p-6 flex flex-col overflow-hidden">
+                <h3 class="text-sm md:text-base font-bold text-gray-200 flex items-center gap-2 mb-4 flex-shrink-0">
+                    <img src="assets/operator_icon.png" alt="Operators" class="w-4 h-4 md:w-5 md:h-5">
+                    Operators
+                </h3>
+                <div id="stream-operators-list" class="flex-1 overflow-y-auto min-h-0">
+                    <!-- Operators will be injected here -->
+                </div>
+            </div>
+
+            <!-- ROW 2: Funding History + Permissions -->
+            <!-- Funding History -->
+            <div id="funding-history-tile" class="bg-[#1E1E1E] border border-[#333] rounded-xl p-4 md:p-6 overflow-hidden">
+                <div class="flex items-center justify-between gap-3 mb-4">
+                <h3 class="text-sm md:text-base font-bold text-gray-200 flex items-center gap-2">
+                    <svg class="w-4 h-4 md:w-5 md:h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                    Funding 
+                </h3>
+                <button id="sponsorship-add-funds-btn" type="button" disabled title="Connect a wallet to add funds"
+                class="h-8 px-3 flex items-center gap-1.5 bg-blue-800 hover:bg-blue-900 text-white text-xs font-semibold rounded-lg transition-colors flex-shrink-0 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-blue-800">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" d="M12 5v14M5 12h14"/></svg>
+                Add Funds
+            </button>
+                </div>
+                <div id="stream-funding-history" class="max-h-64 overflow-y-auto">
+                    <!-- Funding history will be injected here -->
+                </div>
+            </div>
+
+            <!-- On-chain History -->
+            <div id="onchain-history-tile" class="bg-[#1E1E1E] border border-[#333] rounded-xl p-4 md:p-6 overflow-hidden">
+                <h3 class="text-sm md:text-base font-bold text-gray-200 flex items-center gap-2 mb-4">
+                    <svg class="w-4 h-4 md:w-5 md:h-5 text-green-400" viewBox="0 0 507.91 446.91">
+                        <path fill="#8247e5" d="M384.58,136.59c-9.28-5.3-21.22-5.3-31.83,0l-74.26,43.77L228.1,208.2,155.16,252c-9.28,5.3-21.22,5.3-31.83,0l-57-34.48a32.33,32.33,0,0,1-15.92-27.85V123.33c0-10.61,5.31-21.22,15.92-27.85l57-33.15c9.28-5.31,21.22-5.31,31.83,0l57,34.48a32.31,32.31,0,0,1,15.92,27.85v43.76l50.39-29.18V94.16c0-10.61-5.3-21.22-15.91-27.85L156.48,4c-9.28-5.31-21.21-5.31-31.82,0L15.91,67.63C5.3,72.94,0,83.55,0,94.16V218.81C0,229.42,5.3,240,15.91,246.66L123.33,309c9.28,5.31,21.22,5.31,31.83,0l72.94-42.44,50.39-29.17,72.94-42.44c9.28-5.3,21.22-5.3,31.83,0l57,33.16A32.32,32.32,0,0,1,456.19,256v66.3c0,10.61-5.3,21.22-15.91,27.85l-55.7,33.16c-9.28,5.3-21.22,5.3-31.83,0l-57-33.16a32.32,32.32,0,0,1-15.91-27.85V279.82L229.42,309v43.76c0,10.61,5.31,21.22,15.92,27.85l107.41,62.33c9.29,5.31,21.22,5.31,31.83,0L492,380.6a32.32,32.32,0,0,0,15.91-27.85v-126c0-10.61-5.3-21.22-15.91-27.85Z"/>
+                    </svg>
+                    On-chain History
+                </h3>
+                <div id="sponsorship-history-empty" class="hidden py-8 text-center">
+                    <p class="text-gray-500 text-sm">No on-chain activity found for this sponsorship.</p>
+                </div>
+                <div id="sponsorship-history-list" class="max-h-64 overflow-y-auto">
+                    <!-- On-chain history will be injected here -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Chart Section - Moved to bottom, full width -->
+        <div class="bg-[#1E1E1E] border border-[#333] rounded-xl p-4 md:p-6 mt-4 md:mt-6">
+            <div class="flex flex-col gap-2 mb-4">
+                <!-- Pills Row: Chart Type + View Mode -->
+                <div class="flex flex-wrap items-center justify-between gap-2">
+                    <!-- Chart Type Pills -->
+                    <div id="stream-chart-type-tabs" class="flex bg-[#2C2C2C] p-1 rounded-lg">
+                        <button data-stream-chart-type="apy" class="px-3 py-1.5 text-xs font-medium rounded-md bg-blue-800 text-white transition-colors">APY</button>
+                        <button data-stream-chart-type="stake" class="px-3 py-1.5 text-xs font-medium rounded-md text-gray-400 hover:text-white transition-colors">Stake</button>
+                        <button data-stream-chart-type="operators" class="px-3 py-1.5 text-xs font-medium rounded-md text-gray-400 hover:text-white transition-colors">Operators</button>
+                    </div>
+
+                    <!-- View Mode Pills (DATA/USD) - only for stake chart -->
+                    <div id="stream-chart-view-buttons" class="hidden flex items-center gap-1 bg-[#2C2C2C] p-1 rounded-lg">
+                        <button data-stream-view="data" class="px-3 py-1 text-xs font-bold rounded-md bg-blue-800 text-white transition">DATA</button>
+                        <button data-stream-view="usd" class="px-3 py-1 text-xs font-bold rounded-md text-gray-300 hover:bg-[#444444] transition">USD</button>
+                    </div>
+                </div>
+
+                <!-- Timeframe Pills Row -->
+                <div class="flex justify-end">
+                    <div id="stream-chart-timeframe-buttons" class="flex items-center gap-1 bg-[#2C2C2C] p-1 rounded-lg">
+                        <button data-stream-days="30" class="px-3 py-1 text-xs font-bold rounded-md hover:bg-[#444444] text-gray-300 transition">30D</button>
+                        <button data-stream-days="90" class="px-3 py-1 text-xs font-bold rounded-md hover:bg-[#444444] text-gray-300 transition">90D</button>
+                        <button data-stream-days="365" class="px-3 py-1 text-xs font-bold rounded-md hover:bg-[#444444] text-gray-300 transition">1Y</button>
+                        <button data-stream-days="all" class="px-3 py-1 text-xs font-bold rounded-md bg-blue-800 text-white transition shadow-sm">All</button>
+                    </div>
+                </div>
+            </div>
+            <div id="stream-chart-container" class="h-64">
+                <canvas id="stream-unified-chart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <!-- Permissions Panel for Non-Sponsored Streams -->
+    <div id="stream-permissions-panel-standalone" class="hidden bg-[#1E1E1E] border border-[#333] rounded-xl p-4 md:p-6 overflow-hidden">
+        <h3 class="text-sm md:text-base font-bold text-gray-200 flex items-center gap-2 mb-4">
+            <svg class="w-4 h-4 md:w-5 md:h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
+            </svg>
+            Permissions
+        </h3>
+        <div id="stream-permissions-empty-standalone" class="hidden py-8 text-center">
+            <p class="text-gray-500 text-sm">No specific permissions set. Stream uses default access.</p>
+        </div>
+        <div class="overflow-x-auto">
+            <table id="stream-permissions-table-standalone" class="w-full text-sm min-w-[400px]">
+                <thead class="text-xs text-gray-500 uppercase bg-[#252525]">
+                    <tr>
+                        <th class="px-4 py-3 text-left">Address</th>
+                        <th class="px-4 py-3 text-center">Pub</th>
+                        <th class="px-4 py-3 text-center">Sub</th>
+                        <th class="px-4 py-3 text-center">Edit</th>
+                        <th class="px-4 py-3 text-center">Del</th>
+                        <th class="px-4 py-3 text-center">Grant</th>
+                    </tr>
+                </thead>
+                <tbody id="stream-permissions-tbody-standalone" class="divide-y divide-[#333]">
+                    <!-- Permissions injected by JS -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Sponsorships Panel for Non-Sponsored Streams (shows linked sponsorships) -->
+    <div id="stream-sponsorships-list-panel" class="hidden bg-[#1E1E1E] border border-[#333] rounded-xl p-4 md:p-6 overflow-hidden">
+        <div class="flex items-center justify-between gap-3 mb-4">
+        <h3 class="text-sm md:text-base font-bold text-gray-200 flex items-center gap-2">
+            <svg class="w-4 h-4 md:w-5 md:h-5" viewBox="0 0 56 56" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <circle cx="28" cy="28" r="28" fill="#F7600A"/>
+                <path fill-rule="evenodd" clip-rule="evenodd" d="M32.9091 10.2118V9.08164C32.9091 8.69418 32.5861 8.38241 32.199 8.4008C24.6009 8.76169 18.5119 14.8843 18.2056 22.4955C18.2219 22.9725 18.608 23.0974 18.8351 23.0974H19.983C20.3463 23.0974 20.6441 22.8122 20.6629 22.4495C20.989 16.1879 26.0134 11.1697 32.278 10.8522C32.7558 10.7908 32.9091 10.5297 32.9091 10.2118ZM22.5761 23.0974H23.6747C24.0313 23.0974 24.3221 22.8195 24.348 22.4638C24.6586 18.2097 28.0701 14.8164 32.3324 14.5336C32.523 14.521 32.9091 14.3783 32.9091 13.8844V12.7659C32.9091 12.3707 32.5739 12.0603 32.1795 12.0861C26.6654 12.4459 22.256 16.8547 21.8961 22.3679C21.8704 22.7623 22.1808 23.0974 22.5761 23.0974ZM37.1763 32.9026C37.4035 32.9026 37.7895 33.0275 37.8058 33.5045C37.4995 41.1158 31.4105 47.2383 23.8124 47.5993C23.4253 47.6176 23.1023 47.3059 23.1023 46.9183V45.7883C23.1023 45.4704 23.2556 45.2093 23.7333 45.1479C29.9981 44.8304 35.0224 39.8121 35.3485 33.5505C35.3673 33.1878 35.6651 32.9026 36.0284 32.9026H37.1763ZM33.4353 32.9026C33.8306 32.9026 34.141 33.2377 34.1153 33.6321C33.7554 39.1454 29.346 43.5542 23.8319 43.914C23.4375 43.9398 23.1023 43.6293 23.1023 43.2341V42.1155C23.1023 41.6217 23.4884 41.4791 23.679 41.4664C27.9413 41.1837 31.3529 37.7903 31.6633 33.5362C31.6893 33.1805 31.9801 32.9026 32.3367 32.9026H33.4353ZM29.7445 32.9026C30.1445 32.9026 30.463 33.246 30.4231 33.6441C30.0758 37.1151 27.3154 39.8751 23.8438 40.2224C23.4458 40.2623 23.1023 39.9438 23.1023 39.5438V38.4201C23.1023 37.9604 23.5015 37.795 23.6961 37.7715C25.9261 37.5025 27.6953 35.7373 27.9703 33.5095C28.0129 33.1647 28.2999 32.9026 28.6474 32.9026H29.7445ZM10.212 23.0945C10.53 23.0945 10.7911 23.2477 10.8525 23.7254C11.1701 29.9892 16.189 35.0129 22.4516 35.3389C22.8143 35.3577 23.0996 35.6555 23.0996 36.0187V37.1666C23.0996 37.3936 22.9746 37.7796 22.4976 37.7959C14.8853 37.4896 8.76181 31.4015 8.4008 23.8045C8.3824 23.4174 8.69423 23.0945 9.0818 23.0945H10.212ZM13.8853 23.0945C14.3792 23.0945 14.5219 23.4805 14.5346 23.6711C14.8173 27.9328 18.2111 31.3439 22.4659 31.6543C22.8216 31.6803 23.0996 31.971 23.0996 32.3276V33.426C23.0996 33.8212 22.7644 34.1316 22.3699 34.1059C16.8559 33.746 12.4464 29.3373 12.0866 23.824C12.0608 23.4296 12.3713 23.0945 12.7666 23.0945H13.8853ZM33.5024 18.1729C41.1148 18.4792 47.2382 24.5673 47.5993 32.1644C47.6176 32.5514 47.3058 32.8744 46.9183 32.8744H45.788C45.4701 32.8744 45.2089 32.7211 45.1475 32.2434C44.8299 25.9795 39.811 20.956 33.5485 20.6299C33.1857 20.6111 32.9005 20.3133 32.9005 19.9501V18.8023C32.9005 18.5752 33.0253 18.1892 33.5024 18.1729ZM33.6301 21.8629C39.1442 22.2227 43.5536 26.6315 43.9135 32.1448C43.9392 32.5392 43.6288 32.8744 43.2335 32.8744H42.1148C41.6208 32.8744 41.4782 32.4883 41.4655 32.2977C41.1828 28.036 37.7889 24.6249 33.5342 24.3145C33.1784 24.2886 32.9005 23.9978 32.9005 23.6412V22.5428C32.9005 22.1476 33.2357 21.8372 33.6301 21.8629ZM33.642 25.5545C37.1136 25.9019 39.874 28.6619 40.2213 32.1329C40.2612 32.5309 39.9427 32.8744 39.5427 32.8744H38.4188C37.959 32.8744 37.7936 32.4752 37.7701 32.2806C37.501 30.0509 35.7356 28.282 33.5075 28.0071C33.1626 27.9645 32.9005 27.6775 32.9005 27.33V26.2331C32.9005 25.8331 33.244 25.5147 33.642 25.5545ZM17.5812 23.0945C18.0411 23.0945 18.2064 23.4936 18.2299 23.6882C18.4991 25.9179 20.2644 27.6868 22.4926 27.9618C22.8374 28.0043 23.0996 28.2913 23.0996 28.6388V29.7357C23.0996 30.1357 22.7561 30.4541 22.358 30.4144C18.8865 30.0669 16.1261 27.3069 15.7786 23.8359C15.7388 23.4379 16.0573 23.0945 16.4574 23.0945H17.5812ZM32.9091 16.4562V17.5798C32.9091 18.0396 32.51 18.205 32.3152 18.2285C30.0853 18.4976 28.3161 20.2627 28.0411 22.4905C27.9985 22.8353 27.7115 23.0974 27.364 23.0974H26.2669C25.8669 23.0974 25.5484 22.7539 25.5882 22.3559C25.9357 18.885 28.6961 16.125 32.1675 15.7776C32.5656 15.7378 32.9091 16.0562 32.9091 16.4562Z" fill="white"/>
+            </svg>
+            Sponsorships
+        </h3>
+            <button id="stream-new-sponsorship-btn" type="button" disabled title="Connect a wallet to create a sponsorship"
+                class="h-8 px-3 flex items-center gap-1.5 bg-blue-800 hover:bg-blue-900 text-white text-xs font-semibold rounded-lg transition-colors flex-shrink-0 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-blue-800">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" d="M12 5v14M5 12h14"/></svg>
+                New Sponsorship
+            </button>
+        </div>
+        <div id="stream-sponsorships-list-empty" class="hidden py-8 text-center">
+            <p class="text-gray-500 text-sm">No sponsorships found for this stream.</p>
+        </div>
+        <div id="stream-sponsorships-list-content">
+            <!-- Sponsorships injected by JS -->
+        </div>
+    </div>
+
+    <!-- Data Storage Panel for Non-Sponsored Streams -->
+    <div id="stream-storage-panel" class="hidden bg-[#1E1E1E] border border-[#333] rounded-xl p-4 md:p-6 overflow-hidden">
+        <h3 class="text-sm md:text-base font-bold text-gray-200 flex items-center gap-2 mb-4">
+            <svg class="w-4 h-4 md:w-5 md:h-5 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4"/>
+            </svg>
+            Data Storage
+        </h3>
+        <div id="stream-storage-empty" class="hidden py-8 text-center">
+            <p class="text-gray-500 text-sm">No storage nodes are storing this stream.</p>
+        </div>
+        <div id="stream-storage-content" class="space-y-2">
+            <!-- Storage nodes injected by JS -->
+        </div>
+    </div>
+
+    <!-- Live Data Player (only for public streams) -->
+    <div id="stream-player-panel" class="hidden bg-[#1E1E1E] border border-[#333] rounded-xl p-4 md:p-6">
+        <div class="flex items-center justify-between mb-4 flex-wrap gap-3">
+            <h3 class="text-sm md:text-base font-bold text-gray-200 flex items-center gap-2">
+                <svg class="w-4 h-4 md:w-5 md:h-5 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/>
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+                Live Data Viewer
+            </h3>
+            <div class="flex items-center gap-3">
+                <!-- Partition Selector (shown only if partitions > 1) -->
+                <div id="stream-partition-selector" class="hidden flex items-center gap-2">
+                    <span class="text-xs text-gray-500">Partition:</span>
+                    <select id="stream-partition-select" class="bg-[#252525] border border-[#444] text-gray-200 text-sm rounded-lg px-3 py-1.5 focus:border-purple-500 focus:ring-1 focus:ring-purple-500 outline-none">
+                        <!-- Populated by JS -->
+                    </select>
+                </div>
+                <button id="stream-play-btn" class="flex items-center gap-1.5 px-3 py-1.5 border border-purple-500/50 text-purple-400 hover:bg-purple-500/10 rounded-lg transition-colors text-sm font-medium">
+                    <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M8 5v14l11-7z"/>
+                    </svg>
+                    Subscribe
+                </button>
+                <button id="stream-stop-btn" class="hidden flex items-center gap-1.5 px-3 py-1.5 border border-red-500/50 text-red-400 hover:bg-red-500/10 rounded-lg transition-colors text-sm font-medium">
+                    <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24">
+                        <rect x="6" y="6" width="12" height="12" rx="1"/>
+                    </svg>
+                    Stop
+                </button>
+                <button id="stream-clear-btn" class="flex items-center gap-1.5 px-2.5 py-1.5 text-gray-500 hover:text-gray-300 hover:bg-[#333] rounded-lg transition-colors text-sm">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                    </svg>
+                </button>
+            </div>
+        </div>
+
+        <!-- Player Stats -->
+        <div class="grid grid-cols-2 md:flex md:items-center gap-2 md:gap-6 mb-4 text-xs md:text-sm">
+            <div class="flex items-center gap-2">
+                <span id="stream-player-status" class="w-2 h-2 rounded-full bg-gray-500"></span>
+                <span id="stream-player-status-text" class="text-gray-400">Idle</span>
+            </div>
+            <div class="text-gray-500">
+                Msgs: <span id="stream-player-msg-count" class="text-white font-mono">0</span>
+            </div>
+            <div class="text-gray-500">
+                Rate: <span id="stream-player-rate" class="text-white font-mono">0</span> <span class="text-gray-600">msg/s</span>
+            </div>
+            <div class="text-gray-500">
+                <span id="stream-player-kbps" class="text-white font-mono">0</span> <span class="text-gray-600">Kbps</span>
+            </div>
+        </div>
+
+        <!-- Message Log -->
+        <div id="stream-player-log" class="bg-[#0d0d0d] border border-[#333] rounded-lg p-3 md:p-4 h-60 md:h-80 overflow-y-auto font-mono text-xs">
+            <div class="text-gray-500 text-center py-8">Click "Subscribe" to start receiving live data</div>
+        </div>
+    </div>
+
+</div>

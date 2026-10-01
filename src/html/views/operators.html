@@ -1,0 +1,41 @@
+<!-- Operator List View -->
+<main id="operator-list-view" class="p-4 md:p-6">
+    <!-- Search Bar (simplified - navigation moved to bottom/side nav) + Create Operator -->
+    <div class="mb-6 flex gap-3">
+        <div class="relative flex-1 min-w-0">
+            <input 
+                type="text" 
+                id="search-input" 
+                placeholder="Search operators..." 
+                class="w-full h-12 pl-11 pr-4 bg-[#1E1E1E] border border-[#333333] rounded-xl text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all"
+            >
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+        </div>
+        <button id="operators-create-btn" disabled title="Connect a wallet (MetaMask or private key) to create an operator"
+            class="h-12 px-3 md:px-4 flex items-center gap-2 bg-blue-800 hover:bg-blue-900 text-white text-sm font-semibold rounded-xl transition-colors flex-shrink-0 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-blue-800">
+            <span class="relative w-6 h-6 flex-shrink-0">
+                <img src="/assets/operator_icon.png" alt="" class="w-6 h-6 brightness-0 invert">
+                <span class="absolute -bottom-1 -right-1.5 w-3.5 h-3.5 rounded-full bg-white text-blue-800 flex items-center justify-center ring-2 ring-blue-800">
+                    <svg class="w-2.5 h-2.5" fill="none" stroke="currentColor" stroke-width="4" viewBox="0 0 24 24"><path stroke-linecap="round" d="M12 5v14M5 12h14"/></svg>
+                </span>
+            </span>
+            <span class="hidden sm:inline">Become an Operator</span>
+        </button>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6" id="operators-grid">
+    </div>
+    <div class="mt-8 text-center" id="load-more-container">
+         <button id="load-more-operators-btn" class="bg-[#2C2C2C] hover:bg-[#3A3A3A] text-white font-bold py-3 px-8 rounded-xl transition-colors hidden disabled:opacity-50">
+            Load More Operators
+        </button>
+    </div>
+</main>
+
+<!-- Operator Detail View -->
+<div id="operator-detail-view" class="p-4 md:p-6 space-y-4 md:space-y-8">
+    <div id="detail-content">
+    </div>
+</div>
