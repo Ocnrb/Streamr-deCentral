@@ -232,8 +232,19 @@ export function getGraphUrl() {
 export const DEX_SUBGRAPH_IDS = {
     v4: '2CB2uQxcDKWDenagn2z17KQVCtfwSx5eXYuvqTciRTJu',    // Uniswap v4
     uni: '3hCPRGf4z88VC5rsBKU5AA9FBBq5nF3jbKJG7VZCbhjm',   // Uniswap v3
-    qv3: 'FqsRcH1XqSjqVx9GRTvEJe959aCbKrcyGgDWBrUkG24g'    // QuickSwap V3 (Algebra)
+    qv3: 'FqsRcH1XqSjqVx9GRTvEJe959aCbKrcyGgDWBrUkG24g',   // QuickSwap V3 (Algebra)
+    ethUniV2: 'GmSczqdCDZ3hJeYY9JphwsADn5rePUzUKm8EZcVuhRAm', // Uniswap v2 on Ethereum
+    ethUniV3: '5zvR82QoaXYFyDEKLZ9t6v9adgnptxYpKpSbxtgVENFV', // Uniswap v3 on Ethereum
+    ethUniV4: 'DiYPVdygkfjDWhbxGSqAQxwBKmfKnkWQojqeM2rkLb3G'  // Uniswap v4 on Ethereum
 };
+
+// Ethereum RPC endpoints (bridge, Ethereum DATA pools of the Swap page); the provider moves to the next one when one fails
+export const ETHEREUM_RPC_URLS = [
+    'https://ethereum-rpc.publicnode.com',
+    'https://eth.drpc.org',
+    'https://1rpc.io/eth'
+];
+export const DATA_TOKEN_ADDRESS_ETHEREUM = '0x8f693ca8D21b157107184d29D398A8D082b38b76';
 
 export function getDexSubgraphUrl(venue) {
     return `https://gateway.thegraph.com/api/${getGraphApiKey()}/subgraphs/id/${DEX_SUBGRAPH_IDS[venue]}`;
