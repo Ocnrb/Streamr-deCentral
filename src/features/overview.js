@@ -1,9 +1,9 @@
 /**
  * Overview Feature Module
  * Home page: the Streamr Network at a glance. Stake, delegations, operators, sponsorships,
- * network APY and the DATA price; total stake and DATA/USD over time; top operators,
- * best and ending sponsorships, and the flags in review or voting.
- * Network data comes from The Graph (time-travel queries for the stake history),
+ * network APY and the DATA price; stake in sponsorships and DATA/USD over time; top operators,
+ * best sponsorships, and the latest staking and governance events.
+ * Network data comes from The Graph (the stake history from the sponsorships' daily buckets),
  * the DATA price from the app's price streams.
  */
 
@@ -21,9 +21,10 @@ const REFRESH_MS = 60 * 1000;        // network numbers and lists while the page
 const LIST_SIZE = 5;
 // Streamr 1.0 staking went live late November 2023 (the Leaderboard starts there too)
 const NETWORK_START = Math.floor(Date.UTC(2023, 11, 1) / 1000);
-const POLYGON_BLOCK_SECONDS = 2.1;   // first guess, calibrated against the subgraph before the history query
+const BUCKET_PAGE = 1000;
+const BUCKET_ALIASES = 10;           // windows per subgraph request
 
-// Stake history: one point per `step` days (time-travel query per point)
+// Stake history: one point per `step` days
 const STAKE_RANGES = {
     '30d': { label: '30D', days: 30, step: 1 },
     '1y': { label: '1Y', days: 365, step: 7 },
@@ -36,9 +37,12 @@ const PRICE_RANGES = {
 };
 
 const LINK_CLASS = 'hover:text-white hover:underline underline-offset-2 transition-colors';
-const STATUS = {
-    waiting: { label: 'In review', badge: 'bg-amber-500/10 text-amber-400 border-amber-500/30' },
-    voting: { label: 'Voting', badge: 'bg-blue-500/10 text-blue-400 border-blue-500/30' }
+const BADGES = {
+    flagged: { label: 'Flagged', badge: 'bg-amber-500/10 text-amber-400 border-amber-500/30' },
+    kick: { label: 'Voted kick', badge: 'bg-red-500/10 text-red-400 border-red-500/30' },
+    keep: { label: 'Voted no kick', badge: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' },
+    kicked: { label: 'Kicked', badge: 'bg-red-500/10 text-red-400 border-red-500/30' },
+    failed: { label: 'Not kicked', badge: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' }
 };
 
 // ============================================
@@ -49,11 +53,12 @@ const state = {
     active: false,
     timer: null,
     network: null,
-    activeOperators: null,
-    nodes: null,
+    totals: null,                // { staked, delegated, activeOperators, nodes } from the operators
+    stakedBySponsorship: [],     // [{ id, staked }] every sponsorship with stake now
     sponsorships: [],
     operators: [],
-    flags: [],
+    govEvents: [],
+    stakingEvents: [],
     loaded: false,
     error: false,
     stakeRange: '1y',
@@ -98,12 +103,12 @@ function formatPercent(value, digits = 1) {
     return Number.isFinite(value) ? `${(value * 100).toFixed(digits)}%` : '--';
 }
 
-function formatDuration(seconds) {
-    if (seconds <= 0) return 'now';
-    const days = Math.floor(seconds / DAY);
-    if (days >= 1) return `${days}d ${Math.floor((seconds % DAY) / 3600)}h`;
-    const hours = Math.floor(seconds / 3600);
-    return hours >= 1 ? `${hours}h ${Math.floor((seconds % 3600) / 60)}m` : `${Math.max(1, Math.floor(seconds / 60))}m`;
+function timeAgo(seconds) {
+    const elapsed = now() - Number(seconds);
+    if (elapsed < 60) return 'just now';
+    if (elapsed < 3600) return `${Math.floor(elapsed / 60)}m ago`;
+    if (elapsed < DAY) return `${Math.floor(elapsed / 3600)}h ago`;
+    return `${Math.floor(elapsed / DAY)}d ago`;
 }
 
 function shortStreamId(streamId) {
@@ -139,66 +144,114 @@ async function graphRequest(query) {
 }
 
 async function fetchSnapshot() {
+    const PARTY = 'id metadataJsonString';
+    const FLAG = `id result flaggingTimestamp flagResolutionTimestamp target { ${PARTY} } flagger { ${PARTY} } sponsorship { id stream { id } }`;
     const data = await Services.runQuery(`{
-        networks(first: 1) { totalStake totalDelegated operatorsCount sponsorshipsCount fundedSponsorshipsCount }
-        activeOperators: operators(first: 1000, where: { totalStakeInSponsorshipsWei_gt: "0" }) { id nodes }
+        networks(first: 1) { operatorsCount sponsorshipsCount }
+        allOperators: operators(first: 1000) { valueWithoutEarnings totalStakeInSponsorshipsWei nodes }
+        staked: sponsorships(first: 1000, where: { totalStakedWei_gt: "0" }) { id totalStakedWei }
         sponsorships(first: 1000, where: { isRunning: true, remainingWei_gt: "0" }) {
-            id spotAPY totalStakedWei remainingWei totalPayoutWeiPerSec projectedInsolvency operatorCount
+            id spotAPY totalStakedWei remainingWei totalPayoutWeiPerSec operatorCount
             stream { id }
         }
         topOperators: operators(first: ${LIST_SIZE}, orderBy: valueWithoutEarnings, orderDirection: desc) {
             id valueWithoutEarnings delegatorCount metadataJsonString
             stakes(first: 50) { amountWei sponsorship { spotAPY } }
         }
-        flags(first: 20, orderBy: voteEndTimestamp, orderDirection: asc, where: { result_in: ["waiting", "voting"], voteEndTimestamp_gt: ${now() - 3600} }) {
-            id result voteStartTimestamp voteEndTimestamp reviewerCount targetStakeAtRiskWei
-            target { id metadataJsonString }
-            sponsorship { id stream { id } }
-            votes(first: 100) { id }
+        raised: flags(first: ${LIST_SIZE}, orderBy: flaggingTimestamp, orderDirection: desc) { ${FLAG} }
+        resolved: flags(first: ${LIST_SIZE}, orderBy: flagResolutionTimestamp, orderDirection: desc, where: { result_in: ["kicked", "failed"] }) { ${FLAG} }
+        votes(first: ${LIST_SIZE}, orderBy: timestamp, orderDirection: desc) {
+            id timestamp votedKick voter { ${PARTY} }
+            flag { id target { ${PARTY} } sponsorship { id stream { id } } }
+        }
+        stakingEvents(first: ${LIST_SIZE}, orderBy: date, orderDirection: desc) {
+            id amount date operator { ${PARTY} } sponsorship { id stream { id } }
         }
     }`);
     state.network = data.networks?.[0] || null;
-    state.activeOperators = data.activeOperators?.length ?? null;
-    state.nodes = (data.activeOperators || []).reduce((sum, op) => sum + (op.nodes?.length || 0), 0);
+    // Stake and delegations: sums over the operators (the Network entity's totals are cumulative)
+    const operators = data.allOperators || [];
+    const active = operators.filter(op => BigInt(op.totalStakeInSponsorshipsWei || '0') > 0n);
+    state.totals = {
+        staked: operators.reduce((sum, op) => sum + weiToNumber(op.totalStakeInSponsorshipsWei), 0),
+        delegated: operators.reduce((sum, op) => sum + weiToNumber(op.valueWithoutEarnings), 0),
+        activeOperators: active.length,
+        nodes: active.reduce((sum, op) => sum + (op.nodes?.length || 0), 0)
+    };
+    state.stakedBySponsorship = (data.staked || []).map(s => ({ id: s.id, staked: weiToNumber(s.totalStakedWei) }));
     state.sponsorships = data.sponsorships || [];
     state.operators = data.topOperators || [];
-    state.flags = data.flags || [];
+    state.stakingEvents = data.stakingEvents || [];
+
+    // Governance: flags raised, votes cast and results, newest first
+    const events = new Map();
+    for (const flag of data.raised || []) {
+        events.set(`raised:${flag.id}`, { kind: 'flagged', time: Number(flag.flaggingTimestamp), flag, who: flag.target, by: flag.flagger });
+    }
+    for (const flag of data.resolved || []) {
+        events.set(`resolved:${flag.id}`, { kind: flag.result, time: Number(flag.flagResolutionTimestamp), flag, who: flag.target });
+    }
+    for (const vote of data.votes || []) {
+        events.set(`vote:${vote.id}`, { kind: vote.votedKick ? 'kick' : 'keep', time: Number(vote.timestamp), flag: vote.flag, who: vote.voter, on: vote.flag?.target });
+    }
+    state.govEvents = [...events.values()].sort((a, b) => b.time - a.time).slice(0, LIST_SIZE);
+}
+
+/** Daily buckets of every sponsorship in (from, to], several windows per request, each paged */
+async function fetchBuckets(windows) {
+    const results = windows.map(() => []);
+    let pending = windows.map((w, i) => ({ ...w, i, skip: 0 }));
+    while (pending.length) {
+        const next = [];
+        const batches = [];
+        for (let k = 0; k < pending.length; k += BUCKET_ALIASES) batches.push(pending.slice(k, k + BUCKET_ALIASES));
+        await Promise.all(batches.map(async (batch) => {
+            const fields = batch.map((w, j) => `w${j}: sponsorshipDailyBuckets(first: ${BUCKET_PAGE}, skip: ${w.skip}, orderBy: date, orderDirection: asc, where: { date_gt: "${w.from}", date_lte: "${w.to}" }) { date totalStakedWei sponsorship { id } }`).join('\n');
+            const data = await Services.runQuery(`{ ${fields} }`);
+            batch.forEach((w, j) => {
+                const rows = data[`w${j}`] || [];
+                results[w.i].push(...rows);
+                if (rows.length === BUCKET_PAGE) next.push({ ...w, skip: w.skip + BUCKET_PAGE });
+            });
+        }));
+        pending = next;
+    }
+    return results;
 }
 
 /**
- * Total stake at past dates: the Network entity at estimated Polygon blocks (time-travel queries).
- * The block time is calibrated on the oldest point; each point is placed at its block's real timestamp.
+ * DATA staked in sponsorships at past dates, from the sponsorships' daily buckets: each sponsorship
+ * keeps its last bucket's stake until the next one. Sponsorships without a bucket in the range kept
+ * the stake they have now; the others start from the last bucket before the range.
  */
 async function fetchStakeHistory(rangeKey) {
     const range = STAKE_RANGES[rangeKey];
-    const latest = (await Services.runQuery('{ _meta { block { number timestamp } } }'))._meta.block;
-    const start = range.days ? latest.timestamp - range.days * DAY : NETWORK_START;
+    const today = Math.floor(now() / DAY) * DAY;
     const step = range.step * DAY;
+    const start = range.days ? today - range.days * DAY : Math.floor(NETWORK_START / DAY) * DAY;
     const times = [];
-    for (let t = latest.timestamp - step; t >= start; t -= step) times.unshift(t);
+    for (let t = today; t > start; t -= step) times.unshift(t);
     if (!times.length) return [];
 
-    let blockSeconds = POLYGON_BLOCK_SECONDS;
-    const blockAt = (t) => Math.max(1, Math.round(latest.number - (latest.timestamp - t) / blockSeconds));
-    const probe = await graphRequest(`{ _meta(block: { number: ${blockAt(times[0])} }) { block { number timestamp } } }`);
-    const probed = probe.data?._meta?.block;
-    if (probed && latest.number > probed.number && latest.timestamp > probed.timestamp) {
-        blockSeconds = (latest.timestamp - probed.timestamp) / (latest.number - probed.number);
-    }
+    // Window i: the buckets after the previous point, up to point i
+    const first = times[0] - step;
+    const [beforeData, inRange] = await Promise.all([
+        // State before the range: the latest buckets before it (read oldest first below, so each sponsorship ends on its newest)
+        Services.runQuery(`{ sponsorshipDailyBuckets(first: ${BUCKET_PAGE}, orderBy: date, orderDirection: desc, where: { date_lte: "${first}" }) { date totalStakedWei sponsorship { id } } }`),
+        fetchBuckets(times.map((t, i) => ({ from: i ? times[i - 1] : first, to: t })))
+    ]);
+    const value = new Map();
+    for (const row of [...(beforeData.sponsorshipDailyBuckets || [])].reverse()) value.set(row.sponsorship.id, weiToNumber(row.totalStakedWei));
+    const seen = new Set([...value.keys(), ...inRange.flat().map(row => row.sponsorship.id)]);
+    // Unchanged since before the range: the stake they have now
+    const constant = state.stakedBySponsorship.filter(s => !seen.has(s.id)).reduce((sum, s) => sum + s.staked, 0);
 
-    const fields = times.map((t, i) => {
-        const block = `block: { number: ${blockAt(t)} }`;
-        return `n${i}: networks(first: 1, ${block}) { totalStake } m${i}: _meta(${block}) { block { timestamp } }`;
-    }).join('\n');
-    const json = await graphRequest(`{ ${fields} }`);
-    // Points the indexer cannot serve (e.g. pruned blocks) come back empty: the others are kept
-    const points = times.map((t, i) => {
-        const network = json.data?.[`n${i}`]?.[0];
-        const timestamp = json.data?.[`m${i}`]?.block?.timestamp;
-        return network && timestamp ? { x: timestamp * 1000, y: weiToNumber(network.totalStake) } : null;
-    }).filter(Boolean);
-    if (!points.length) throw new Error(json.errors?.[0]?.message || 'No stake history');
-    return points;
+    return times.map((t, i) => {
+        for (const row of inRange[i]) value.set(row.sponsorship.id, weiToNumber(row.totalStakedWei));
+        let total = constant;
+        for (const staked of value.values()) total += staked;
+        return { x: t * 1000, y: total };
+    });
 }
 
 function setPriceHistory({ priceMap }) {
@@ -265,8 +318,9 @@ function renderKpis() {
     const dataUnit = (value) => `${compact(value)} <span class="text-sm font-semibold text-gray-300">DATA</span>`;
     const placeholder = state.error ? '--' : '<span class="inline-block w-16 h-6 rounded bg-[#2C2C2C] animate-pulse align-middle"></span>';
 
-    const staked = n ? weiToNumber(n.totalStake) : null;
-    const delegated = n ? weiToNumber(n.totalDelegated) : null;
+    const totals = state.totals;
+    const staked = totals ? totals.staked : null;
+    const delegated = totals ? totals.delegated : null;
     const apy = state.loaded ? networkApy() : null;
     const before = price24hAgo();
     const change = price && before ? price / before - 1 : null;
@@ -275,11 +329,11 @@ function renderKpis() {
 
     el.innerHTML = [
         kpiTile('Total staked', staked === null ? placeholder : dataUnit(staked), staked === null ? '' : usd(staked),
-            staked === null ? '' : `${formatBigNumber(Math.round(staked).toString())} DATA staked in sponsorships`),
+            staked === null ? '' : `${formatBigNumber(Math.round(staked).toString())} DATA staked by the operators in sponsorships`),
         kpiTile('Delegated', delegated === null ? placeholder : dataUnit(delegated), delegated === null ? '' : usd(delegated),
-            delegated === null ? '' : `${formatBigNumber(Math.round(delegated).toString())} DATA delegated to operators`),
-        kpiTile('Operators', state.activeOperators === null ? placeholder : formatBigNumber(String(state.activeOperators)),
-            n ? `Staking · ${formatBigNumber(String(n.operatorsCount))} in total · ${formatBigNumber(String(state.nodes || 0))} nodes` : ''),
+            delegated === null ? '' : `${formatBigNumber(Math.round(delegated).toString())} DATA delegated to the operators, by delegators and owners<br>Operator value without the earnings not yet withdrawn`),
+        kpiTile('Operators', totals ? formatBigNumber(String(totals.activeOperators)) : placeholder,
+            n ? `Staking · ${formatBigNumber(String(n.operatorsCount))} in total · ${formatBigNumber(String(totals.nodes))} nodes` : ''),
         kpiTile('Sponsorships', n ? formatBigNumber(String(state.sponsorships.length)) : placeholder,
             n ? `Running · ${formatBigNumber(String(n.sponsorshipsCount))} in total` : ''),
         kpiTile('Network APY', apy === null ? (state.loaded ? '--' : placeholder) : formatPercent(apy),
@@ -336,15 +390,8 @@ function sponsorshipRow(s, right, rightSub) {
 
 function renderSponsorships() {
     const best = $('overview-best');
-    const ending = $('overview-ending');
-    if (!best || !ending) return;
-    if (!state.loaded) {
-        const content = state.error ? emptyRow('Sponsorships could not be loaded.') : loadingRows();
-        best.innerHTML = content;
-        ending.innerHTML = content;
-        return;
-    }
-    const t = now();
+    if (!best) return;
+    if (!state.loaded) { best.innerHTML = state.error ? emptyRow('Sponsorships could not be loaded.') : loadingRows(); return; }
     const top = [...state.sponsorships]
         .filter(s => Number(s.spotAPY) > 0)
         .sort((a, b) => Number(b.spotAPY) - Number(a.spotAPY))
@@ -352,37 +399,59 @@ function renderSponsorships() {
     best.innerHTML = top.length
         ? top.map(s => sponsorshipRow(s, formatPercent(Number(s.spotAPY)), `${compact(weiToNumber(s.remainingWei))} DATA left`)).join('')
         : emptyRow('No running sponsorships.');
-
-    const soon = state.sponsorships
-        .filter(s => Number(s.projectedInsolvency) > t)
-        .sort((a, b) => Number(a.projectedInsolvency) - Number(b.projectedInsolvency))
-        .slice(0, LIST_SIZE);
-    ending.innerHTML = soon.length
-        ? soon.map(s => sponsorshipRow(s, `in ${formatDuration(Number(s.projectedInsolvency) - t)}`, `${formatPercent(Number(s.spotAPY))} APY`)).join('')
-        : emptyRow('No sponsorship ends soon.');
 }
 
-function renderFlags() {
-    const el = $('overview-flags');
+function badge(kind) {
+    const { label, badge: classes } = BADGES[kind];
+    return `<span class="inline-flex items-center px-2 py-0.5 rounded-full border text-[11px] font-semibold whitespace-nowrap ${classes}">${label}</span>`;
+}
+
+function avatar(operator) {
+    return operatorAvatarHtml(operator?.metadataJsonString, { className: 'w-8 h-8 border border-[#333]' });
+}
+
+function renderStakingEvents() {
+    const el = $('overview-staking');
     if (!el) return;
-    if (!state.loaded) { el.innerHTML = state.error ? emptyRow('Flags could not be loaded.') : loadingRows(); return; }
-    if (!state.flags.length) { el.innerHTML = emptyRow('No flags in review or voting.'); return; }
-    el.innerHTML = state.flags.slice(0, LIST_SIZE).map(flag => {
-        const status = STATUS[flag.result] || STATUS.voting;
-        const t = now();
-        const phase = flag.result === 'waiting' && flag.voteStartTimestamp > t
-            ? `Voting in ${formatDuration(flag.voteStartTimestamp - t)}`
-            : flag.voteEndTimestamp > t ? `Ends in ${formatDuration(flag.voteEndTimestamp - t)}` : 'Awaiting result';
+    if (!state.loaded) { el.innerHTML = state.error ? emptyRow('Staking events could not be loaded.') : loadingRows(); return; }
+    if (!state.stakingEvents.length) { el.innerHTML = emptyRow('No staking events.'); return; }
+    el.innerHTML = state.stakingEvents.map(event => {
+        const amount = weiToNumber(event.amount);   // negative: unstaked
+        const staked = amount >= 0;
         return `
-            <a href="/governance/flag/${encodeURIComponent(flag.id)}" class="flex items-center gap-3 px-2 py-2 -mx-2 rounded-lg hover:bg-white/[0.03] transition-colors">
-                ${operatorAvatarHtml(flag.target?.metadataJsonString, { className: 'w-8 h-8 border border-[#333]' })}
+            <a href="/operator/${event.operator?.id}" class="flex items-center gap-3 px-2 py-2 -mx-2 rounded-lg hover:bg-white/[0.03] transition-colors">
+                ${avatar(event.operator)}
                 <div class="min-w-0 flex-1">
-                    <p class="text-sm font-semibold text-white truncate">${escapeHtml(operatorName(flag.target))}</p>
-                    <p class="text-xs text-gray-400 truncate">${escapeHtml(shortStreamId(flag.sponsorship?.stream?.id))}</p>
+                    <p class="text-sm font-semibold text-white truncate">${escapeHtml(operatorName(event.operator))}</p>
+                    <p class="text-xs text-gray-400 truncate" data-tooltip-content="${escapeHtml(event.sponsorship?.stream?.id || '')}">${staked ? 'Staked in' : 'Unstaked from'} ${escapeHtml(shortStreamId(event.sponsorship?.stream?.id) || shortAddress(event.sponsorship?.id || ''))}</p>
                 </div>
                 <div class="text-right whitespace-nowrap">
-                    <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full border text-[11px] font-semibold ${status.badge}"><span class="w-1.5 h-1.5 rounded-full bg-current animate-pulse"></span>${status.label}</span>
-                    <p class="text-xs text-gray-400 mt-1">${phase}<span class="hidden sm:inline"> · ${flag.votes?.length || 0}/${flag.reviewerCount || 0} voted</span></p>
+                    <p class="text-sm font-semibold ${staked ? 'text-green-400' : 'text-red-400'}" data-tooltip-content="${formatBigNumber(Math.round(Math.abs(amount)).toString())} DATA">${staked ? '+' : '-'}${compact(Math.abs(amount))} DATA</p>
+                    <p class="text-xs text-gray-400">${timeAgo(event.date)}</p>
+                </div>
+            </a>`;
+    }).join('');
+}
+
+function renderGovernanceEvents() {
+    const el = $('overview-governance');
+    if (!el) return;
+    if (!state.loaded) { el.innerHTML = state.error ? emptyRow('Governance events could not be loaded.') : loadingRows(); return; }
+    if (!state.govEvents.length) { el.innerHTML = emptyRow('No governance events.'); return; }
+    el.innerHTML = state.govEvents.map(event => {
+        const stream = shortStreamId(event.flag?.sponsorship?.stream?.id);
+        const detail = event.kind === 'flagged' ? `By ${operatorName(event.by)}`
+            : event.on ? `On ${operatorName(event.on)}` : stream;
+        return `
+            <a href="/governance/flag/${encodeURIComponent(event.flag?.id || '')}" class="flex items-center gap-3 px-2 py-2 -mx-2 rounded-lg hover:bg-white/[0.03] transition-colors">
+                ${avatar(event.who)}
+                <div class="min-w-0 flex-1">
+                    <p class="text-sm font-semibold text-white truncate">${escapeHtml(operatorName(event.who))}</p>
+                    <p class="text-xs text-gray-400 truncate">${escapeHtml(detail)}</p>
+                </div>
+                <div class="text-right whitespace-nowrap">
+                    ${badge(event.kind)}
+                    <p class="text-xs text-gray-400 mt-1">${timeAgo(event.time)}</p>
                 </div>
             </a>`;
     }).join('');
@@ -515,7 +584,7 @@ function renderStakeChart() {
     if (!history) return chartMessage('stake', container, 'Loading stake history...', true);
     const points = [...history];
     // Ends at the live total
-    if (state.network) points.push({ x: Date.now(), y: weiToNumber(state.network.totalStake) });
+    if (state.totals) points.push({ x: Date.now(), y: state.totals.staked });
     if (points.length < 2) return chartMessage('stake', container, 'Not enough data for this range.');
     drawChart('stake', container, points, {
         color: '#3b82f6', rgb: '59, 130, 246', label: 'Total staked', rangeKey: key,
@@ -566,7 +635,8 @@ function renderAll() {
     renderKpis();
     renderOperators();
     renderSponsorships();
-    renderFlags();
+    renderStakingEvents();
+    renderGovernanceEvents();
     renderStakeChart();
     renderPriceChart();
     renderRangeButtons('overview-stake-range', state.stakeRange);
@@ -590,7 +660,8 @@ async function refresh() {
     renderKpis();
     renderOperators();
     renderSponsorships();
-    renderFlags();
+    renderStakingEvents();
+    renderGovernanceEvents();
     renderStakeChart();
     renderPriceChart();
 }
