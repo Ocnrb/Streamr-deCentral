@@ -174,8 +174,8 @@ export function showToast({ type = 'info', title, message = '', txHash = null, d
             <div class="flex items-start gap-3">
                 <span class="toast-icon">${getToastIcon(type)}</span>
                 <div class="flex-1 min-w-0">
-                    <p class="toast-title font-semibold text-white text-sm">${title}</p>
-                    <p class="toast-message text-sm text-gray-400 mt-0.5 ${message ? '' : 'hidden'}">${message}</p>
+                    <p class="toast-title font-semibold text-white text-sm">${escapeHtml(String(title ?? ''))}</p>
+                    <p class="toast-message text-sm text-gray-400 mt-0.5 ${message ? '' : 'hidden'}">${escapeHtml(String(message ?? ''))}</p>
                     <div class="toast-link-container">${buildPolygonscanLink(txHash)}</div>
                 </div>
                 <button class="toast-close flex-shrink-0 ${type === 'loading' ? 'hidden' : ''}" onclick="document.getElementById('${toastId}').dispatchEvent(new CustomEvent('close'))">
@@ -2243,7 +2243,7 @@ export function renderAutostakerSponsorships(sponsorships, onToggleExclude) {
         }
         
         return `
-            <div class="bg-[#1E1E1E] rounded-xl p-5 border ${borderColor} autostaker-sponsorship-item ${hasIssues && !sp.isStaked ? 'opacity-60' : ''}" data-sponsorship-id="${sp.id}" data-stream-id="${sp.streamId.toLowerCase()}" data-is-staked="${sp.isStaked}" data-is-stakeable="${isStakeable}" data-can-be-activated="${canBeActivated}">
+            <div class="bg-[#1E1E1E] rounded-xl p-5 border ${borderColor} autostaker-sponsorship-item ${hasIssues && !sp.isStaked ? 'opacity-60' : ''}" data-sponsorship-id="${escapeHtml(String(sp.id))}" data-stream-id="${escapeHtml(sp.streamId.toLowerCase())}" data-is-staked="${sp.isStaked}" data-is-stakeable="${isStakeable}" data-can-be-activated="${canBeActivated}">
                 <!-- Header -->
                 <div class="mb-4">
                     <p class="text-sm text-gray-200 font-mono leading-relaxed break-all overflow-hidden" title="${escapeHtml(sp.streamId)}">${escapeHtml(truncatedId)}</p>

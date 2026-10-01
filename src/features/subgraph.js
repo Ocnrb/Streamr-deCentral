@@ -5,6 +5,7 @@
  */
 
 import { getGraphUrl } from '../core/constants.js';
+import { gqlEscape } from '../core/utils.js';
 import * as UI from '../ui/ui.js';
 import { navigationController } from '../ui/navigation.js';
 import { ENTITY_CONFIG, CATEGORY_ORDER, CATEGORY_ICONS } from './subgraphEntities.js';
@@ -320,7 +321,7 @@ function getFilterWhereClause(config) {
             case 'text': {
                 // Case-sensitive contains on addresses/ids expects lowercase
                 const value = filter.field.includes('_contains') && !filter.field.includes('nocase') ? rawValue.toLowerCase() : rawValue;
-                filterString = `${filter.field}: "${value.replace(/"/g, '\\"')}"`;
+                filterString = `${filter.field}: "${gqlEscape(value)}"`;
                 break;
             }
             case 'number':
@@ -359,7 +360,7 @@ function getFilterWhereClause(config) {
                 if (filter.options.includes(rawValue)) filterString = `${filter.field}: "${rawValue}"`;
                 break;
             default:
-                filterString = `${filter.field}: "${rawValue.replace(/"/g, '\\"')}"`;
+                filterString = `${filter.field}: "${gqlEscape(rawValue)}"`;
         }
         if (filterString) filters.push(filterString);
     });

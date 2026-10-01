@@ -910,7 +910,7 @@ function renderAutostakerLogs() {
             <div class="flex gap-2 py-1 border-b border-[#333333]/50">
                 <span class="text-gray-500 flex-shrink-0">${timeStr}</span>
                 <span class="${colorClass}">${icon}</span>
-                <span class="${colorClass}">${log.message}</span>
+                <span class="${colorClass}">${Utils.escapeHtml(String(log.message ?? ''))}</span>
             </div>
         `;
     }).join('');
@@ -1523,6 +1523,13 @@ function setupRouter() {
     
     // Make router available globally for navigation controller
     window.router = router;
+    // Table rows that open a page (data-nav-href, escaped): the links inside them keep their own target
+    document.addEventListener('click', (e) => {
+        const row = e.target.closest('[data-nav-href]');
+        if (!row || e.target.closest('a[href], button')) return;
+        e.preventDefault();
+        router.navigate(row.dataset.navHref);
+    });
 
     // Home route - network overview (stops itself when the route changes)
     router.addRoute('/', async () => {

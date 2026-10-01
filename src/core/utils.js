@@ -44,6 +44,11 @@ export function escapeHtml(unsafe) {
          .replace(/'/g, "&#039;");
 }
 
+/** Text for inside a GraphQL string literal ("..."): quotes, backslashes and control characters escaped (JSON rules) */
+export function gqlEscape(value) {
+    return JSON.stringify(String(value ?? '')).slice(1, -1);
+}
+
 /**
  * Formats a big number string with spaces as thousands separators.
  * @param {string} numStr - The number string to format.

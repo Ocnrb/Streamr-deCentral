@@ -931,7 +931,7 @@ async function waitUntil(checkFn, timeoutMs, intervalMs) {
  * Check whether the subgraph already reflects the submitted flow
  */
 async function isFlowIndexed(flow) {
-    const sanitizedId = flow.streamId.replace(/"/g, '\\"');
+    const sanitizedId = Utils.gqlEscape(flow.streamId);
     const data = await Services.runQuery(`{
         stream(id: "${sanitizedId}") {
             id
@@ -1240,7 +1240,7 @@ async function runDelete() {
 
         // Wait (bounded) for the subgraph so the streams list doesn't show it anymore
         setDeleteLabel(`${spinner}<span class="text-white">Waiting for the indexer...</span>`);
-        const sanitizedId = streamId.replace(/"/g, '\\"');
+        const sanitizedId = Utils.gqlEscape(streamId);
         const indexed = await waitUntil(async () => {
             const data = await Services.runQuery(`{ stream(id: "${sanitizedId}") { id } }`);
             return !data.stream;

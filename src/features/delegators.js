@@ -12,7 +12,7 @@ import {
     POLYGONSCAN_METHOD_IDS,
     DATA_TOKEN_ADDRESS_POLYGON
 } from '../core/constants.js';
-import { formatBigNumber, shortAddress, parseOperatorMetadata, formatUsdForTooltip, avatarImgHtml } from '../core/utils.js';
+import { formatBigNumber, shortAddress, parseOperatorMetadata, formatUsdForTooltip, avatarImgHtml, escapeHtml } from '../core/utils.js';
 import { loadOperatorAvatarImage } from '../core/streamAvatar.js';
 import { showToast, customTooltip, setTooltipContent, positionTooltip, updateDelegatorProfileButton, handleDelegatorProfileButtonClick, renderProfileShortcut } from '../ui/ui.js';
 
@@ -671,7 +671,7 @@ function renderDelegationsTable(delegations) {
                 <div class="flex items-center gap-2">
                     ${avatarImgHtml(imageUrl, { alt: name, className: `h-6 w-6 ${isUndelegated ? 'opacity-50 grayscale' : ''}` })}
                     <div class="flex flex-col">
-                        <span class="truncate max-w-[150px] ${isUndelegated ? 'text-gray-500' : 'text-white'}" title="${name}">${name}</span>
+                        <span class="truncate max-w-[150px] ${isUndelegated ? 'text-gray-500' : 'text-white'}" title="${escapeHtml(String(name))}">${escapeHtml(String(name))}</span>
                         <span class="text-[10px] text-gray-500 font-mono">${shortAddress(del.operator.id)}</span>
                     </div>
                 </div>
@@ -755,7 +755,7 @@ function renderInlineDelegationsTable(delegations) {
             <td class="px-3 md:px-6 py-3 md:py-4">
                 <a href="/operator/${del.operator.id}" class="flex items-center gap-2 md:gap-3 hover:opacity-80 transition-opacity" data-nav-link>
                     ${avatarImgHtml(imageUrl, { alt: name, className: `h-8 w-8 md:h-10 md:w-10 ${isUndelegated ? 'opacity-50 grayscale' : ''}` })}
-                    <span class="text-sm md:text-base truncate max-w-[100px] md:max-w-[200px] ${isUndelegated ? 'text-gray-500' : 'text-gray-300'}" title="${name}">${name}</span>
+                    <span class="text-sm md:text-base truncate max-w-[100px] md:max-w-[200px] ${isUndelegated ? 'text-gray-500' : 'text-gray-300'}" title="${escapeHtml(String(name))}">${escapeHtml(String(name))}</span>
                 </a>
             </td>
             <td class="px-3 md:px-6 py-3 md:py-4 text-right text-xs md:text-sm ${isUndelegated ? 'text-gray-600' : 'text-gray-300'}">
@@ -798,11 +798,11 @@ function renderHistoryTable(txs) {
         
         tr.innerHTML = `
             <td class="px-4 py-3 font-mono text-gray-300 text-xs whitespace-nowrap">${tx.date.toLocaleString('en-US')}</td>
-            <td class="px-4 py-3 text-xs text-white font-bold">${tx.type}</td>
-            <td class="px-4 py-3 text-xs text-gray-300">${tx.operatorName}</td>
+            <td class="px-4 py-3 text-xs text-white font-bold">${escapeHtml(String(tx.type))}</td>
+            <td class="px-4 py-3 text-xs text-gray-300">${escapeHtml(String(tx.operatorName ?? ''))}</td>
             <td class="px-4 py-3 text-right font-medium ${amountClass}">${sign}${formatDATA(tx.amount * 1e18)}</td>
             <td class="px-4 py-3 text-center">
-                <a href="${POLYGONSCAN_NETWORK.explorerUrl}${tx.hash}" target="_blank" class="text-blue-400 hover:text-white">
+                <a href="${POLYGONSCAN_NETWORK.explorerUrl}${escapeHtml(String(tx.hash))}" target="_blank" rel="noopener noreferrer" class="text-blue-400 hover:text-white">
                     <svg class="w-3 h-3 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/>
                     </svg>

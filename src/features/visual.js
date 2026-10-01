@@ -1,4 +1,4 @@
-import { formatBigNumber, parseOperatorMetadata } from '../core/utils.js';
+import { formatBigNumber, parseOperatorMetadata, escapeHtml } from '../core/utils.js';
 import { loadOperatorAvatarImage } from '../core/streamAvatar.js';
 import { getGraphUrl } from '../core/constants.js';
 
@@ -580,13 +580,13 @@ export const VisualLogic = {
             resultsContainer.innerHTML = '<div class="p-3 text-gray-500 text-xs text-center">No results found</div>';
         } else {
             resultsContainer.innerHTML = matches.map(item => `
-                <div class="search-item p-3 hover:bg-white/5 cursor-pointer flex items-center gap-3 transition-colors border-b border-white/5 last:border-none" data-id="${item.id}">
+                <div class="search-item p-3 hover:bg-white/5 cursor-pointer flex items-center gap-3 transition-colors border-b border-white/5 last:border-none" data-id="${escapeHtml(item.id)}">
                     <div class="w-8 h-8 rounded-full ${item.type === 'operator' ? 'bg-blue-500/20 text-blue-400' : 'bg-orange-500/20 text-orange-400'} border border-white/10 flex items-center justify-center text-[10px] font-bold shrink-0">
                         ${item.type === 'operator' ? 'OP' : 'DEL'}
                     </div>
                     <div class="min-w-0 flex-1">
-                        <div class="text-xs font-bold text-white truncate">${item.name}</div>
-                        <div class="text-[10px] font-mono text-gray-500 truncate">${item.id.substring(0, 16)}...</div>
+                        <div class="text-xs font-bold text-white truncate">${escapeHtml(String(item.name))}</div>
+                        <div class="text-[10px] font-mono text-gray-500 truncate">${escapeHtml(item.id.substring(0, 16))}...</div>
                     </div>
                     <i data-lucide="chevron-right" class="w-3 h-3 text-gray-600"></i>
                 </div>
@@ -2249,23 +2249,23 @@ export const VisualLogic = {
 
         let html = '';
         if (node.type === 'sponsorship') {
-            html = `<div class="font-bold text-orange-400 mb-1 text-sm">${node.label}</div>
+            html = `<div class="font-bold text-orange-400 mb-1 text-sm">${escapeHtml(String(node.label))}</div>
                     <div class="text-gray-300">Balance: <span class="text-white font-mono">${Math.floor(node.val).toLocaleString()}</span></div>`;
         } else if (node.type === 'operator') {
             const opMetadata = this.operatorNodeMetadata.get(node.id);
             const delegatorCount = (opMetadata && opMetadata.delegatorCount) ? Math.max(0, opMetadata.delegatorCount - 1) : 0;
 
-            html = `<div class="font-bold text-blue-400 mb-1 text-sm">${node.label}</div>
+            html = `<div class="font-bold text-blue-400 mb-1 text-sm">${escapeHtml(String(node.label))}</div>
                     <div class="text-gray-300">Stake: <span class="text-white font-mono">${Math.floor(node.val).toLocaleString()}</span></div>
                     <div class="text-gray-300">Delegators: <span class="text-white font-mono">${delegatorCount}</span></div>`;
         } else if (node.type === 'delegator') {
                 html = `<div class="font-bold text-orange-400 mb-1 text-sm">Delegator</div>
-                    <div class="text-xs text-gray-500 mb-1 font-mono">${node.id.substring(0,10)}...</div>
+                    <div class="text-xs text-gray-500 mb-1 font-mono">${escapeHtml(node.id.substring(0,10))}...</div>
                     <div class="text-gray-300">Delegated: <span class="text-white font-mono">${Math.floor(node.val).toLocaleString()}</span></div>`;
         } else if (node.type === 'live-node') {
             const parentMetadata = this.operatorNodeMetadata.get(node.operatorId);
             const parentLabel = parentMetadata ? parentMetadata.label : node.operatorId.substring(0, 12) + '...';
-            const rfDisplay = parentMetadata?.redundancyFactor ? `<div class="text-gray-300">Redundancy Factor: <span class="text-white font-mono">${parentMetadata.redundancyFactor}</span></div>` : '';
+            const rfDisplay = parentMetadata?.redundancyFactor ? `<div class="text-gray-300">Redundancy Factor: <span class="text-white font-mono">${escapeHtml(String(parentMetadata.redundancyFactor))}</span></div>` : '';
             
             const nodeIdDisplay = `Node #${node.nodeIndex}`;
             
@@ -2275,7 +2275,7 @@ export const VisualLogic = {
                 fleetSize = opNodes.size;
             }
 
-            html = `<div class="font-bold text-green-400 mb-1 text-sm">${parentLabel}</div>
+            html = `<div class="font-bold text-green-400 mb-1 text-sm">${escapeHtml(String(parentLabel))}</div>
                     <div class="text-gray-300">ID: <span class="text-white font-mono">${nodeIdDisplay}</span></div>
                     ${rfDisplay}
                     <div class="text-gray-300">Fleet Size: <span class="text-white font-mono">${fleetSize}</span></div>`;
