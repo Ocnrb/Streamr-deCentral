@@ -39,6 +39,8 @@ function buildData() {
     T.sponsoringEvents.push({ id: 'spNew', amount: W(7500), date: String(NOW - 400), sponsor: hex(0x5555), sponsorship: T.sponsorships[4] });
     const streamStart = Math.floor(Date.UTC(2021, 5, 1) / 1000);
     T.streams = Array.from({ length: 2500 }, (_, i) => ({ id: `${hex(0xd000 + (i % 97))}/s-${String(i).padStart(5, '0')}`, createdAt: String(streamStart + Math.floor((NOW - streamStart) * (i / 2500) ** 0.7)) }));
+    // The sponsorships' streams: found by id (their pages), not in the stream lists
+    T.byIdOnly = { stream: T.sponsorships.map((s) => ({ id: s.stream.id, createdAt: String(streamStart), metadata: '{"partitions":2}', sponsorships: [s] })) };
     // Daily buckets: sponsorships every 2 days growing to their stake now; operators 0-49 every 3 days; 300-329 stopped 200 days ago
     T.sponsorshipDailyBuckets = [];
     T.sponsorships.forEach((s, i) => {
@@ -212,6 +214,12 @@ export async function mockNetwork(context) {
             stats.queries[name] = (stats.queries[name] || 0) + 1;
             if (name === '_meta') {
                 data[f.alias?.value || name] = { block: { number: LATEST_BLOCK, timestamp: NOW } };
+                continue;
+            }
+            // One entity by id (stream(id: ...), operator(id: ...)): null when there is none
+            if (!T[name] && T[`${name}s`] && args.id !== undefined) {
+                const row = [...T[`${name}s`], ...(T.byIdOnly[name] || [])].find(r => r.id.toLowerCase() === String(args.id).toLowerCase());
+                data[f.alias?.value || name] = row ? project(row, f.selectionSet) : null;
                 continue;
             }
             let rows = (T[name] || []).filter(r => matches(r, args.where));
