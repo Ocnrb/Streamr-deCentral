@@ -6,9 +6,9 @@
  * and governance events.
  *
  * Everything comes from The Graph, except the DATA price (the app's price streams), the operators'
- * own events read through the Etherscan API (Delegated / Undelegated, and OperatorSlashed, which every
- * slashing reports to the operator contract) and the nodes, heard on the operators' coordination
- * streams as on the Network Map:
+ * Delegated / Undelegated events read through the Etherscan API (with their transactions, to leave out
+ * the ones of staking actions) and the nodes, heard on the operators' coordination streams as on the
+ * Network Map:
  * - totals: sums over every operator and sponsorship (paged), the slashings, the streams' creation dates;
  * - history: the daily buckets of sponsorships and operators (each keeps its last bucket until the next one),
  *   and the dated sponsoring events, slashings and stream creations, added up over time.
@@ -40,14 +40,12 @@ const DELEGATION_TOPICS = {
     delegate: ethers.utils.id('Delegated(address,uint256)'),
     undelegate: ethers.utils.id('Undelegated(address,uint256)')
 };
-// Operator.onSlash: the DATA a sponsorship slashed from the operator
-const SLASHED_TOPIC = ethers.utils.id('OperatorSlashed(uint256,uint256,uint256)');
-const OPERATORS_FIRST_BLOCK = 49000000;      // Polygon, before Streamr 1.0 (November 2023)
 // streamr.eth/recovery: in March 2024 the stake of the broken operator contracts was moved out through
 // slashings in this sponsorship. A recovery of funds, not a penalty: left out of DATA slashed
 const RECOVERY_SPONSORSHIP = '0x9109abd75eae7e526fc85e33bab24ac45f71717a';
 const POLYGON_BLOCKS_PER_DAY = 43200;
 const DELEGATION_WINDOWS_DAYS = [1, 7, 30];   // looked back further while there are fewer than LIST_SIZE events
+const DELEGATION_MAX_TXS = 60;                // transactions checked per read
 const EXPLORER_BUSY = /rate limit|max calls|too many|timeout|temporarily|busy/i;
 
 // Nodes, as on the Network Map: each operator's nodes send heartbeats to its coordination stream
@@ -80,7 +78,7 @@ const METRICS = {
     sponsored: { label: 'DATA sponsored', kind: 'data', source: 'sponsoring',
         info: 'DATA paid into sponsorships by their sponsors, all time.' },
     slashed: { label: 'DATA slashed', kind: 'data', source: 'slashing',
-        info: 'DATA slashed from operators, all time: every slashing their sponsorships reported to the operator contracts (onSlash).<br>Without the March 2024 recovery of the broken operator contracts (streamr.eth/recovery), which was not a penalty.' },
+        info: 'DATA slashed from operators by their sponsorships, all time: kicks, failed flags and leaving too early.<br>Without the March 2024 recovery of the broken operator contracts (streamr.eth/recovery), which was not a penalty.' },
     price: { label: 'DATA price', kind: 'price', source: 'price',
         info: 'DATA/USD from the app\'s price feed: the daily history, then the latest price.' }
 };
@@ -115,9 +113,6 @@ const state = {
     bestStreams: [],
     slashing: null,             // { total, count } of the operators' slashings
     slashingEvents: [],         // [{ t, v }] oldest first
-    slashingSeen: new Set(),
-    slashingFrom: OPERATORS_FIRST_BLOCK,
-    recoveryTxs: null,          // Set of the recovery sponsorship's transactions
     slashingLoading: null,
     slashingError: false,
     totals: null,
@@ -129,6 +124,7 @@ const state = {
     topOperators: [],
     stakingEvents: [],
     delegations: [],
+    delegationTxs: new Map(),   // tx hash -> true when it is a delegation of its own (no sponsorship took part)
     delegationsLoaded: false,
     delegationsError: false,
     govEvents: [],
@@ -344,10 +340,9 @@ async function fetchTotals() {
 // Data: delegation events (operator contract logs)
 // ============================================
 
-/** Logs of one event (or of one contract) from a block on, oldest first (at most 1000); a busy explorer is asked again shortly */
-async function fetchEventLogs(topic, fromBlock, address = null) {
-    const filter = address ? `address=${address}` : `topic0=${topic}`;
-    const url = `${POLYGONSCAN_NETWORK.apiUrl}?chainid=${POLYGONSCAN_NETWORK.chainId}&module=logs&action=getLogs&${filter}`
+/** Logs of one event from a block on, oldest first (at most 1000); a busy explorer is asked again shortly */
+async function fetchEventLogs(topic, fromBlock) {
+    const url = `${POLYGONSCAN_NETWORK.apiUrl}?chainid=${POLYGONSCAN_NETWORK.chainId}&module=logs&action=getLogs&topic0=${topic}`
         + `&fromBlock=${fromBlock}&toBlock=latest&page=1&offset=${PAGE}&apikey=${getEtherscanApiKey()}`;
     let lastError = null;
     for (let attempt = 0; attempt < 3; attempt++) {
@@ -370,6 +365,30 @@ async function newestLogs(topic, fromBlock, latestBlock) {
         from = Math.floor((from + latestBlock) / 2);
     }
     return fetchEventLogs(topic, from);
+}
+
+/**
+ * The newest events that are delegations of their own (up to LIST_SIZE). The operator contract also emits
+ * Delegated / Undelegated inside staking actions: the owner's cut re-delegated when earnings are withdrawn,
+ * flagging and review rewards, the undelegation queue paid out on unstaking. A sponsorship takes part in
+ * all of those, never in a delegation or undelegation: a transaction with a log of a sponsorship is left out.
+ */
+async function ownDelegations(candidates, sponsorships) {
+    const own = [];
+    let checked = 0;
+    for (let i = 0; i < candidates.length && own.length < LIST_SIZE; i += LIST_SIZE) {
+        const batch = candidates.slice(i, i + LIST_SIZE);
+        const unknown = [...new Set(batch.map(e => e.tx))].filter(tx => !state.delegationTxs.has(tx));
+        if (checked + unknown.length > DELEGATION_MAX_TXS) break;
+        checked += unknown.length;
+        await Promise.all(unknown.map(async (tx) => {
+            const receipt = await Services.readWithFallback(() => Services.getReadOnlyProvider().getTransactionReceipt(tx));
+            if (!receipt) return;   // asked again next time
+            state.delegationTxs.set(tx, !receipt.logs.some(log => sponsorships.has(log.address.toLowerCase())));
+        }));
+        own.push(...batch.filter(e => state.delegationTxs.get(e.tx)));
+    }
+    return own;
 }
 
 /** The delegator and DATA amount of a Delegated / Undelegated log (delegator indexed or in the data) */
@@ -396,6 +415,7 @@ async function fetchDelegationEvents() {
     const operators = new Map(state.allOperators.map(op => [op.id.toLowerCase(), op]));
     if (!operators.size) return;
     const latest = (await Services.runQuery('{ _meta { block { number } } }'))._meta.block.number;
+    const sponsorships = new Set(state.allSponsorships.map(s => s.id.toLowerCase()));
     let events = [];
     for (const days of DELEGATION_WINDOWS_DAYS) {
         const from = Math.max(0, latest - days * POLYGON_BLOCKS_PER_DAY);
@@ -403,18 +423,19 @@ async function fetchDelegationEvents() {
             newestLogs(DELEGATION_TOPICS.delegate, from, latest),
             newestLogs(DELEGATION_TOPICS.undelegate, from, latest)
         ]);
-        events = [...delegated.map(log => ({ log, type: 'delegate' })), ...undelegated.map(log => ({ log, type: 'undelegate' }))]
+        const candidates = [...delegated.map(log => ({ log, type: 'delegate' })), ...undelegated.map(log => ({ log, type: 'undelegate' }))]
             // Only the operators' own events (other contracts can share the signature)
             .filter(({ log }) => operators.has(log.address.toLowerCase()))
             .map(({ log, type }) => {
                 const operator = operators.get(log.address.toLowerCase());
                 const { delegator, amount } = parseDelegationLog(log);
                 return { type, delegator, amount, operatorId: operator.id, owner: delegator === (operator.owner || '').toLowerCase(),
-                    time: parseInt(log.timeStamp, 16), block: parseInt(log.blockNumber, 16), index: parseInt(log.logIndex, 16) };
-            });
+                    tx: log.transactionHash.toLowerCase(), time: parseInt(log.timeStamp, 16), block: parseInt(log.blockNumber, 16), index: parseInt(log.logIndex, 16) };
+            })
+            .sort((a, b) => b.block - a.block || b.index - a.index);
+        events = await ownDelegations(candidates, sponsorships);
         if (events.length >= LIST_SIZE) break;
     }
-    events.sort((a, b) => b.block - a.block || b.index - a.index);
     events = events.slice(0, LIST_SIZE);
     // Names and avatars of their operators
     const ids = [...new Set(events.map(e => e.operatorId))];
@@ -428,55 +449,16 @@ async function fetchDelegationEvents() {
     state.delegationsError = false;
 }
 
-/** Every log of a contract (oldest first), paged on the block */
-async function contractLogs(address, fromBlock) {
-    const all = [];
-    const seen = new Set();
-    let from = fromBlock;
-    for (let i = 0; i < 50; i++) {
-        const logs = await fetchEventLogs(null, from, address);
-        for (const log of logs) {
-            const key = `${log.transactionHash}:${log.logIndex}`;
-            if (seen.has(key)) continue;
-            seen.add(key);
-            all.push(log);
-        }
-        if (logs.length) from = parseInt(logs[logs.length - 1].blockNumber, 16);
-        if (logs.length < PAGE) break;
-    }
-    return all;
-}
-
-/** OperatorSlashed logs of the operators since the last read (kept between visits) */
+/**
+ * The sponsorships' slashings (their OperatorSlashed events, kept by the subgraph): kicks, failed flags and
+ * leaving before the minimum stake time. Without the recovery sponsorship.
+ */
 async function loadSlashing() {
     if (state.slashingLoading) return state.slashingLoading;
     state.slashingLoading = (async () => {
         try {
-            if (!state.totals) await state.totalsPromise;
-            const operators = new Set(state.allOperators.map(op => op.id.toLowerCase()));
-            if (!operators.size) throw new Error('No operators');
-            // The recovery's slashings happened in its own transactions
-            if (!state.recoveryTxs) {
-                const logs = await contractLogs(RECOVERY_SPONSORSHIP, OPERATORS_FIRST_BLOCK);
-                state.recoveryTxs = new Set(logs.map(log => log.transactionHash.toLowerCase()));
-            }
-            const seen = state.slashingSeen;
-            let from = state.slashingFrom;
-            for (let i = 0; i < 50; i++) {
-                const logs = await fetchEventLogs(SLASHED_TOPIC, from);
-                for (const log of logs) {
-                    const key = `${log.transactionHash}:${log.logIndex}`;
-                    if (seen.has(key) || !operators.has(log.address.toLowerCase())) continue;
-                    if (state.recoveryTxs.has(log.transactionHash.toLowerCase())) continue;
-                    seen.add(key);
-                    const [amount] = ethers.utils.defaultAbiCoder.decode(['uint256', 'uint256', 'uint256'], log.data);
-                    state.slashingEvents.push({ t: parseInt(log.timeStamp, 16), v: weiToNumber(amount.toString()) });
-                }
-                if (logs.length) from = parseInt(logs[logs.length - 1].blockNumber, 16);   // that block again: seen ones are skipped
-                if (logs.length < PAGE) break;
-            }
-            state.slashingFrom = from;
-            state.slashingEvents.sort((a, b) => a.t - b.t);
+            const events = await fetchAll('slashingEvents', 'amount date', `sponsorship_not: "${RECOVERY_SPONSORSHIP}",`);
+            state.slashingEvents = events.map(e => ({ t: Number(e.date), v: weiToNumber(e.amount) })).sort((a, b) => a.t - b.t);
             state.slashing = {
                 total: state.slashingEvents.reduce((sum, e) => sum + e.v, 0),
                 count: state.slashingEvents.length
@@ -926,10 +908,7 @@ function chartPoints(metric) {
         if (!state.priceHistory.length) return 'loading';
         const range = RANGES[state.range];
         const start = range.days ? Date.now() - range.days * DAY * 1000 : -Infinity;
-        const points = state.priceHistory.filter(p => p.x >= start);
-        const price = Services.getCurrentLivePrice();
-        if (price && points.length) points.push({ x: Date.now(), y: price });
-        return points;
+        return withNow(state.priceHistory.filter(p => p.x >= start), Services.getCurrentLivePrice());
     }
     if (metric === 'streams' && !state.streams) return 'loading';
     if (metric === 'slashed' && !state.slashing) return state.slashingError ? 'error' : 'loading';
@@ -939,10 +918,15 @@ function chartPoints(metric) {
         return 'loading';
     }
     if (history === 'error') return 'error';
-    const points = [...(history[metric] || [])];
-    const value = currentValue(metric);
-    if (value !== null && points.length) points.push({ x: Date.now(), y: value });
-    return points;
+    return withNow(history[metric] || [], currentValue(metric));
+}
+
+/** The line ends on the value now: it takes the place of today's point (one point per day) */
+function withNow(points, value) {
+    if (value === null || value === undefined || !points.length) return [...points];
+    const today = Math.floor(Date.now() / (DAY * 1000)) * DAY * 1000;
+    const before = points.filter(p => p.x < today);
+    return [...before, { x: Date.now(), y: value }];
 }
 
 function chartMessage(container, text, spinner = false) {
