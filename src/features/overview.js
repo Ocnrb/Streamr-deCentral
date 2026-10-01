@@ -6,9 +6,9 @@
  * and governance events.
  *
  * Everything comes from The Graph, except the DATA price (the app's price streams):
- * - totals: sums over every operator and sponsorship (paged), the slashing events, the streams' creation dates;
+ * - totals: sums over every operator and sponsorship (paged), the kicked flags, the streams' creation dates;
  * - history: the daily buckets of sponsorships and operators (each keeps its last bucket until the next one),
- *   and the dated sponsoring / slashing events and stream creations, added up over time.
+ *   and the dated sponsoring events, kicks and stream creations, added up over time.
  */
 
 import * as Services from '../core/services.js';
@@ -43,7 +43,7 @@ const METRICS = {
     staked: { label: 'Total staked', kind: 'data', source: 'sponsorships',
         info: 'DATA staked by the operators in sponsorships.<br>Over time: the daily records of each sponsorship.' },
     delegated: { label: 'Delegated', kind: 'data', source: 'operators',
-        info: 'DATA delegated to the operators, by delegators and owners: the operators\' value without the earnings not yet withdrawn.<br>Over time: the daily records of each operator.' },
+        info: 'DATA delegated to the operators by delegators, without the owners\' own stake in their operator.<br>Over time: the daily value of each operator, with its owner\'s share as it is now.' },
     apy: { label: 'Network APY', kind: 'percent', source: 'sponsorships',
         info: 'APY of the running sponsorships weighted by their stake: their yearly payouts over the DATA staked in them, before the operators\' cut.' },
     operators: { label: 'Operators', kind: 'count', source: 'operators',
@@ -55,7 +55,7 @@ const METRICS = {
     sponsored: { label: 'DATA sponsored', kind: 'data', source: 'sponsoring',
         info: 'DATA paid into sponsorships by their sponsors, all time.' },
     slashed: { label: 'DATA slashed', kind: 'data', source: 'slashing',
-        info: 'DATA slashed from operators, all time: kicks after a flag and penalties.' },
+        info: 'DATA slashed from operators kicked after a flag, all time: the stake at risk of every flag that ended in a kick.' },
     price: { label: 'DATA price', kind: 'price', source: 'price',
         info: 'DATA/USD from the app\'s price feed: the daily history, then the latest price.' }
 };
@@ -84,6 +84,7 @@ const state = {
     error: false,
     network: null,
     allOperators: [],
+    ownerShare: new Map(),      // operator id -> owner's share of its value now
     allSponsorships: [],
     bestStreams: [],
     slashing: [],
@@ -126,7 +127,7 @@ const full = (value) => formatBigNumber(Math.round(value).toString());
 
 function formatPrice(value) {
     if (!(value > 0)) return '--';
-    return `$${value >= 1 ? value.toFixed(2) : value.toPrecision(4)}`;
+    return `$${value >= 1 ? value.toFixed(2) : String(Number(value.toPrecision(3)))}`;
 }
 
 function formatPercent(value, digits = 1) {
@@ -246,6 +247,11 @@ async function fetchLists() {
     state.govEvents = events.sort((a, b) => b.time - a.time).slice(0, LIST_SIZE);
 }
 
+/** An operator's value without its owner's share */
+function delegatedValue(operatorId, valueWei) {
+    return weiToNumber(valueWei) * (1 - (state.ownerShare.get(operatorId) || 0));
+}
+
 /** A sponsorship pays out: funds left and stake in it */
 function isRunning(s) {
     return weiToNumber(s.remainingWei) > 0 && weiToNumber(s.totalStakedWei) > 0;
@@ -259,14 +265,21 @@ function bestSponsorships() {
 }
 
 async function fetchTotals() {
-    const [operators, sponsorships, slashing] = await Promise.all([
+    const [operators, sponsorships, kicks, selfDelegations] = await Promise.all([
         fetchAll('operators', 'valueWithoutEarnings totalStakeInSponsorshipsWei nodes'),
         fetchAll('sponsorships', 'totalStakedWei remainingWei spotAPY isRunning cumulativeSponsoring'),
-        fetchAll('slashingEvents', 'amount date')
+        fetchAll('flags', 'targetStakeAtRiskWei flagResolutionTimestamp', 'result: "kicked",'),
+        fetchAll('delegations', '_valueDataWei operator { id }', 'isSelfDelegation: true,')
     ]);
     state.allOperators = operators;
     state.allSponsorships = sponsorships;
-    state.slashing = slashing.map(e => ({ t: Number(e.date), v: weiToNumber(e.amount) })).sort((a, b) => a.t - b.t);
+    state.slashing = kicks.map(f => ({ t: Number(f.flagResolutionTimestamp), v: weiToNumber(f.targetStakeAtRiskWei) })).sort((a, b) => a.t - b.t);
+    // The owners' share of each operator (their self-delegation), left out of Delegated
+    const ownStake = new Map(selfDelegations.map(d => [d.operator?.id, weiToNumber(d._valueDataWei)]));
+    state.ownerShare = new Map(operators.map(op => {
+        const value = weiToNumber(op.valueWithoutEarnings);
+        return [op.id, value > 0 ? Math.min(1, (ownStake.get(op.id) || 0) / value) : 0];
+    }));
 
     const staking = operators.filter(op => BigInt(op.totalStakeInSponsorshipsWei || '0') > 0n);
     const running = sponsorships.filter(isRunning);
@@ -280,7 +293,7 @@ async function fetchTotals() {
     }
     state.totals = {
         staked: sponsorships.reduce((sum, s) => sum + weiToNumber(s.totalStakedWei), 0),
-        delegated: operators.reduce((sum, op) => sum + weiToNumber(op.valueWithoutEarnings), 0),
+        delegated: operators.reduce((sum, op) => sum + delegatedValue(op.id, op.valueWithoutEarnings), 0),
         apy: runningStake > 0 ? apySum / runningStake : null,
         operators: staking.length,
         operatorsAll: operators.length,
@@ -289,7 +302,7 @@ async function fetchTotals() {
         sponsorshipsAll: sponsorships.length,
         sponsored: sponsorships.reduce((sum, s) => sum + weiToNumber(s.cumulativeSponsoring), 0),
         slashed: state.slashing.reduce((sum, e) => sum + e.v, 0),
-        slashings: state.slashing.length
+        kicks: state.slashing.length
     };
 
     // Streams of the best sponsorships (the totals keep to numbers)
@@ -394,7 +407,7 @@ const BUCKETS = {
         series(rows) {
             let delegated = 0, operators = 0;
             for (const r of rows) {
-                delegated += weiToNumber(r.valueWithoutEarnings);
+                delegated += delegatedValue(r.operator?.id || r.id, r.valueWithoutEarnings);
                 if (weiToNumber(r.totalStakeInSponsorshipsWei) > 0) operators++;
             }
             return { delegated, operators };
@@ -547,12 +560,11 @@ function statSub(metric) {
     switch (metric) {
         case 'staked': return t ? usd(t.staked) : '';
         case 'delegated': return t ? usd(t.delegated) : '';
-        case 'apy': return 'Before the operators\' cut';
         case 'operators': return t ? `of ${full(t.operatorsAll)} · ${full(t.nodes)} nodes` : '';
         case 'sponsorships': return t ? `running of ${full(t.sponsorshipsAll)}` : '';
-        case 'streams': return state.streams ? 'created' : (state.streamsLoading ? 'Counting...' : '');
+        case 'streams': return state.streams ? '' : (state.streamsLoading ? 'Counting...' : '');
         case 'sponsored': return t ? usd(t.sponsored) : '';
-        case 'slashed': return t ? `${full(t.slashings)} slashings` : '';
+        case 'slashed': return t ? `${full(t.kicks)} kicks` : '';
         case 'price': {
             const value = currentPrice();
             const before = price24hAgo();
@@ -585,7 +597,7 @@ function renderStats() {
                     <svg class="w-3 h-3 flex-shrink-0 transition-transform ${selected ? 'rotate-180 text-blue-400' : 'text-gray-500 group-hover:text-gray-300'}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
                 </span>
                 <span class="block mt-1 text-base sm:text-xl font-bold text-white whitespace-nowrap"${tip}>${shown}${unit}</span>
-                <span class="block text-[11px] sm:text-xs text-gray-400 truncate">${statSub(metric)}</span>
+                <span class="block text-[11px] sm:text-xs text-gray-400 truncate min-h-[1rem]">${statSub(metric)}</span>
             </button>`;
     }).join('');
 }
@@ -651,21 +663,12 @@ function chartMessage(container, text, spinner = false) {
     container.innerHTML = `<div class="flex items-center justify-center gap-2 h-full text-sm text-gray-300">${spin}${text}</div>`;
 }
 
-function renderChartHeader(metric, points) {
+function renderChartHeader(metric) {
     const def = METRICS[metric];
     $('overview-chart-title').textContent = def.label;
     $('overview-chart-info').setAttribute('data-tooltip-content', def.info);
     const value = currentValue(metric);
     $('overview-chart-value').textContent = value === null ? '' : formatMetric(def.kind, value, true);
-    const change = $('overview-chart-change');
-    if (Array.isArray(points) && points.length > 1 && points[0].y > 0) {
-        const delta = points[points.length - 1].y / points[0].y - 1;
-        const label = state.range === 'all' ? 'all time' : `in ${RANGES[state.range].label}`;
-        change.className = `text-sm font-semibold ${delta >= 0 ? 'text-green-400' : 'text-red-400'}`;
-        change.innerHTML = `${delta >= 0 ? '+' : ''}${(delta * 100).toFixed(1)}% <span class="font-normal text-gray-400">${label}</span>`;
-    } else {
-        change.textContent = '';
-    }
 }
 
 function renderChart() {
@@ -682,7 +685,7 @@ function renderChart() {
     renderRangeButtons();
     const def = METRICS[metric];
     const points = chartPoints(metric);
-    renderChartHeader(metric, points);
+    renderChartHeader(metric);
     if (points === 'loading') return chartMessage(container, metric === 'streams' ? 'Counting streams...' : 'Loading history...', true);
     if (points === 'error') return chartMessage(container, 'History could not be loaded.');
     if (points.length < 2) return chartMessage(container, 'Not enough data for this range.');
