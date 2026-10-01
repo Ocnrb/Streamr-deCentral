@@ -13,8 +13,6 @@ function getAutostakerModal() {
     return _autostakerModal;
 }
 
-let currentAutostakerTab = 'settings';
-
 /**
  * Open the Autostaker modal
  */
@@ -47,7 +45,6 @@ export function hideAutostakerModal() {
  * @param {string} tab - Tab name: 'settings', 'sponsorships', 'preview'
  */
 export function switchAutostakerTab(tab) {
-    currentAutostakerTab = tab;
     
     // Update tab buttons
     const tabs = ['settings', 'sponsorships', 'preview'];

@@ -1,4 +1,4 @@
-﻿import { formatBigNumber, parseOperatorMetadata, avatarImgHtml } from '../core/utils.js';
+﻿import { parseOperatorMetadata, avatarImgHtml } from '../core/utils.js';
 import { getGraphUrl } from '../core/constants.js';
 import { renderIcons } from '../core/icons.js';
 

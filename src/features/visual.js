@@ -1,5 +1,5 @@
 import * as d3 from 'd3';
-import { formatBigNumber, parseOperatorMetadata, escapeHtml } from '../core/utils.js';
+import { parseOperatorMetadata, escapeHtml } from '../core/utils.js';
 import { renderIcons } from '../core/icons.js';
 import { loadOperatorAvatarImage } from '../core/streamAvatar.js';
 import { getGraphUrl } from '../core/constants.js';

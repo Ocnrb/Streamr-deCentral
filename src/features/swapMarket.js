@@ -330,8 +330,6 @@ async function loadTrades() {
     return added;
 }
 
-const allReachedStart = () => state.pools.every(p => p.reachedStart);
-
 const OUTLIER_FACTOR = 3;   // a trade priced over 3x away from the main pool's price is a broken pool's
 
 /**
