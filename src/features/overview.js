@@ -2,12 +2,12 @@
  * Overview Feature Module
  * Home page: the Streamr Network at a glance. A row of network numbers (stake, delegations, APY,
  * operators, sponsorships, streams, DATA sponsored and slashed, DATA price); the selected one opens
- * its chart over time. Below: top operators, best sponsorships and the latest staking, delegation
- * and governance events.
+ * its chart over time. Below: top operators, best sponsorships and the latest staking, delegation,
+ * earnings and governance events.
  *
  * Everything comes from The Graph, except the DATA price (the app's price streams), the operators'
- * Delegated / Undelegated events read through the Etherscan API (with their transactions, to leave out
- * the ones of staking actions) and the nodes, heard on the operators' coordination streams as on the
+ * Delegated / Undelegated and Profit (earnings collected) events read through the Etherscan API (the
+ * delegations with their transactions, to leave out the ones of staking actions) and the nodes, heard on the operators' coordination streams as on the
  * Network Map:
  * - totals: sums over every operator and sponsorship (paged), the slashings, the streams' creation dates;
  * - history: the daily buckets of sponsorships and operators (each keeps its last bucket until the next one),
@@ -40,6 +40,8 @@ const DELEGATION_TOPICS = {
     delegate: ethers.utils.id('Delegated(address,uint256)'),
     undelegate: ethers.utils.id('Undelegated(address,uint256)')
 };
+// Operator: earnings withdrawn from its sponsorships (to the delegators, the owner's cut, the protocol fee)
+const PROFIT_TOPIC = ethers.utils.id('Profit(uint256,uint256,uint256)');
 // streamr.eth/recovery: in March 2024 the stake of the broken operator contracts was moved out through
 // slashings in this sponsorship. A recovery of funds, not a penalty: left out of DATA slashed
 const RECOVERY_SPONSORSHIP = '0x9109abd75eae7e526fc85e33bab24ac45f71717a';
@@ -127,6 +129,9 @@ const state = {
     delegationTxs: new Map(),   // tx hash -> true when it is a delegation of its own (no sponsorship took part)
     delegationsLoaded: false,
     delegationsError: false,
+    earnings: [],
+    earningsLoaded: false,
+    earningsError: false,
     govEvents: [],
     priceHistory: [],           // daily DATA/USD (ms, USD)
     metric: 'staked',           // metric whose chart is open (null: closed)
@@ -365,6 +370,52 @@ async function newestLogs(topic, fromBlock, latestBlock) {
         from = Math.floor((from + latestBlock) / 2);
     }
     return fetchEventLogs(topic, from);
+}
+
+async function loadEarnings() {
+    state.earningsAt = Date.now();
+    try {
+        await fetchEarningsEvents();
+    } catch (e) {
+        logger.warn('Overview: earnings events not loaded', e);
+        if (!state.earningsLoaded) state.earningsError = true;
+    }
+    if (state.active) renderActivity();
+}
+
+/** The operators' latest Profit events: earnings withdrawn from their sponsorships */
+async function fetchEarningsEvents() {
+    const operators = new Map(state.allOperators.map(op => [op.id.toLowerCase(), op]));
+    if (!operators.size) return;
+    const latest = (await Services.runQuery('{ _meta { block { number } } }'))._meta.block.number;
+    let events = [];
+    for (const days of DELEGATION_WINDOWS_DAYS) {
+        const logs = await newestLogs(PROFIT_TOPIC, Math.max(0, latest - days * POLYGON_BLOCKS_PER_DAY), latest);
+        events = logs
+            .filter(log => operators.has(log.address.toLowerCase()))
+            .map(log => {
+                // Profit(valueIncreaseWei, indexed operatorsCutDataWei, indexed protocolFeeDataWei)
+                const [delegators, cut, fee] = log.topics.length === 3
+                    ? [ethers.BigNumber.from(log.data), ethers.BigNumber.from(log.topics[1]), ethers.BigNumber.from(log.topics[2])]
+                    : ethers.utils.defaultAbiCoder.decode(['uint256', 'uint256', 'uint256'], log.data);
+                return { operatorId: operators.get(log.address.toLowerCase()).id,
+                    delegators: weiToNumber(delegators.toString()), cut: weiToNumber(cut.toString()), fee: weiToNumber(fee.toString()),
+                    time: parseInt(log.timeStamp, 16), block: parseInt(log.blockNumber, 16), index: parseInt(log.logIndex, 16) };
+            })
+            .filter(e => e.delegators + e.cut + e.fee > 0)
+            .sort((a, b) => b.block - a.block || b.index - a.index);
+        if (events.length >= LIST_SIZE) break;
+    }
+    events = events.slice(0, LIST_SIZE);
+    const ids = [...new Set(events.map(e => e.operatorId))];
+    if (ids.length) {
+        const data = await Services.runQuery(`{ operators(where: { id_in: ${JSON.stringify(ids)} }) { id metadataJsonString } }`);
+        const meta = new Map((data.operators || []).map(op => [op.id, op]));
+        for (const event of events) event.operator = meta.get(event.operatorId) || { id: event.operatorId };
+    }
+    state.earnings = events;
+    state.earningsLoaded = true;
+    state.earningsError = false;
 }
 
 /**
@@ -1062,14 +1113,15 @@ function renderRangeButtons() {
 // Rendering: lists
 // ============================================
 
-const ROW = 'flex items-center gap-3 px-2 py-2 -mx-2 rounded-lg hover:bg-white/[0.03] transition-colors';
+// Rows of one height (whatever their badges), so the lists keep their size between tabs
+const ROW = 'flex items-center gap-3 px-2 h-14 -mx-2 rounded-lg hover:bg-white/[0.03] transition-colors';
 
 function emptyRow(text) {
     return `<p class="py-6 text-center text-sm text-gray-400">${text}</p>`;
 }
 
 function loadingRows() {
-    return Array.from({ length: 3 }, () => '<div class="h-10 rounded-lg bg-[#2C2C2C] animate-pulse"></div>').join('');
+    return Array.from({ length: LIST_SIZE }, () => '<div class="h-14 rounded-lg bg-[#2C2C2C] animate-pulse"></div>').join('');
 }
 
 function badge(kind) {
@@ -1167,6 +1219,23 @@ function delegationRow(event) {
         </a>`;
 }
 
+function earningsRow(event) {
+    const total = event.delegators + event.cut + event.fee;
+    const parts = `${full(event.delegators)} DATA to the delegators<br>${full(event.cut)} DATA owner's cut<br>${full(event.fee)} DATA protocol fee`;
+    return `
+        <a href="/operator/${event.operatorId}" class="${ROW}">
+            ${avatar(event.operator)}
+            <div class="min-w-0 flex-1">
+                <p class="text-sm font-semibold text-white truncate">${escapeHtml(operatorName(event.operator))}</p>
+                <p class="text-xs text-gray-400 truncate">Collected earnings</p>
+            </div>
+            <div class="text-right whitespace-nowrap">
+                <p class="text-sm font-semibold text-green-400" data-tooltip-content="${parts}">+${compact(total)} DATA</p>
+                <p class="text-xs text-gray-400">${timeAgo(event.time)}</p>
+            </div>
+        </a>`;
+}
+
 function governanceRow(event) {
     const stream = shortStreamId(event.flag?.sponsorship?.stream?.id);
     const detail = event.kind === 'flagged' ? `By ${operatorName(event.by)}` : event.on ? `On ${operatorName(event.on)}` : stream;
@@ -1188,15 +1257,27 @@ const ACTIVITY = {
     staking: { rows: () => state.stakingEvents, render: stakingRow, error: 'Staking events could not be loaded.', empty: 'No staking events.', href: '/subgraph/stakingEvents' },
     delegations: { rows: () => state.delegations, render: delegationRow, error: 'Delegation events could not be loaded.', empty: 'No delegations in the last 30 days.', href: '/delegators',
         loaded: () => state.delegationsLoaded, failed: () => state.delegationsError },
+    earnings: { rows: () => state.earnings, render: earningsRow, error: 'Earnings events could not be loaded.', empty: 'No earnings collected in the last 30 days.', href: null,
+        loaded: () => state.earningsLoaded, failed: () => state.earningsError },
     governance: { rows: () => state.govEvents, render: governanceRow, error: 'Governance events could not be loaded.', empty: 'No governance events.', href: '/governance' }
 };
+
+/** Explorer-backed tabs: read while open (at most once a minute), and once at the start */
+const ACTIVITY_LOADERS = { delegations: () => loadDelegations(), earnings: () => loadEarnings() };
 
 function renderActivity() {
     const el = $('overview-activity');
     if (!el) return;
     const tab = ACTIVITY[state.activity];
     el.innerHTML = listContent(tab.rows(), tab.render, tab);
-    $('overview-activity-all')?.setAttribute('href', tab.href);
+    const all = $('overview-activity-all');
+    if (all) {
+        // No full list of earnings: the link keeps its place
+        if (tab.href) all.setAttribute('href', tab.href);
+        all.classList.toggle('invisible', !tab.href);
+        all.setAttribute('aria-hidden', String(!tab.href));
+        all.tabIndex = tab.href ? 0 : -1;
+    }
     document.querySelectorAll('#overview-activity-tabs button').forEach(btn => {
         const active = btn.dataset.tab === state.activity;
         btn.classList.toggle('bg-[#3A3A3A]', active);
@@ -1219,8 +1300,9 @@ function renderLists() {
 async function refresh() {
     const totals = fetchTotals();
     state.totalsPromise = totals.catch(() => {});
-    // Delegation events (explorer requests): while their tab is open, or once
+    // Delegation and earnings events (explorer requests): while their tab is open, or once
     if (state.activity === 'delegations' || !state.delegationsLoaded) totals.then(loadDelegations).catch(() => {});
+    if (state.activity === 'earnings' || !state.earningsLoaded) totals.then(loadEarnings).catch(() => {});
     try {
         await Promise.all([totals, fetchLists()]);
         state.loaded = true;
@@ -1267,7 +1349,8 @@ function init() {
     document.querySelectorAll('#overview-activity-tabs button').forEach(btn => btn.addEventListener('click', () => {
         state.activity = btn.dataset.tab;
         renderActivity();
-        if (state.activity === 'delegations' && state.totals && Date.now() - (state.delegationsAt || 0) > REFRESH_MS) loadDelegations();
+        const at = { delegations: state.delegationsAt, earnings: state.earningsAt }[state.activity];
+        if (ACTIVITY_LOADERS[state.activity] && state.totals && Date.now() - (at || 0) > REFRESH_MS) ACTIVITY_LOADERS[state.activity]();
     }));
     // The page stops itself when another one opens
     window.addEventListener('app:routechange', (e) => {

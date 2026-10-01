@@ -291,6 +291,9 @@
   .collapse {
     visibility: collapse;
   }
+  .invisible {
+    visibility: hidden;
+  }
   .visible {
     visibility: visible;
   }
@@ -746,6 +749,9 @@
   }
   .min-h-\[280px\] {
     min-height: 280px;
+  }
+  .min-h-\[296px\] {
+    min-height: 296px;
   }
   .min-h-\[300px\] {
     min-height: 300px;
@@ -3386,6 +3392,11 @@
       display: block;
     }
   }
+  .sm\:flex {
+    @media (width >= 40rem) {
+      display: flex;
+    }
+  }
   .sm\:grid {
     @media (width >= 40rem) {
       display: grid;
@@ -3519,6 +3530,11 @@
   .sm\:gap-6 {
     @media (width >= 40rem) {
       gap: calc(var(--spacing) * 6);
+    }
+  }
+  .sm\:self-start {
+    @media (width >= 40rem) {
+      align-self: flex-start;
     }
   }
   .sm\:overflow-visible {
