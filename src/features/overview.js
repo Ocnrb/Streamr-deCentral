@@ -5,9 +5,10 @@
  * its chart over time. Below: top operators, best sponsorships and the latest staking, delegation
  * and governance events.
  *
- * Everything comes from The Graph, except the DATA price (the app's price streams) and the operators'
+ * Everything comes from The Graph, except the DATA price (the app's price streams), the operators'
  * own events read through the Etherscan API (Delegated / Undelegated, and OperatorSlashed, which every
- * slashing reports to the operator contract):
+ * slashing reports to the operator contract) and the nodes, heard on the operators' coordination
+ * streams as on the Network Map:
  * - totals: sums over every operator and sponsorship (paged), the slashings, the streams' creation dates;
  * - history: the daily buckets of sponsorships and operators (each keeps its last bucket until the next one),
  *   and the dated sponsoring events, slashings and stream creations, added up over time.
@@ -42,9 +43,18 @@ const DELEGATION_TOPICS = {
 // Operator.onSlash: the DATA a sponsorship slashed from the operator
 const SLASHED_TOPIC = ethers.utils.id('OperatorSlashed(uint256,uint256,uint256)');
 const OPERATORS_FIRST_BLOCK = 49000000;      // Polygon, before Streamr 1.0 (November 2023)
+// streamr.eth/recovery: in March 2024 the stake of the broken operator contracts was moved out through
+// slashings in this sponsorship. A recovery of funds, not a penalty: left out of DATA slashed
+const RECOVERY_SPONSORSHIP = '0x9109abd75eae7e526fc85e33bab24ac45f71717a';
 const POLYGON_BLOCKS_PER_DAY = 43200;
 const DELEGATION_WINDOWS_DAYS = [1, 7, 30];   // looked back further while there are fewer than LIST_SIZE events
 const EXPLORER_BUSY = /rate limit|max calls|too many|timeout|temporarily|busy/i;
+
+// Nodes, as on the Network Map: each operator's nodes send heartbeats to its coordination stream
+const NODES_CACHE_KEY = 'overview.nodes.v1';
+const NODE_TTL_MS = 60 * 60 * 1000;          // a node not heard from in an hour is not counted
+const NODE_LISTEN_MS = 45 * 1000;            // per operator, at most
+const NODE_SUBSCRIPTIONS = 40;               // operators listened to at once
 
 // Chart ranges: one point per `step` days
 const RANGES = {
@@ -62,7 +72,7 @@ const METRICS = {
     apy: { label: 'Network APY', kind: 'percent', source: 'sponsorships',
         info: 'APY of the running sponsorships weighted by their stake: their yearly payouts over the DATA staked in them, before the operators\' cut.' },
     operators: { label: 'Operators', kind: 'count', source: 'operators',
-        info: 'Operators with stake in sponsorships.<br>Nodes: the node addresses these operators registered in their contract (not a live count).' },
+        info: 'Operators with stake in sponsorships.<br>Nodes: the nodes heard on these operators\' coordination streams in the last hour, as on the Network Map.' },
     sponsorships: { label: 'Sponsorships', kind: 'count', source: 'sponsorships',
         info: 'Running sponsorships: funds left and DATA staked.<br>Over time: the daily records of each sponsorship.' },
     streams: { label: 'Streams', kind: 'count', source: 'streams',
@@ -70,7 +80,7 @@ const METRICS = {
     sponsored: { label: 'DATA sponsored', kind: 'data', source: 'sponsoring',
         info: 'DATA paid into sponsorships by their sponsors, all time.' },
     slashed: { label: 'DATA slashed', kind: 'data', source: 'slashing',
-        info: 'DATA slashed from operators, all time: every slashing their sponsorships reported to the operator contracts (onSlash).' },
+        info: 'DATA slashed from operators, all time: every slashing their sponsorships reported to the operator contracts (onSlash).<br>Without the March 2024 recovery of the broken operator contracts (streamr.eth/recovery), which was not a penalty.' },
     price: { label: 'DATA price', kind: 'price', source: 'price',
         info: 'DATA/USD from the app\'s price feed: the daily history, then the latest price.' }
 };
@@ -107,10 +117,13 @@ const state = {
     slashingEvents: [],         // [{ t, v }] oldest first
     slashingSeen: new Set(),
     slashingFrom: OPERATORS_FIRST_BLOCK,
+    recoveryTxs: null,          // Set of the recovery sponsorship's transactions
     slashingLoading: null,
     slashingError: false,
     totals: null,
     totalsPromise: null,
+    nodes: new Map(),           // node id -> last heartbeat (ms)
+    nodesScan: null,            // { stopped, listeners: Set(stop) } while the operators are listened to
     streams: null,              // { byDay: Map(day -> count), total }
     streamsLoading: false,
     topOperators: [],
@@ -285,7 +298,7 @@ function bestSponsorships() {
 
 async function fetchTotals() {
     const [operators, sponsorships, selfDelegations] = await Promise.all([
-        fetchAll('operators', 'owner valueWithoutEarnings totalStakeInSponsorshipsWei nodes'),
+        fetchAll('operators', 'owner valueWithoutEarnings totalStakeInSponsorshipsWei'),
         fetchAll('sponsorships', 'totalStakedWei remainingWei spotAPY isRunning cumulativeSponsoring'),
         fetchAll('delegations', '_valueDataWei operator { id }', 'isSelfDelegation: true,')
     ]);
@@ -314,7 +327,6 @@ async function fetchTotals() {
         apy: runningStake > 0 ? apySum / runningStake : null,
         operators: staking.length,
         operatorsAll: operators.length,
-        nodes: staking.reduce((sum, op) => sum + (op.nodes?.length || 0), 0),
         sponsorships: running.length,
         sponsorshipsAll: sponsorships.length,
         sponsored: sponsorships.reduce((sum, s) => sum + weiToNumber(s.cumulativeSponsoring), 0)
@@ -332,9 +344,10 @@ async function fetchTotals() {
 // Data: delegation events (operator contract logs)
 // ============================================
 
-/** Logs of one event from a block on, oldest first (at most 1000); a busy explorer is asked again shortly */
-async function fetchEventLogs(topic, fromBlock) {
-    const url = `${POLYGONSCAN_NETWORK.apiUrl}?chainid=${POLYGONSCAN_NETWORK.chainId}&module=logs&action=getLogs&topic0=${topic}`
+/** Logs of one event (or of one contract) from a block on, oldest first (at most 1000); a busy explorer is asked again shortly */
+async function fetchEventLogs(topic, fromBlock, address = null) {
+    const filter = address ? `address=${address}` : `topic0=${topic}`;
+    const url = `${POLYGONSCAN_NETWORK.apiUrl}?chainid=${POLYGONSCAN_NETWORK.chainId}&module=logs&action=getLogs&${filter}`
         + `&fromBlock=${fromBlock}&toBlock=latest&page=1&offset=${PAGE}&apikey=${getEtherscanApiKey()}`;
     let lastError = null;
     for (let attempt = 0; attempt < 3; attempt++) {
@@ -415,6 +428,25 @@ async function fetchDelegationEvents() {
     state.delegationsError = false;
 }
 
+/** Every log of a contract (oldest first), paged on the block */
+async function contractLogs(address, fromBlock) {
+    const all = [];
+    const seen = new Set();
+    let from = fromBlock;
+    for (let i = 0; i < 50; i++) {
+        const logs = await fetchEventLogs(null, from, address);
+        for (const log of logs) {
+            const key = `${log.transactionHash}:${log.logIndex}`;
+            if (seen.has(key)) continue;
+            seen.add(key);
+            all.push(log);
+        }
+        if (logs.length) from = parseInt(logs[logs.length - 1].blockNumber, 16);
+        if (logs.length < PAGE) break;
+    }
+    return all;
+}
+
 /** OperatorSlashed logs of the operators since the last read (kept between visits) */
 async function loadSlashing() {
     if (state.slashingLoading) return state.slashingLoading;
@@ -423,6 +455,11 @@ async function loadSlashing() {
             if (!state.totals) await state.totalsPromise;
             const operators = new Set(state.allOperators.map(op => op.id.toLowerCase()));
             if (!operators.size) throw new Error('No operators');
+            // The recovery's slashings happened in its own transactions
+            if (!state.recoveryTxs) {
+                const logs = await contractLogs(RECOVERY_SPONSORSHIP, OPERATORS_FIRST_BLOCK);
+                state.recoveryTxs = new Set(logs.map(log => log.transactionHash.toLowerCase()));
+            }
             const seen = state.slashingSeen;
             let from = state.slashingFrom;
             for (let i = 0; i < 50; i++) {
@@ -430,6 +467,7 @@ async function loadSlashing() {
                 for (const log of logs) {
                     const key = `${log.transactionHash}:${log.logIndex}`;
                     if (seen.has(key) || !operators.has(log.address.toLowerCase())) continue;
+                    if (state.recoveryTxs.has(log.transactionHash.toLowerCase())) continue;
                     seen.add(key);
                     const [amount] = ethers.utils.defaultAbiCoder.decode(['uint256', 'uint256', 'uint256'], log.data);
                     state.slashingEvents.push({ t: parseInt(log.timeStamp, 16), v: weiToNumber(amount.toString()) });
@@ -456,6 +494,89 @@ async function loadSlashing() {
         }
     })();
     return state.slashingLoading;
+}
+
+// ============================================
+// Data: nodes (heartbeats on the coordination streams, as on the Network Map)
+// ============================================
+
+function readNodesCache() {
+    try {
+        const cached = JSON.parse(localStorage.getItem(NODES_CACHE_KEY) || 'null');
+        if (Array.isArray(cached)) state.nodes = new Map(cached);
+    } catch (e) { /* no cache */ }
+}
+
+function writeNodesCache() {
+    try {
+        localStorage.setItem(NODES_CACHE_KEY, JSON.stringify([...state.nodes.entries()]));
+    } catch (e) { /* storage full or blocked: heard again next time */ }
+}
+
+/** Nodes heard in the last hour (null before any was heard) */
+function nodesCount() {
+    const since = Date.now() - NODE_TTL_MS;
+    for (const [id, seen] of state.nodes) if (seen < since) state.nodes.delete(id);
+    return state.nodes.size || null;
+}
+
+/** Listens to one operator's coordination stream until each of its nodes sent two heartbeats (at most 45 s) */
+async function listenOperator(client, operatorId, scan) {
+    const heartbeats = new Map();
+    let subscription = null;
+    let finish;
+    const done = new Promise(resolve => { finish = resolve; });
+    const timer = setTimeout(finish, NODE_LISTEN_MS);
+    scan.listeners.add(finish);
+    try {
+        subscription = await client.subscribe(`${operatorId}/operator/coordination`, (message) => {
+            const nodeId = message?.msgType === 'heartbeat' ? message?.peerDescriptor?.nodeId : null;
+            if (!nodeId) return;
+            const known = state.nodes.has(nodeId) && Date.now() - state.nodes.get(nodeId) < NODE_TTL_MS;
+            state.nodes.set(nodeId, Date.now());
+            heartbeats.set(nodeId, (heartbeats.get(nodeId) || 0) + 1);
+            if (!known && state.active) renderStats();
+            if ([...heartbeats.values()].every(count => count >= 2)) finish();
+        });
+        if (!scan.stopped) await done;
+    } catch (e) {
+        logger.warn(`Overview: ${operatorId} coordination stream not heard`, e);
+    } finally {
+        clearTimeout(timer);
+        scan.listeners.delete(finish);
+        if (subscription) subscription.unsubscribe().catch(() => {});
+    }
+}
+
+/** Listens to the coordination streams of the operators with stake, a few at a time */
+async function scanNodes() {
+    if (state.nodesScan) return;
+    const client = Services.getStreamrClient();
+    if (!client) return;   // asked again on the next round
+    const scan = { stopped: false, listeners: new Set() };
+    state.nodesScan = scan;
+    try {
+        if (!state.totals) await state.totalsPromise;
+        const queue = state.allOperators
+            .filter(op => BigInt(op.totalStakeInSponsorshipsWei || '0') > 0n)
+            .map(op => op.id);
+        await Promise.all(Array.from({ length: NODE_SUBSCRIPTIONS }, async () => {
+            while (queue.length && !scan.stopped && state.active) await listenOperator(client, queue.shift(), scan);
+        }));
+    } finally {
+        if (state.nodesScan === scan) state.nodesScan = null;
+        writeNodesCache();
+    }
+    if (state.active) renderStats();
+}
+
+function stopNodesScan() {
+    const scan = state.nodesScan;
+    if (!scan) return;
+    scan.stopped = true;
+    for (const finish of scan.listeners) finish();
+    state.nodesScan = null;
+    writeNodesCache();
 }
 
 // ============================================
@@ -722,7 +843,11 @@ function statSub(metric) {
     switch (metric) {
         case 'staked': return t ? usd(t.staked) : '';
         case 'delegated': return t ? usd(t.delegated) : '';
-        case 'operators': return t ? `of ${full(t.operatorsAll)} · ${full(t.nodes)} nodes` : '';
+        case 'operators': {
+            if (!t) return '';
+            const nodes = nodesCount();
+            return `of ${full(t.operatorsAll)}${nodes ? ` · ${full(nodes)} nodes` : ''}`;
+        }
         case 'sponsorships': return t ? `running of ${full(t.sponsorshipsAll)}` : '';
         case 'streams': return state.streams ? '' : (state.streamsLoading ? 'Counting...' : '');
         case 'sponsored': return t ? usd(t.sponsored) : '';
@@ -1169,6 +1294,7 @@ function init() {
         if (!document.hidden && state.active) refresh();
     });
     Services.onHistoricalDataLoaded(setPriceHistory);
+    readNodesCache();
 }
 
 function show() {
@@ -1181,12 +1307,14 @@ function show() {
     renderChart();
     loadStreams();
     loadSlashing();
+    scanNodes();
     schedule();
     clearInterval(state.streamsTimer);
     state.streamsTimer = setInterval(() => {
         if (state.active && !document.hidden) {
             loadStreams();
             loadSlashing();
+            scanNodes();
         }
     }, STREAMS_REFRESH_MS);
 }
@@ -1195,6 +1323,7 @@ function stop() {
     state.active = false;
     clearTimeout(state.timer);
     clearInterval(state.streamsTimer);
+    stopNodesScan();
 }
 
 export const OverviewLogic = { show, stop };
