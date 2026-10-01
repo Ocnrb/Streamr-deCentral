@@ -20,8 +20,22 @@ test('a saved key is unlocked with its password', async ({ page }) => {
     test.slow();
     await page.fill('#encryptionPassword', 'secret-123');
     await page.fill('#encryptionPasswordConfirm', 'secret-123');
+    const logs = [];
+    page.on('console', m => logs.push(`${m.type()}: ${m.text().slice(0, 300)}`));
+    page.on('pageerror', e => logs.push(`pageerror: ${e.message}`));
     await page.click('#pkModalConnect');
-    await expect(page.locator('#sidebar-wallet-address')).toHaveText(ADDRESS, { timeout: SCRYPT_TIMEOUT });
+    try {
+        await expect(page.locator('#sidebar-wallet-address')).toHaveText(ADDRESS, { timeout: SCRYPT_TIMEOUT });
+    } catch (error) {
+        // What the page shows and logged, to tell a slow key encryption from a failed one
+        const state = await page.evaluate(() => ({
+            toasts: document.getElementById('toast-container')?.innerText,
+            loading: !document.getElementById('loadingContent')?.classList.contains('hidden'),
+            loadingText: document.getElementById('loading-main-text')?.innerText,
+            saved: !!localStorage.getItem('encrypted_wallet')
+        }));
+        throw new Error(`${error.message}\n${JSON.stringify(state)}\n${logs.filter(l => !/ERR_FAILED|Service Worker/.test(l)).join('\n')}`);
+    }
 
     await page.reload({ waitUntil: 'domcontentloaded' });
     await expect(page.locator('#unlockWalletModal')).toBeVisible();
