@@ -21,8 +21,14 @@ function buildData() {
         id: hex(0xa0000 + i), owner: hex(0xf000 + i),
         valueWithoutEarnings: W(i < 300 ? 200000 + i * 1000 : 1000), totalStakeInSponsorshipsWei: i < 300 ? W(150000 + i * 500) : '0',
         delegatorCount: i % 40, metadataJsonString: JSON.stringify({ name: i === 2 ? XSS_NAME : `Operator ${i}` }),
+        // The operator page's fields: 10% owner's cut, earnings, its owner as agent
+        operatorsCutFraction: (10n ** 17n).toString(), operatorTokenTotalSupplyWei: W(i < 300 ? 200000 : 1000), cumulativeEarningsWei: W(i < 300 ? 30000 : 0),
+        cumulativeProfitsWei: W(i < 300 ? 27000 : 0), cumulativeOperatorsCutWei: W(i < 300 ? 3000 : 0), nodes: [], controllers: [hex(0xf000 + i)], queueEntries: [],
         // The largest ones earning nothing are skipped from the top list
-        stakes: [{ amountWei: W(1e5), sponsorship: { spotAPY: i === 299 || i === 297 ? '0' : i === 296 ? '0.0001' : '0.12' } }]
+        stakes: [{ amountWei: W(1e5), sponsorship: {
+            id: hex(0xb000 + (i % 20)), stream: { id: `${hex(0xc000 + (i % 20))}/stream-${i % 20}` }, isRunning: true, remainingWei: W(40000), totalStakedWei: W(5e6), totalPayoutWeiPerSec: (BigInt(W(1)) / 50n).toString(),
+            spotAPY: i === 299 || i === 297 ? '0' : i === 296 ? '0.0001' : '0.12'
+        } }]
     }));
     T.sponsorships = Array.from({ length: 20 }, (_, i) => ({
         id: hex(0xb000 + i), totalStakedWei: W(i < 15 ? 5e6 + i * 2e5 : 0), remainingWei: W(i < 12 ? 40000 + i * 1000 : 0),
@@ -83,6 +89,7 @@ function buildData() {
         { id: 'f0', result: 'kicked', flaggingTimestamp: NOW - 90000, flagResolutionTimestamp: NOW - 7200, target: party(T.operators[2]), flagger: party(T.operators[3]), sponsorship: T.sponsorships[1] }
     ];
     T.votes = [{ id: 'v1', timestamp: NOW - 600, votedKick: true, voter: party(T.operators[3]), flag: { id: 'f1', target: party(T.operators[1]), sponsorship: T.sponsorships[0] } }];
+    T.flags.forEach(f => { f.votes = T.votes.filter(v => v.flag.id === f.id).map(v => ({ ...v, voterWeight: W(1) })); });
     return T;
 }
 
@@ -236,6 +243,7 @@ export async function mockNetwork(context) {
     const rpc = (req) => ({
         jsonrpc: '2.0', id: req.id,
         result: req.method === 'eth_chainId' ? '0x89' : req.method === 'net_version' ? '137' : req.method === 'eth_blockNumber' ? '0x' + LATEST_BLOCK.toString(16)
+            : req.method === 'eth_getBalance' ? '0xde0b6b3a7640000'   // 1 POL
             : req.method === 'eth_getTransactionReceipt' ? (stats.receiptCalls++, logs.receipt(req.params[0])) : null
     });
 
@@ -243,6 +251,10 @@ export async function mockNetwork(context) {
         const request = route.request();
         const url = request.url();
         if (url.startsWith('http://localhost:')) return route.continue();
+        // An operator's own transactions: none (its history comes from the subgraph)
+        if (url.includes('api.etherscan.io') && /action=(txlist|tokentx)/.test(url)) {
+            return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ status: '0', message: 'No transactions found', result: [] }) });
+        }
         if (url.includes('api.etherscan.io') && url.includes('action=getLogs')) {
             stats.explorerCalls++;
             const q = new URL(url).searchParams;
