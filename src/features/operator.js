@@ -1330,9 +1330,7 @@ export const OperatorLogic = {
             }
             // Optional extra lines, separated by "|" (e.g. "Stake before: ...|Stake after: ..." in the history)
             if (content && target.dataset.tooltipExtra) {
-                const extraLines = target.dataset.tooltipExtra.split('|')
-                    .map(line => `<span class="text-gray-400">${Utils.escapeHtml(line)}</span>`).join('<br>');
-                content = `${Utils.escapeHtml(String(content))}<br>${extraLines}`;
+                content = `${content}<br>${target.dataset.tooltipExtra.split('|').join('<br>')}`;
             }
             
             if (content) {

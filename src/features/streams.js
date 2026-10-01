@@ -290,7 +290,7 @@ async function fetchAllStreams(skip = 0) {
  */
 async function searchSponsorships(searchTerm, includeInactive = false) {
     // Escape special characters for GraphQL
-    const sanitizedTerm = searchTerm.replace(/"/g, '\\"');
+    const sanitizedTerm = Utils.gqlEscape(searchTerm);
     
     // Build where conditions based on includeInactive toggle
     const activeCondition = includeInactive 
@@ -342,7 +342,7 @@ async function searchSponsorships(searchTerm, includeInactive = false) {
  */
 async function searchAllStreams(searchTerm) {
     // Escape special characters for GraphQL
-    const sanitizedTerm = searchTerm.replace(/"/g, '\\"');
+    const sanitizedTerm = Utils.gqlEscape(searchTerm);
     
     const query = `
         query SearchAllStreams {
@@ -523,7 +523,7 @@ sponsoringEvents(first: 50, orderBy: date, orderDirection: desc) {
 
 async function fetchStreamDetails(streamId) {
     // Escape quotes in stream ID for safe interpolation
-    const sanitizedId = streamId.replace(/"/g, '\\"');
+    const sanitizedId = Utils.gqlEscape(streamId);
     
     const query = `
         query GetStreamDetails {
@@ -713,7 +713,7 @@ function createSponsorshipRowHtml(sponsorship, index) {
             data-sponsorship-id="${sponsorshipId}"
             data-sponsored="true"
             data-inactive="${isInactive}"
-            onclick="event.preventDefault(); window.router.navigate('/stream/${encodedStreamId}?sponsored=true&sponsorshipId=${sponsorshipId}')">
+            data-nav-href="${Utils.escapeHtml(`/stream/${encodedStreamId}?sponsored=true&sponsorshipId=${sponsorshipId}`)}">
             <td class="px-4 py-3">
                 <span class="font-mono text-sm group-hover:text-blue-400 transition-colors" title="${Utils.escapeHtml(streamId)}">${Utils.escapeHtml(displayStreamId)}</span>${stakedBadge}${inactiveBadge}
             </td>
@@ -760,7 +760,9 @@ function createAllStreamRowHtml(stream, index) {
     try {
         if (stream.metadata) {
             const meta = JSON.parse(stream.metadata);
-            partitions = meta.partitions || 1;
+            // Metadata is whatever the stream's creator wrote: a whole number in the SDK's range, or 1
+            const count = Number(meta.partitions);
+            partitions = Number.isInteger(count) && count >= 1 && count <= 100 ? count : 1;
         }
     } catch (e) { /* ignore */ }
     
@@ -794,7 +796,7 @@ function createAllStreamRowHtml(stream, index) {
         <tr class="stream-row cursor-pointer hover:bg-white/5 transition-colors group" 
             data-stream-id="${Utils.escapeHtml(streamId)}"
             data-sponsored="false"
-            onclick="event.preventDefault(); window.router.navigate('/stream/${encodedStreamId}')">
+            data-nav-href="${Utils.escapeHtml(`/stream/${encodedStreamId}`)}">
             <td class="px-4 py-3">
                 <span class="font-mono text-sm group-hover:text-blue-400 transition-colors hidden md:inline" title="${Utils.escapeHtml(streamId)}">${Utils.escapeHtml(displayStreamIdDesktop)}</span>
                 <span class="font-mono text-sm group-hover:text-blue-400 transition-colors md:hidden" title="${Utils.escapeHtml(streamId)}">${Utils.escapeHtml(displayStreamIdMobile)}</span>
@@ -1622,7 +1624,9 @@ function renderStreamDetail(stream, isSponsored, sponsorshipId) {
     try {
         if (stream.metadata) {
             metadata = JSON.parse(stream.metadata);
-            partitions = metadata.partitions || 1;
+            // A whole number in the SDK's range (the metadata is the creator's), or 1
+            const count = Number(metadata.partitions);
+            partitions = Number.isInteger(count) && count >= 1 && count <= 100 ? count : 1;
             description = metadata.description || '';
         }
     } catch (e) { /* ignore */ }
@@ -2737,7 +2741,7 @@ function renderOperatorsList(stakes) {
             <div class="flex justify-between items-center px-4 md:px-6 py-3 border-b border-[#333] last:border-b-0 hover:bg-white/5 transition-colors">
                 <div class="flex items-center gap-3 min-w-0">
                     ${profileImage}
-                    <a href="/operator/${stake.operator?.id}" onclick="event.preventDefault(); window.router.navigate('/operator/${stake.operator?.id}')" class="text-blue-400 hover:text-blue-300 font-medium text-sm truncate">${Utils.escapeHtml(opName)}</a>
+                    <a href="/operator/${Utils.escapeHtml(String(stake.operator?.id || ''))}" class="text-blue-400 hover:text-blue-300 font-medium text-sm truncate">${Utils.escapeHtml(opName)}</a>
                 </div>
                 <span class="text-gray-300 font-mono text-sm flex-shrink-0 ml-2" data-tooltip-value="${rawStake}">${stakeAmount} DATA</span>
             </div>

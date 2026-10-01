@@ -14,7 +14,7 @@
  */
 
 import { runQuery } from './services.js';
-import { AVATAR_STREAM_MARKER as MARKER, OPERATOR_AVATAR_PLACEHOLDER, isValidProfileStreamId, ipfsCidFromAvatarUrl, markDeadIpfsCid } from './utils.js';
+import { AVATAR_STREAM_MARKER as MARKER, OPERATOR_AVATAR_PLACEHOLDER, isValidProfileStreamId, ipfsCidFromAvatarUrl, markDeadIpfsCid, gqlEscape } from './utils.js';
 import { STREAMR_SDK_CONTRACTS_CONFIG } from './constants.js';
 
 export { isValidProfileStreamId };
@@ -60,7 +60,7 @@ export function storageNodeUrls(nodeMetadataJson) {
 
 async function getStreamStorageUrls(streamId) {
     if (!urlCache.has(streamId)) {
-        const promise = runQuery(`{ stream(id: "${streamId.replace(/"/g, '')}") { storageNodes { id metadata } } }`)
+        const promise = runQuery(`{ stream(id: "${gqlEscape(streamId)}") { storageNodes { id metadata } } }`)
             .then(data => [...new Set((data?.stream?.storageNodes || []).flatMap(node => storageNodeUrls(node.metadata)))].slice(0, MAX_STORAGE_URLS))
             .catch(() => { urlCache.delete(streamId); return []; });
         urlCache.set(streamId, promise);
