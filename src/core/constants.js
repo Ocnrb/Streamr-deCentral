@@ -219,10 +219,20 @@ export const STORAGE_KEYS = {
  * This is the single source of truth for Graph API access across the app.
  * @returns {string} The Graph API URL
  */
-export function getGraphUrl() {
+function getGraphApiKey() {
     const storedKey = localStorage.getItem(STORAGE_KEYS.GRAPH_API_KEY);
-    const apiKey = storedKey && storedKey.trim() !== '' ? storedKey : DEFAULT_GRAPH_API_KEY;
-    return `https://gateway-arbitrum.network.thegraph.com/api/${apiKey}/subgraphs/id/${SUBGRAPH_ID}`;
+    return storedKey && storedKey.trim() !== '' ? storedKey : DEFAULT_GRAPH_API_KEY;
+}
+
+export function getGraphUrl() {
+    return `https://gateway-arbitrum.network.thegraph.com/api/${getGraphApiKey()}/subgraphs/id/${SUBGRAPH_ID}`;
+}
+
+// Uniswap v4 on Polygon (The Graph): daily volume and transactions of the DATA/USDC pool for the Swap page
+export const UNISWAP_V4_SUBGRAPH_ID = '2CB2uQxcDKWDenagn2z17KQVCtfwSx5eXYuvqTciRTJu';
+
+export function getUniswapV4SubgraphUrl() {
+    return `https://gateway.thegraph.com/api/${getGraphApiKey()}/subgraphs/id/${UNISWAP_V4_SUBGRAPH_ID}`;
 }
 
 /**
