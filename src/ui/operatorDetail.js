@@ -3,6 +3,7 @@ import { escapeHtml, formatBigNumber, convertWeiToData, createAddressLink, creat
 import { getMaticBalance } from '../core/services.js';
 import { initLeafletMap } from './nodeMap.js';
 import { updateProfileButton } from './profileShortcut.js';
+import Chart from 'chart.js/auto';
 
 export const detailContent = document.getElementById('detail-content');
 

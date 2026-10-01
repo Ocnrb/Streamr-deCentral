@@ -12,6 +12,7 @@ import { loadedPage } from './pages.js';
 import { router } from './routes.js';
 import { isAutostakerRunning, stopAutostakerBot } from './autostakerPanel.js';
 import { savePrivateKey, decryptPrivateKey, hasStoredPrivateKey, clearStoredPrivateKey } from './keystore.js';
+import { ethers } from 'ethers';
 
 const { logger } = Utils;
 

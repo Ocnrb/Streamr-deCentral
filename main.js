@@ -1,4 +1,4 @@
-import './src/core/libs.js';   // first: the libraries the other modules use as globals
+import './src/core/libs.js';   // Leaflet's CSS and the libraries as globals (MapLibre plugin)
 import * as Constants from './src/core/constants.js';
 import * as UI from './src/ui/ui.js';
 import * as Services from './src/core/services.js';

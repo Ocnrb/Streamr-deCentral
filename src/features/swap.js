@@ -15,6 +15,7 @@ import * as UI from '../ui/ui.js';
 import * as Services from '../core/services.js';
 import { DATA_TOKEN_ADDRESS_POLYGON, POLYGONSCAN_NETWORK, getEtherscanApiKey } from '../core/constants.js';
 import { SwapMarket } from './swapMarket.js';
+import { ethers } from 'ethers';
 
 const { logger } = Utils;
 
@@ -1867,7 +1868,7 @@ export const SwapLogic = {
             const saved = Number(localStorage.getItem(SLIPPAGE_KEY));
             if ([0.5, 1, 3].includes(saved)) state.slippage = saved;
         } catch (e) { /* private mode */ }
-        let address = null;
+        let address;
         try {
             address = window.appSigner ? (await window.appSigner.getAddress()).toLowerCase() : null;
         } catch (e) {

@@ -14,6 +14,7 @@ import * as Utils from '../core/utils.js';
 import * as UI from '../ui/ui.js';
 import * as Services from '../core/services.js';
 import { DATA_TOKEN_ADDRESS_POLYGON, POLYGONSCAN_NETWORK, getEtherscanApiKey, ETHEREUM_RPC_URLS } from '../core/constants.js';
+import { ethers } from 'ethers';
 
 const { logger } = Utils;
 
@@ -1144,7 +1145,7 @@ export const BridgeLogic = {
     async show() {
         setupListeners();
         state.active = true;
-        let address = null;
+        let address;
         try {
             address = window.appSigner ? (await window.appSigner.getAddress()).toLowerCase() : null;
         } catch (e) {

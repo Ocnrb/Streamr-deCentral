@@ -20,6 +20,7 @@ import {
     MAX_STREAM_PARTITIONS,
     DEFAULT_STORAGE_DAYS
 } from '../core/constants.js';
+import { ethers } from 'ethers';
 
 const { logger } = Utils;
 
@@ -1368,7 +1369,7 @@ async function openModal(mode) {
  * @param {Function} onSaved - called after the changes are saved
  */
 function openEdit(stream, onSaved) {
-    let metadata = {};
+    let metadata;
     try {
         metadata = stream.metadata ? JSON.parse(stream.metadata) : {};
         if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) metadata = {};

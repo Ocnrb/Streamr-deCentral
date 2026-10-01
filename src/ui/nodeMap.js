@@ -2,6 +2,7 @@
 import { escapeHtml } from '../core/utils.js';
 import { regionToLocationMap } from './locationData.js';
 import { MAX_STREAM_MESSAGES } from '../core/constants.js';
+import L from 'leaflet';
 
 // --- Leaflet Map State ---
 let leafletMap = null;

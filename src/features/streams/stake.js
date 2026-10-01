@@ -6,6 +6,7 @@ import { logger } from '../../core/utils.js';
 import { getOperatorProfile } from '../../core/profile.js';
 import { detailState } from './state.js';
 import { StreamsLogic } from '../streams.js';
+import { ethers } from 'ethers';
 
 let currentSponsorshipForStake = null;
 

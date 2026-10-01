@@ -9,6 +9,7 @@
 import * as Utils from '../core/utils.js';
 import * as UI from '../ui/ui.js';
 import * as Services from '../core/services.js';
+import { ethers } from 'ethers';
 
 const { logger } = Utils;
 

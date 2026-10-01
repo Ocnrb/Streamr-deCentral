@@ -1,6 +1,7 @@
 // Polygon RPC: the read-only provider with fallbacks, gas settings, retries and the wallet's network
 import { POLYGON_RPC_URL, POLYGON_RPC_FALLBACKS } from './constants.js';
 import { showToast } from '../ui/ui.js';
+import { ethers } from 'ethers';
 
 // --- Centralized RPC Provider ---
 

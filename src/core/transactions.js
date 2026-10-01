@@ -3,6 +3,7 @@ import { DATA_TOKEN_ADDRESS_POLYGON, STREAMR_CONFIG_ADDRESS, DATA_TOKEN_ABI, OPE
 import { showToast, setModalState, txModalAmount, txModalBalanceValue, txModalMinimumValue, stakeModalAmount, transactionModal, stakeModal } from '../ui/ui.js';
 import { getFriendlyErrorMessage } from './utils.js';
 import { getReadOnlyProvider, getProvider, getGasOverrides, checkGasPriceAndWarn, readWithFallback, executeWithFallback } from './rpc.js';
+import { ethers } from 'ethers';
 
 // --- Blockchain Interactions (Ethers.js) ---
 

@@ -19,6 +19,8 @@
 import * as Services from '../core/services.js';
 import { POLYGONSCAN_NETWORK, getEtherscanApiKey, STREAM_REGISTRY_ADDRESS, STREAM_STORAGE_REGISTRY_ADDRESS, SPONSORSHIP_FACTORY_ADDRESS, PUBLIC_PERMISSION_ADDRESS } from '../core/constants.js';
 import { escapeHtml, convertWeiToData, formatBigNumber, parseOperatorMetadata, shortAddress, operatorAvatarHtml, calculateWeightedApy, logger } from '../core/utils.js';
+import { ethers } from 'ethers';
+import Chart from 'chart.js/auto';
 
 // ============================================
 // Constants

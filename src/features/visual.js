@@ -632,9 +632,7 @@ export const VisualLogic = {
     selectOperatorFromSearch: function(operatorId) {
         this.selectedOperatorId = operatorId;
         
-        let targetNode = null;
-        
-        targetNode = this.nodes.find(n => n.id === operatorId);
+        let targetNode = this.nodes.find(n => n.id === operatorId);
         
         if (!targetNode) {
             targetNode = this.nodes.find(n => n.type === 'live-node' && n.operatorId === operatorId);

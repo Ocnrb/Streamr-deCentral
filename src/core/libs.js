@@ -1,5 +1,5 @@
-// libs.js - Libraries from npm (versions pinned in package.json), shared as globals: the app's modules use them
-// that way, and so do the scripts loaded later (the MapLibre plugin needs L). Imported first by main.js.
+// libs.js - Leaflet's CSS, and the libraries as globals for the scripts loaded outside the bundle (the MapLibre
+// plugin needs L) and for the console. The app's modules import what they use themselves.
 import { ethers } from 'ethers';
 import Chart from 'chart.js/auto';
 import L from 'leaflet';
