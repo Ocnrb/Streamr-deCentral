@@ -484,9 +484,6 @@ const compactChip = (symbol) => state.tokenChip(symbol)
     .replace('gap-1.5 pl-1 pr-2', 'gap-1 pl-0.5 pr-1.5')
     .replace('text-xs', 'text-[11px]')
     .replaceAll('w-4 h-4', 'w-3.5 h-3.5');
-const SHORT_DEX = [[/^Uniswap /, 'Uni '], [/^QuickSwap /, 'QS '], [/^SushiSwap V2/, 'Sushi']];
-/** Short pool name for the list ("Uni v4 0.3%", "QS V2"): the tokens are in the trade's chips */
-const poolShortName = (pool) => (pool ? SHORT_DEX.reduce((name, [from, to]) => name.replace(from, to), pool.label) : '');
 const poolFullName = (pool) => (pool ? `${pool.label} · DATA/${counterName(pool)}` : '');
 
 function renderFilter() {
@@ -501,7 +498,7 @@ function renderFilter() {
 function renderTrades() {
     const body = $('swap-trades');
     if (!body) return;
-    const row = (text) => `<tr><td colspan="6" class="py-4 text-sm text-gray-300">${text}</td></tr>`;
+    const row = (text) => `<tr><td colspan="5" class="py-4 text-sm text-gray-300">${text}</td></tr>`;
     if (!state.loaded) {
         $('swap-trades-more')?.classList.add('hidden');
         const spinner = '<span class="w-4 h-4 flex-shrink-0 border-2 border-gray-500 border-t-transparent rounded-full animate-spin" aria-hidden="true"></span>';
@@ -541,8 +538,7 @@ function renderTrades() {
                 <td class="py-2 pr-2">${tradeCell}</td>
                 <td class="py-2 pr-2 text-right whitespace-nowrap text-white font-medium">${formatPrice(trade.price)}</td>
                 <td class="py-2 pr-2 text-right whitespace-nowrap text-gray-200">${formatData(trade.data)}</td>
-                <td class="py-2 2xl:pr-2 text-right whitespace-nowrap text-gray-200">${trade.usd === null ? '--' : formatUsd(trade.usd)}</td>
-                <td class="hidden 2xl:table-cell py-2 text-right whitespace-nowrap text-xs text-gray-300"><span data-tooltip-content="${Utils.escapeHtml(poolFullName(pool))}">${Utils.escapeHtml(poolShortName(pool))}</span></td>
+                <td class="py-2 text-right whitespace-nowrap text-gray-200">${trade.usd === null ? '--' : formatUsd(trade.usd)}</td>
             </tr>`;
     }).join('');
 }

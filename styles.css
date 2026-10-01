@@ -4220,11 +4220,6 @@
       grid-column: span 1 / span 1;
     }
   }
-  .\32 xl\:table-cell {
-    @media (width >= 96rem) {
-      display: table-cell;
-    }
-  }
   .\32 xl\:grid-cols-4 {
     @media (width >= 96rem) {
       grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -4238,11 +4233,6 @@
   .\32 xl\:grid-cols-\[minmax\(0\,1fr\)_minmax\(0\,1fr\)_5\.5rem\] {
     @media (width >= 96rem) {
       grid-template-columns: minmax(0,1fr) minmax(0,1fr) 5.5rem;
-    }
-  }
-  .\32 xl\:pr-2 {
-    @media (width >= 96rem) {
-      padding-right: calc(var(--spacing) * 2);
     }
   }
   .\[\&\:\:-webkit-details-marker\]\:hidden {
