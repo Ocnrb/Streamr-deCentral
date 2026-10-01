@@ -1630,8 +1630,9 @@ const MESH_MAX_MESSAGES = 40;
 
 const mesh = { canvas: null, ctx: null, nodes: [], messages: [], width: 0, height: 0, running: false, frame: 0, onScreen: true, nextMessage: 0 };
 
+/** Closed intro: a class on <html> (set by early.js before the first paint, then here) hides it and shows the reopen link */
 function heroHidden() {
-    return !!$('overview-hero')?.classList.contains('hidden');
+    return document.documentElement.classList.contains('hero-closed');
 }
 
 function setHeroHidden(hidden) {
@@ -1639,8 +1640,7 @@ function setHeroHidden(hidden) {
         if (hidden) localStorage.setItem(HERO_HIDDEN_KEY, '1');
         else localStorage.removeItem(HERO_HIDDEN_KEY);
     } catch (e) { /* storage blocked: for this visit only */ }
-    $('overview-hero')?.classList.toggle('hidden', hidden);
-    $('overview-hero-reopen')?.classList.toggle('hidden', !hidden);
+    document.documentElement.classList.toggle('hero-closed', hidden);
     if (!hidden) meshResize();
     meshUpdate();
 }

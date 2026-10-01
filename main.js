@@ -1523,6 +1523,18 @@ function setupRouter() {
     
     // Make router available globally for navigation controller
     window.router = router;
+    // Delegators page buttons (data-delegators-action: no inline handlers under the CSP)
+    document.addEventListener('click', (e) => {
+        const button = e.target.closest('[data-delegators-action]');
+        if (!button) return;
+        const action = window.DelegatorsLogic?.[button.dataset.delegatorsAction];
+        if (typeof action === 'function') action.call(window.DelegatorsLogic, ...(button.dataset.delegatorsArg ? [button.dataset.delegatorsArg] : []));
+    });
+    // Images with a fallback (data-fallback-src) switch to it once when they fail
+    document.addEventListener('error', (e) => {
+        const img = e.target;
+        if (img?.tagName === 'IMG' && img.dataset.fallbackSrc && img.getAttribute('src') !== img.dataset.fallbackSrc) img.src = img.dataset.fallbackSrc;
+    }, true);
     // Table rows that open a page (data-nav-href, escaped): the links inside them keep their own target
     document.addEventListener('click', (e) => {
         const row = e.target.closest('[data-nav-href]');

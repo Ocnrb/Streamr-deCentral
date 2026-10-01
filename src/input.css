@@ -457,6 +457,15 @@
     transform: translateY(-50%) scaleY(1);
   }
   
+  /* Overview intro closed (class on <html>, set before the first paint): hidden, with the link to open it again */
+  html.hero-closed #overview-hero {
+    display: none !important;
+  }
+
+  html.hero-closed #overview-hero-reopen {
+    display: flex !important;
+  }
+
   /* Compact sidebar: the page names in a tooltip of their own (the sidebar clips its overflow) */
   #sidebar-tooltip {
     position: fixed;
