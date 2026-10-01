@@ -2644,6 +2644,21 @@
       }
     }
   }
+  .group-hover\/title\:translate-x-0\.5 {
+    &:is(:where(.group\/title):hover *) {
+      @media (hover: hover) {
+        --tw-translate-x: calc(var(--spacing) * 0.5);
+        translate: var(--tw-translate-x) var(--tw-translate-y);
+      }
+    }
+  }
+  .group-hover\/title\:text-gray-300 {
+    &:is(:where(.group\/title):hover *) {
+      @media (hover: hover) {
+        color: var(--color-gray-300);
+      }
+    }
+  }
   .peer-checked\:bg-blue-800 {
     &:is(:where(.peer):checked ~ *) {
       background-color: var(--color-blue-800);

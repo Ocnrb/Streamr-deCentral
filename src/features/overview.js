@@ -26,6 +26,7 @@ const DAY = 86400;
 const REFRESH_MS = 60 * 1000;            // totals and lists while the page is open
 const STREAMS_REFRESH_MS = 10 * 60 * 1000;
 const LIST_SIZE = 5;
+const TOP_CANDIDATES = 50;               // largest operators read for the top list (the ones earning nothing are skipped)
 const PAGE = 1000;                       // rows per subgraph request (The Graph's maximum)
 const MAX_SKIP_PAGES = 5;                // skip is capped at 5000 by graph-node
 const ALIASES = 10;                      // queries per subgraph request
@@ -263,7 +264,7 @@ async function fetchLists() {
     const PARTY = 'id metadataJsonString';
     const FLAG = `id result flaggingTimestamp flagResolutionTimestamp target { ${PARTY} } flagger { ${PARTY} } sponsorship { id stream { id } }`;
     const data = await Services.runQuery(`{
-        topOperators: operators(first: ${LIST_SIZE}, orderBy: valueWithoutEarnings, orderDirection: desc) {
+        topOperators: operators(first: ${TOP_CANDIDATES}, orderBy: valueWithoutEarnings, orderDirection: desc) {
             id valueWithoutEarnings delegatorCount metadataJsonString
             stakes(first: 50) { amountWei sponsorship { spotAPY } }
         }
@@ -277,7 +278,10 @@ async function fetchLists() {
             flag { id target { ${PARTY} } sponsorship { id stream { id } } }
         }
     }`);
-    state.topOperators = data.topOperators || [];
+    // The largest operators that earn: an APY shown as 0.0% leaves its place to the next one
+    state.topOperators = (data.topOperators || [])
+        .filter(op => calculateWeightedApy(op.stakes) >= 0.0005)
+        .slice(0, LIST_SIZE);
     state.stakingEvents = data.stakingEvents || [];
 
     // Governance: flags raised, votes cast and results, newest first
