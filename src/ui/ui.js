@@ -30,13 +30,31 @@ export const customTooltip = document.getElementById('custom-tooltip');
  * the whole value moves to the next line.
  * @param {string} content - text, or HTML when it contains <br>
  */
+/**
+ * Writes the tooltip as text, never as HTML: tooltip texts often hold outside data (operator descriptions, stream ids)
+ * and a data-tooltip-content attribute comes back unescaped from dataset. Only two marks are kept: "<br>" starts a
+ * new line, and a line starting with <span class='font-semibold'>...</span> shows that part in bold (both as text).
+ */
 export function setTooltipContent(content) {
     if (!customTooltip) return;
     const keepTogether = (text) => String(text)
         .replace(/(\d) (?=\d)/g, '$1\u00A0')
         .replace(/(\d) (?=(DATA|POL|USD|%)\b)/g, '$1\u00A0');
-    if (String(content).includes('<br>')) customTooltip.innerHTML = keepTogether(content);
-    else customTooltip.textContent = keepTogether(content);
+    const bold = /^<span class=['"]font-semibold['"]>([\s\S]*?)<\/span>([\s\S]*)$/;
+    const nodes = [];
+    String(content).split(/<br\s*\/?>/i).forEach((line, i) => {
+        if (i) nodes.push(document.createElement('br'));
+        const match = bold.exec(line);
+        if (match) {
+            const strong = document.createElement('span');
+            strong.className = 'font-semibold';
+            strong.textContent = keepTogether(match[1]);
+            nodes.push(strong, document.createTextNode(keepTogether(match[2])));
+        } else {
+            nodes.push(document.createTextNode(keepTogether(line)));
+        }
+    });
+    customTooltip.replaceChildren(...nodes);
 }
 
 /**
