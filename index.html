@@ -3110,7 +3110,7 @@
                     </button>
                     <p class="text-xs font-semibold uppercase tracking-wider text-blue-400">The Streamr Network</p>
                     <h2 id="overview-hero-title" class="mt-2 pr-8 text-2xl sm:text-4xl font-bold tracking-tight text-white">Real-time data, peer to peer</h2>
-                    <p class="mt-3 max-w-2xl text-sm sm:text-base leading-relaxed text-gray-300">Streamr is an open-source, decentralized network that streams live data and media at scale. It is free and permissionless, anyone can publish or subscribe. There are no central servers or trackers, every node is a full peer, even a web browser, and each one that joins adds capacity.</p>
+                    <p class="mt-3 max-w-2xl text-sm sm:text-base leading-relaxed text-gray-300">Streamr is a peer-to-peer pub/sub network for live data and media at scale. Open source, free and permissionless, anyone can publish or subscribe. No central servers or trackers, every node is a full peer, even a web browser, and each one that joins adds capacity.</p>
                     <p id="overview-hero-live" class="mt-4 flex items-center gap-2 text-sm text-gray-400 min-h-[1.25rem]"></p>
                     <button id="overview-hero-more-toggle" type="button" aria-expanded="false" aria-controls="overview-hero-more" class="md:hidden group/more mt-4 inline-flex items-center gap-1 text-sm font-semibold text-gray-300 hover:text-white transition-colors">How it works <svg class="w-4 h-4 transition-transform group-aria-expanded/more:rotate-180" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>
                     <!-- Phones: shown with How it works -->
@@ -3145,18 +3145,22 @@
                     </div>
                     <details id="overview-hero-data" class="group/data mt-4">
                         <summary class="inline-flex items-center gap-1 cursor-pointer list-none [&::-webkit-details-marker]:hidden text-sm font-semibold text-gray-300 hover:text-white transition-colors">Incentives and DATA <svg class="w-4 h-4 transition-transform group-open/data:rotate-180" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></summary>
-                        <div class="mt-3 grid gap-4 md:grid-cols-3">
-                            <div>
+                        <div class="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                            <div class="rounded-lg border border-white/[0.06] bg-[#181818]/80 backdrop-blur-sm p-4">
                                 <h3 class="text-sm font-semibold text-white">Incentives are opt-in</h3>
-                                <p class="mt-1 text-xs sm:text-sm leading-relaxed text-gray-400">Using the network costs nothing. A sponsorship is for a stream that needs more than its own users bring, such as extra nodes for a broadcast to many viewers, steady relays for publishers on weak connections, or a stream that stays reachable around the clock.</p>
+                                <p class="mt-1 text-xs sm:text-sm leading-relaxed text-gray-400">Using the network is free. Sponsored nodes are plug-and-play relays, like TURN servers for a stream, adding bandwidth for wide broadcasts, relaying for publishers behind NATs or on weak links and keeping the stream reachable 24/7.</p>
                             </div>
-                            <div>
+                            <div class="rounded-lg border border-white/[0.06] bg-[#181818]/80 backdrop-blur-sm p-4">
                                 <h3 class="text-sm font-semibold text-white">Paid in DATA</h3>
-                                <p class="mt-1 text-xs sm:text-sm leading-relaxed text-gray-400">DATA is the ERC-20 utility token of Streamr. Sponsors pay it into sponsorships, smart contracts that tie off-chain streaming to on-chain rewards. Operators stake it there and earn for relaying the data, delegators back them, and nodes that fail their job are slashed. The result is a decentralized live CDN.</p>
+                                <p class="mt-1 text-xs sm:text-sm leading-relaxed text-gray-400">DATA is the ERC-20 utility token of Streamr. Sponsors pay it into sponsorships, smart contracts that tie off-chain streaming to on-chain rewards. Operators stake it there and earn for relaying the data, and delegators back them. The result is a decentralized live CDN.</p>
                             </div>
-                            <div>
-                                <h3 class="text-sm font-semibold text-white">Governance</h3>
-                                <p class="mt-1 text-xs sm:text-sm leading-relaxed text-gray-400">DATA is also voting power. Its holders decide on the network and its economic parameters, for a healthy network.</p>
+                            <div class="rounded-lg border border-white/[0.06] bg-[#181818]/80 backdrop-blur-sm p-4">
+                                <h3 class="text-sm font-semibold text-white">Checked by the operators</h3>
+                                <p class="mt-1 text-xs sm:text-sm leading-relaxed text-gray-400">Inside each sponsorship, operators keep each other honest. A node that does not do its job can be flagged, operators picked as reviewers vote on it, and a kick slashes part of its stake. These are the flags and votes on the Governance page.</p>
+                            </div>
+                            <div class="rounded-lg border border-white/[0.06] bg-[#181818]/80 backdrop-blur-sm p-4">
+                                <h3 class="text-sm font-semibold text-white">DAO governance</h3>
+                                <p class="mt-1 text-xs sm:text-sm leading-relaxed text-gray-400">Apart from that work, DATA is voting power in the Streamr DAO. Token holders vote on the proposals that set the rules and economic parameters of the network.</p>
                             </div>
                         </div>
                     </details>
