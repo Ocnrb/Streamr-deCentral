@@ -688,7 +688,7 @@ function listedTrades() {
 }
 
 // Beside the price of an off-market trade (kept out of the volume and the chart)
-const OUTLIER_INFO = '<button type="button" class="inline-flex text-gray-300 hover:text-white cursor-help" aria-label="Off-market price" data-tooltip-content="Price far from the main pool, in a pool briefly out of balance and set back by arbitrage.<br>Left out of the volume and the chart."><svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg></button>';
+const OUTLIER_INFO = '<button type="button" class="inline-flex text-gray-300 hover:text-white cursor-help" aria-label="Off-market price" data-tooltip-content="Price far from the market, a bot passing its own funds through a nearly empty pool.<br>Left out of the volume and the chart."><svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg></button>';
 
 // Small Ethereum logo beside the trades of Ethereum pools
 const ETHEREUM_MARK = '<svg class="w-3.5 h-3.5 flex-shrink-0" viewBox="0 0 32 32" aria-label="Ethereum" role="img"><circle cx="16" cy="16" r="16" fill="#627EEA"/><path fill="#fff" fill-opacity=".6" d="M16.5 4v8.87l7.5 3.35z"/><path fill="#fff" d="M16.5 4 9 16.22l7.5-3.35z"/><path fill="#fff" fill-opacity=".6" d="M16.5 21.97v6.03L24 17.62z"/><path fill="#fff" d="M16.5 28v-6.03L9 17.62z"/></svg>';
