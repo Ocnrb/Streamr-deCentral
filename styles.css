@@ -525,6 +525,9 @@
   .mt-8 {
     margin-top: calc(var(--spacing) * 8);
   }
+  .mt-auto {
+    margin-top: auto;
+  }
   .mt-px {
     margin-top: 1px;
   }
@@ -1235,6 +1238,9 @@
     :where(& > :not(:last-child)) {
       border-color: #333;
     }
+  }
+  .self-end {
+    align-self: flex-end;
   }
   .self-start {
     align-self: flex-start;
