@@ -19,6 +19,8 @@ export default defineConfig({
     use: {
         viewport: { width: 1440, height: 900 },
         serviceWorkers: 'block',
+        // On CI, a failed test keeps its trace (console, network, DOM at each step) in the uploaded report
+        trace: process.env.CI ? 'retain-on-failure' : 'off',
         // A Chromium installed elsewhere (e.g. PLAYWRIGHT_CHROMIUM_PATH=/opt/pw-browsers/...)
         launchOptions: process.env.PLAYWRIGHT_CHROMIUM_PATH ? { executablePath: process.env.PLAYWRIGHT_CHROMIUM_PATH } : {}
     },
