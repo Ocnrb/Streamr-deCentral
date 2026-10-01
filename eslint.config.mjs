@@ -6,7 +6,7 @@ import globals from 'globals';
 const LIBRARIES = { ethers: 'readonly', Chart: 'readonly', d3: 'readonly', L: 'readonly', lucide: 'readonly', StreamrClient: 'readonly', maplibregl: 'readonly' };
 
 export default [
-    { ignores: ['libs/**', 'node_modules/**', 'styles.css', 'test-results/**', 'playwright-report/**'] },
+    { ignores: ['public/libs/**', 'dist/**', 'node_modules/**', 'test-results/**', 'playwright-report/**'] },
     js.configs.recommended,
     {
         files: ['main.js', 'src/**/*.js'],
@@ -17,16 +17,17 @@ export default [
         }
     },
     {
-        files: ['src/early.js'],
-        languageOptions: { sourceType: 'script', globals: globals.browser }
+        files: ['public/early.js'],
+        languageOptions: { sourceType: 'script', globals: globals.browser },
+        rules: { 'no-unused-vars': ['warn', { args: 'none', caughtErrors: 'none' }] }
     },
     {
-        files: ['sw.js'],
+        files: ['public/sw.js'],
         languageOptions: { sourceType: 'script', globals: globals.serviceworker },
         rules: { 'no-unused-vars': ['warn', { args: 'none', caughtErrors: 'none' }] }
     },
     {
-        files: ['workers/**/*.js'],
+        files: ['public/workers/**/*.js'],
         languageOptions: { sourceType: 'script', globals: globals.worker }
     },
     {

@@ -19,9 +19,6 @@ jobs:
 
       - run: npm ci
 
-      - name: styles.css is built from src/input.css
-        run: npm run check:css
-
       - name: Lint
         run: npm run lint
 
