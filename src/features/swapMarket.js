@@ -69,6 +69,7 @@ const state = {
     pools: [MAIN],         // the DATA pools read (the main one first)
     filter: 'all',         // trades list: 'all' pools or 'main'
     polUsdAt: null,        // (times in s) -> POL/USD prices, from the swap page (Chainlink)
+    tokenChip: (symbol) => Utils.escapeHtml(symbol),   // token chip with its logo, from the swap page
     polUsd: new Map(),     // hour (ms) -> POL/USD
     windowStart: null,     // time from which the main pool's trades are complete
     loaded: false,
@@ -478,13 +479,11 @@ function renderStats() {
 // ============================================
 
 const counterName = (pool) => (pool.counterSymbol === 'WPOL' ? 'POL' : pool.counterSymbol);
-const SHORT_DEX = [[/^Uniswap /, 'Uni '], [/^QuickSwap /, 'QS '], [/^SushiSwap V2/, 'Sushi']];
-/** Short pool name for the list ("Uni v4 · USDC"); the full one ("Uniswap v4 0.3% · DATA/USDC") in its tooltip */
-function poolShortName(pool) {
-    if (!pool) return '';
-    const dex = SHORT_DEX.reduce((name, [from, to]) => name.replace(from, to), pool.label).replace(/ [\d.]+%$/, '');
-    return `${dex} · ${counterName(pool)}`;
-}
+/** The swap page's token chip, a size smaller for the trades list */
+const compactChip = (symbol) => state.tokenChip(symbol)
+    .replace('gap-1.5 pl-1 pr-2', 'gap-1 pl-0.5 pr-1.5')
+    .replace('text-xs', 'text-[11px]')
+    .replaceAll('w-4 h-4', 'w-3.5 h-3.5');
 const poolFullName = (pool) => (pool ? `${pool.label} · DATA/${counterName(pool)}` : '');
 
 function renderFilter() {
@@ -499,7 +498,7 @@ function renderFilter() {
 function renderTrades() {
     const body = $('swap-trades');
     if (!body) return;
-    const row = (text) => `<tr><td colspan="6" class="py-4 text-sm text-gray-300">${text}</td></tr>`;
+    const row = (text) => `<tr><td colspan="5" class="py-4 text-sm text-gray-300">${text}</td></tr>`;
     if (!state.loaded) {
         $('swap-trades-more')?.classList.add('hidden');
         const spinner = '<span class="w-4 h-4 flex-shrink-0 border-2 border-gray-500 border-t-transparent rounded-full animate-spin" aria-hidden="true"></span>';
@@ -518,20 +517,24 @@ function renderTrades() {
     const pools = new Map(state.pools.map(p => [p.key, p]));
     body.innerHTML = recent.map(trade => {
         const hash = Utils.escapeHtml(trade.txHash);
+        const pool = pools.get(trade.pool);
         const side = trade.buy
             ? '<span class="tx-badge tx-badge-in whitespace-nowrap">Buy</span>'
             : '<span class="tx-badge tx-badge-out whitespace-nowrap">Sell</span>';
+        // What was paid -> what was received in the pool (the pool's full name in the tooltip)
+        const counter = pool ? counterName(pool) : '';
+        const [paid, received] = trade.buy ? [counter, 'DATA'] : ['DATA', counter];
+        const tradeCell = `<span class="inline-flex items-center gap-1 whitespace-nowrap" data-tooltip-content="${Utils.escapeHtml(poolFullName(pool))}">${side}<span class="ml-0.5"></span>${compactChip(paid)}<span class="text-gray-400 text-xs">→</span>${compactChip(received)}</span>`;
         const own = state.ownHashes.has(trade.txHash.toLowerCase())
             ? '<span class="ml-2 px-1.5 py-0.5 rounded bg-[#2C2C2C] text-[10px] font-semibold text-gray-300">You</span>'
             : '';
         return `
             <tr class="border-b border-[#2a2a2a] last:border-0">
                 <td class="py-2 pr-2 whitespace-nowrap"><a href="https://polygonscan.com/tx/${hash}" target="_blank" rel="noopener noreferrer" class="text-gray-300 hover:text-blue-300" data-tooltip-content="${Utils.escapeHtml(new Date(trade.time).toLocaleString())}">${formatTime(trade.time)}</a>${own}</td>
-                <td class="py-2 pr-2">${side}</td>
+                <td class="py-2 pr-2">${tradeCell}</td>
                 <td class="py-2 pr-2 text-right whitespace-nowrap text-white font-medium">${formatPrice(trade.price)}</td>
                 <td class="py-2 pr-2 text-right whitespace-nowrap text-gray-200">${formatData(trade.data)}</td>
-                <td class="py-2 pr-2 text-right whitespace-nowrap text-gray-200">${trade.usd === null ? '--' : formatUsd(trade.usd)}</td>
-                <td class="py-2 text-right whitespace-nowrap text-xs text-gray-300"><span data-tooltip-content="${Utils.escapeHtml(poolFullName(pools.get(trade.pool)))}">${Utils.escapeHtml(poolShortName(pools.get(trade.pool)))}</span></td>
+                <td class="py-2 text-right whitespace-nowrap text-gray-200">${trade.usd === null ? '--' : formatUsd(trade.usd)}</td>
             </tr>`;
     }).join('');
 }
@@ -827,6 +830,11 @@ export const SwapMarket = {
         if (!added) return;
         if (state.active) loadDays(); else state.daysAt = 0;   // the subgraph's days again, with the new v4 pools
         if (state.active && state.loaded) refresh();
+    },
+
+    /** Token chip (logo + ticker) of the swap page, for the trades list */
+    setTokenChip(fn) {
+        state.tokenChip = fn;
     },
 
     /** POL/USD at times (s), for the trades of the POL pools */

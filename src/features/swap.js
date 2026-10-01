@@ -1881,6 +1881,7 @@ export const SwapLogic = {
         renderHistory();
         refreshHistory().catch(e => logger.warn('Swap: history refresh failed', e));
         SwapMarket.setPolUsdSource(polUsdAt);
+        SwapMarket.setTokenChip(tokenChip);
         SwapMarket.show();
         if (state.liquidity) SwapMarket.setPools(marketPools());
         if (!state.flow) {
