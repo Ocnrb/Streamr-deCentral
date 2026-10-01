@@ -5,6 +5,7 @@ import { mockNetwork } from './support/network.mjs';
 // A well-known test key (Hardhat's first account), never used with funds
 const KEY = '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80';
 const ADDRESS = /0xf39f/i;
+const SCRYPT_TIMEOUT = 90000;
 
 test.beforeEach(async ({ page }) => {
     await mockNetwork(page.context());
@@ -15,19 +16,21 @@ test.beforeEach(async ({ page }) => {
 });
 
 test('a saved key is unlocked with its password', async ({ page }) => {
+    // Encrypting and decrypting the key (scrypt) is slow on purpose: seconds here, much more on a busy CI runner
+    test.slow();
     await page.fill('#encryptionPassword', 'secret-123');
     await page.fill('#encryptionPasswordConfirm', 'secret-123');
     await page.click('#pkModalConnect');
-    await expect(page.locator('#sidebar-wallet-address')).toHaveText(ADDRESS, { timeout: 30000 });
+    await expect(page.locator('#sidebar-wallet-address')).toHaveText(ADDRESS, { timeout: SCRYPT_TIMEOUT });
 
     await page.reload({ waitUntil: 'domcontentloaded' });
     await expect(page.locator('#unlockWalletModal')).toBeVisible();
     await page.fill('#unlockPassword', 'wrong');
     await page.click('#unlockConfirm');
-    await expect(page.locator('#unlockError')).toHaveText('Incorrect password. 4 attempts remaining.', { timeout: 30000 });
+    await expect(page.locator('#unlockError')).toHaveText('Incorrect password. 4 attempts remaining.', { timeout: SCRYPT_TIMEOUT });
     await page.fill('#unlockPassword', 'secret-123');
     await page.click('#unlockConfirm');
-    await expect(page.locator('#unlockWalletModal')).toBeHidden({ timeout: 30000 });
+    await expect(page.locator('#unlockWalletModal')).toBeHidden({ timeout: SCRYPT_TIMEOUT });
     await expect(page.locator('#sidebar-wallet-address')).toHaveText(ADDRESS);
 });
 
