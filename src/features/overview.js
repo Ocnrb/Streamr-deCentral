@@ -77,9 +77,9 @@ const METRICS = {
         info: 'Running sponsorships: funds left and DATA staked.<br>Over time: the daily records of each sponsorship.' },
     streams: { label: 'Streams', kind: 'count', source: 'streams',
         info: 'Streams created on the Streamr Network, by their creation date.<br>Deleted streams are not counted.' },
-    sponsored: { label: 'DATA sponsored', kind: 'data', source: 'sponsoring',
+    sponsored: { label: 'DATA sponsored', kind: 'data', source: 'sponsoring', noUsd: true,
         info: 'DATA paid into sponsorships by their sponsors, all time.' },
-    slashed: { label: 'DATA slashed', kind: 'data', source: 'slashing',
+    slashed: { label: 'DATA slashed', kind: 'data', source: 'slashing', noUsd: true,
         info: 'DATA slashed from operators by their sponsorships, all time: kicks, failed flags and leaving too early.<br>Without the March 2024 recovery of the broken operator contracts (streamr.eth/recovery), which was not a penalty.' },
     price: { label: 'DATA price', kind: 'price', source: 'price',
         info: 'DATA/USD from the app\'s price feed: the daily history, then the latest price.' }
@@ -161,6 +161,14 @@ function compact(value) {
 }
 
 const full = (value) => formatBigNumber(Math.round(value).toString());
+
+/** A tooltip's first line: what a DATA amount is worth now (none without a price) */
+function usdLine(dataAmount) {
+    const price = currentPrice();
+    if (!price || !Number.isFinite(dataAmount)) return '';
+    const usd = Math.abs(dataAmount) * price;
+    return `$${usd >= 100 ? full(usd) : usd.toFixed(2)}<br>`;
+}
 
 function formatPrice(value) {
     if (!(value > 0)) return '--';
@@ -877,11 +885,7 @@ function currentValue(metric) {
 
 function statSub(metric) {
     const t = state.totals;
-    const price = currentPrice();
-    const usd = (value) => (price && value ? `$${compact(value * price)}` : '');
     switch (metric) {
-        case 'staked': return t ? usd(t.staked) : '';
-        case 'delegated': return t ? usd(t.delegated) : '';
         case 'operators': {
             if (!t) return '';
             const nodes = nodesCount();
@@ -890,7 +894,6 @@ function statSub(metric) {
         }
         case 'sponsorships': return t ? `running of ${full(t.sponsorshipsAll)}` : '';
         case 'streams': return state.streams ? '' : (state.streamsLoading ? 'Counting...' : '');
-        case 'sponsored': return t ? usd(t.sponsored) : '';
         case 'slashed': return state.slashing ? `${full(state.slashing.count)} slashings` : '';
         case 'price': {
             const value = currentPrice();
@@ -924,7 +927,9 @@ function renderStats() {
             : state.error && !state.totals && metric !== 'price' && metric !== 'streams';
         const shown = value === null ? (failed ? '--' : placeholder) : formatMetric(def.kind, value);
         const unit = def.kind === 'data' && value !== null ? ' <span class="text-xs font-semibold text-gray-400">DATA</span>' : '';
-        const tip = value !== null && (def.kind === 'data' || def.kind === 'count') ? ` data-tooltip-content="${formatMetric(def.kind, value, true)}"` : '';
+        // In USD at today's price: not the DATA sponsored or slashed over the years
+        const usd = def.kind === 'data' && !def.noUsd ? usdLine(value) : '';
+        const tip = value !== null && (def.kind === 'data' || def.kind === 'count') ? ` data-tooltip-content="${usd}${formatMetric(def.kind, value, true)}"` : '';
         const selected = state.metric === metric;
         // The tile opens the chart: its button (label and value, for the keyboard) or anywhere on it; the line
         // below sits outside the button, so it can hold a button of its own (the nodes' refresh)
@@ -1174,7 +1179,7 @@ function renderOperators() {
                     <p class="text-xs text-gray-400">${full(op.delegatorCount || 0)} delegators</p>
                 </div>
                 <div class="text-right whitespace-nowrap">
-                    <p class="text-sm font-semibold text-white" data-tooltip-content="${full(value)} DATA">${compact(value)} DATA</p>
+                    <p class="text-sm font-semibold text-white" data-tooltip-content="${usdLine(value)}${full(value)} DATA">${compact(value)} DATA</p>
                     <p class="text-xs text-gray-400">${formatPercent(calculateWeightedApy(op.stakes))} APY</p>
                 </div>
             </a>`;
@@ -1213,7 +1218,7 @@ function stakingRow(event) {
                 <p class="text-xs text-gray-400 truncate" data-tooltip-content="${escapeHtml(streamId)}">${staked ? 'Staked in' : 'Unstaked from'} ${escapeHtml(shortStreamId(streamId) || shortAddress(event.sponsorship?.id || ''))}</p>
             </div>
             <div class="text-right whitespace-nowrap">
-                <p class="text-sm font-semibold ${staked ? 'text-green-400' : 'text-red-400'}" data-tooltip-content="${full(Math.abs(amount))} DATA">${staked ? '+' : '-'}${compact(Math.abs(amount))} DATA</p>
+                <p class="text-sm font-semibold ${staked ? 'text-green-400' : 'text-red-400'}" data-tooltip-content="${usdLine(amount)}${full(Math.abs(amount))} DATA">${staked ? '+' : '-'}${compact(Math.abs(amount))} DATA</p>
                 <p class="text-xs text-gray-400">${timeAgo(event.date)}</p>
             </div>
         </a>`;
@@ -1233,7 +1238,7 @@ function delegationRow(event) {
             <div class="text-right whitespace-nowrap">
                 <div class="flex items-center justify-end gap-2">
                     ${badge(event.owner ? 'owner' : 'delegator')}
-                    <span class="text-sm font-semibold ${delegated ? 'text-green-400' : 'text-red-400'}" data-tooltip-content="${full(amount)} DATA">${delegated ? '+' : '-'}${compact(amount)} DATA</span>
+                    <span class="text-sm font-semibold ${delegated ? 'text-green-400' : 'text-red-400'}" data-tooltip-content="${usdLine(amount)}${full(amount)} DATA">${delegated ? '+' : '-'}${compact(amount)} DATA</span>
                 </div>
                 <p class="text-xs text-gray-400 mt-0.5">${timeAgo(event.time)}</p>
             </div>
@@ -1242,7 +1247,12 @@ function delegationRow(event) {
 
 function earningsRow(event) {
     const total = event.delegators + event.cut + event.fee;
-    const parts = `${full(event.delegators)} DATA to the delegators<br>${full(event.cut)} DATA owner's cut<br>${full(event.fee)} DATA protocol fee`;
+    // The value increase goes to every holder of the operator's tokens: the owner's own stake takes its share
+    const ownStake = event.delegators * (state.ownerShare.get(event.operatorId) || 0);
+    const parts = usdLine(total)
+        + `${full(event.delegators - ownStake)} DATA to the delegators<br>${full(event.cut)} DATA owner's cut<br>`
+        + (ownStake >= 0.5 ? `${full(ownStake)} DATA to the owner's own stake<br>` : '')
+        + `${full(event.fee)} DATA protocol fee`;
     return `
         <a href="/operator/${event.operatorId}" class="${ROW}">
             ${avatar(event.operator)}
@@ -1275,12 +1285,12 @@ function governanceRow(event) {
 }
 
 const ACTIVITY = {
-    staking: { rows: () => state.stakingEvents, render: stakingRow, error: 'Staking events could not be loaded.', empty: 'No staking events.', href: '/subgraph/stakingEvents' },
-    delegations: { rows: () => state.delegations, render: delegationRow, error: 'Delegation events could not be loaded.', empty: 'No delegations in the last 30 days.', href: '/delegators',
+    staking: { rows: () => state.stakingEvents, render: stakingRow, error: 'Staking events could not be loaded.', empty: 'No staking events.' },
+    delegations: { rows: () => state.delegations, render: delegationRow, error: 'Delegation events could not be loaded.', empty: 'No delegations in the last 30 days.',
         loaded: () => state.delegationsLoaded, failed: () => state.delegationsError },
-    earnings: { rows: () => state.earnings, render: earningsRow, error: 'Earnings events could not be loaded.', empty: 'No earnings collected in the last 30 days.', href: null,
+    earnings: { rows: () => state.earnings, render: earningsRow, error: 'Earnings events could not be loaded.', empty: 'No earnings collected in the last 30 days.',
         loaded: () => state.earningsLoaded, failed: () => state.earningsError },
-    governance: { rows: () => state.govEvents, render: governanceRow, error: 'Governance events could not be loaded.', empty: 'No governance events.', href: '/governance' }
+    governance: { rows: () => state.govEvents, render: governanceRow, error: 'Governance events could not be loaded.', empty: 'No governance events.' }
 };
 
 /** Explorer-backed tabs: read while open (at most once a minute), and once at the start */
@@ -1291,14 +1301,6 @@ function renderActivity() {
     if (!el) return;
     const tab = ACTIVITY[state.activity];
     el.innerHTML = listContent(tab.rows(), tab.render, tab);
-    const all = $('overview-activity-all');
-    if (all) {
-        // No full list of earnings: the link keeps its place
-        if (tab.href) all.setAttribute('href', tab.href);
-        all.classList.toggle('invisible', !tab.href);
-        all.setAttribute('aria-hidden', String(!tab.href));
-        all.tabIndex = tab.href ? 0 : -1;
-    }
     document.querySelectorAll('#overview-activity-tabs button').forEach(btn => {
         const active = btn.dataset.tab === state.activity;
         btn.classList.toggle('bg-[#3A3A3A]', active);

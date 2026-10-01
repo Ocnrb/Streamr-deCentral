@@ -1405,8 +1405,8 @@ export const StreamsLogic = {
         // Create Stream button is only enabled with a connected wallet
         CreateStream.updateButtonState();
         
-        // Reset UI to default tab
-        switchTab('nonsponsored');
+        // Reset UI to default tab (/streams?tab=sponsorships opens on the sponsorships)
+        switchTab(new URLSearchParams(window.location.search).get('tab') === 'sponsorships' ? 'sponsorships' : 'nonsponsored');
         
         // Show loading state
         UI.showLoader(true);
