@@ -411,6 +411,8 @@ export function displayView(view) {
     if (swapEl) swapEl.style.display = 'none';
     const bridgeEl = document.getElementById('bridge-view');
     if (bridgeEl) bridgeEl.style.display = 'none';
+    const overviewEl = document.getElementById('overview-view');
+    if (overviewEl) overviewEl.style.display = 'none';
 
     // Show/hide navigation based on view (visual is fullscreen)
     const bottomNav = document.getElementById('bottom-nav');
@@ -442,6 +444,8 @@ export function displayView(view) {
         if (swapEl) swapEl.style.display = 'block';
     } else if (view === 'bridge') {
         if (bridgeEl) bridgeEl.style.display = 'block';
+    } else if (view === 'overview') {
+        if (overviewEl) overviewEl.style.display = 'block';
     } else if (view === 'subgraph') {
         // Flex row: query builder + entity navigation panel on the right
         if (subgraphEl) subgraphEl.style.display = 'flex';

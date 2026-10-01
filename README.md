@@ -6,6 +6,7 @@ A community dashboard for the [Streamr Network](https://streamr.network). Manage
 
 ## Features
 
+- **Overview**: the network at a glance, with total stake, operators, sponsorships, network APY, DATA price, top operators and open flags
 - **Streams**: browse, create and manage streams
 - **Operators and Delegators**: stake, delegate, sponsorships, history and wallets
 - **Governance**: flags and votes

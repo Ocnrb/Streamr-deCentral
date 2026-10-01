@@ -100,7 +100,8 @@
             <h1>Streamr deCentral: Streamr Network Command Center</h1>
             <p>Control your operator and stake, follow sponsorships, and visualize the Streamr Network live. Advanced tools to create and manage streams.</p>
             <ul>
-                <li><a href="/">Operators</a>: stake, APY, nodes and earnings of every Streamr operator</li>
+                <li><a href="/">Overview</a>: stake, operators, sponsorships, APY and DATA price of the network</li>
+                <li><a href="/operators">Operators</a>: stake, APY, nodes and earnings of every Streamr operator</li>
                 <li><a href="/delegators">Delegators</a>: delegations and returns</li>
                 <li><a href="/streams">Streams and sponsorships</a>: sponsored streams, payouts and funding</li>
                 <li><a href="/governance">Governance</a>: flags, votes and kicks</li>
@@ -1211,6 +1212,15 @@
         <nav class="flex-1 py-2 lg:overflow-y-auto overflow-hidden">
             <div class="px-2 space-y-px">
                 
+                <!-- Overview (home) -->
+                <a href="/" data-nav="overview" class="nav-link group flex items-center gap-3 px-3 py-2 rounded-md text-gray-400 hover:text-white hover:bg-white/[0.03] transition-all duration-200">
+                    <svg class="w-6 h-6 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg>
+                    <span class="hidden lg:block text-sm font-medium">Overview</span>
+                </a>
+
+                <!-- Divider -->
+                <div class="my-2 mx-3 border-t border-white/[0.04]"></div>
+
                 <!-- Section: Explore -->
                 <div class="px-3 pt-1 pb-1">
                     <span class="hidden lg:block text-[10px] font-semibold text-gray-600 uppercase tracking-widest">Explore</span>
@@ -1223,7 +1233,7 @@
                 </a>
 
                 <!-- Operators -->
-                <a href="/" data-nav="operators" class="nav-link group flex items-center gap-3 px-3 py-2 rounded-md text-gray-400 hover:text-white hover:bg-white/[0.03] transition-all duration-200">
+                <a href="/operators" data-nav="operators" class="nav-link group flex items-center gap-3 px-3 py-2 rounded-md text-gray-400 hover:text-white hover:bg-white/[0.03] transition-all duration-200">
                     <span aria-hidden="true" class="icon-mask w-6 h-6" style="--icon: url(/assets/operator_icon.png)"></span>
                     <span class="hidden lg:block text-sm font-medium">Operators</span>
                 </a>
@@ -1454,26 +1464,32 @@
     <!-- ===== BOTTOM NAVIGATION (Mobile) - hidden until login ===== -->
     <nav id="bottom-nav" class="hidden fixed bottom-0 left-0 right-0 z-40 bg-[#1A1A1A]/95 backdrop-blur-md border-t border-[#2a2a2a] safe-area-bottom">
         <div class="flex justify-around items-center h-16 px-2">
+            <!-- Overview -->
+            <a href="/" data-nav="overview" class="bottom-nav-item flex flex-col items-center justify-center gap-1 px-1 py-2 min-w-[48px] text-gray-400 transition-colors">
+                <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg>
+                <span class="text-[10px] font-medium">Overview</span>
+            </a>
+
             <!-- Streams -->
-            <a href="/streams" data-nav="streams" class="bottom-nav-item flex flex-col items-center justify-center gap-1 p-2 min-w-[56px] text-gray-400 transition-colors">
+            <a href="/streams" data-nav="streams" class="bottom-nav-item flex flex-col items-center justify-center gap-1 px-1 py-2 min-w-[48px] text-gray-400 transition-colors">
                 <span aria-hidden="true" class="icon-mask w-6 h-6" style="--icon: url(/assets/stream_icon.png)"></span>
                 <span class="text-[10px] font-medium">Streams</span>
             </a>
 
             <!-- Operators -->
-            <a href="/" data-nav="operators" class="bottom-nav-item flex flex-col items-center justify-center gap-1 p-2 min-w-[56px] text-gray-400 transition-colors">
+            <a href="/operators" data-nav="operators" class="bottom-nav-item flex flex-col items-center justify-center gap-1 px-1 py-2 min-w-[48px] text-gray-400 transition-colors">
                 <span aria-hidden="true" class="icon-mask w-6 h-6" style="--icon: url(/assets/operator_icon.png)"></span>
                 <span class="text-[10px] font-medium">Operators</span>
             </a>
 
             <!-- Delegators --> 
-            <a href="/delegators" data-nav="delegators" class="bottom-nav-item flex flex-col items-center justify-center gap-1 p-2 min-w-[56px] text-gray-400 transition-colors">
+            <a href="/delegators" data-nav="delegators" class="bottom-nav-item flex flex-col items-center justify-center gap-1 px-1 py-2 min-w-[48px] text-gray-400 transition-colors">
                 <span aria-hidden="true" class="icon-mask w-6 h-6" style="--icon: url(/assets/delegator_icon.png)"></span>
                 <span class="text-[10px] font-medium">Delegators</span>
             </a>
 
             <!-- Autostaker -->
-            <button id="bottom-nav-autostaker" class="bottom-nav-item flex flex-col items-center justify-center gap-1 p-2 min-w-[56px] text-gray-400 transition-colors">
+            <button id="bottom-nav-autostaker" class="bottom-nav-item flex flex-col items-center justify-center gap-1 px-1 py-2 min-w-[48px] text-gray-400 transition-colors">
                 <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
                     <path d="M13 10V3L4 14h7v7l9-11h-7z"/>
                 </svg>
@@ -1482,7 +1498,7 @@
             
             <!-- More -->
             <div class="relative">
-                <button id="bottom-nav-more" class="bottom-nav-item flex flex-col items-center justify-center gap-1 p-2 min-w-[56px] text-gray-400 transition-colors">
+                <button id="bottom-nav-more" class="bottom-nav-item flex flex-col items-center justify-center gap-1 px-1 py-2 min-w-[48px] text-gray-400 transition-colors">
                     <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <circle cx="12" cy="12" r="1"/>
                         <circle cx="19" cy="12" r="1"/>
@@ -3078,6 +3094,78 @@
                     <p class="text-xs text-gray-400">Pools of DATA found on QuickSwap, SushiSwap and Uniswap (v3 with the tokens they hold, v4 with their price). Small pools give a high price impact.</p>
                     <ul id="swap-liquidity-list" class="mt-3 text-xs"><li class="py-1.5 text-gray-400">Looking for pools...</li></ul>
                 </div>
+            </div>
+        </div>
+
+        <!-- Overview: the network at a glance (home page) -->
+        <div id="overview-view" class="hidden p-4 md:p-6 space-y-6">
+
+            <div id="overview-kpis" class="grid grid-cols-2 md:grid-cols-3 2xl:grid-cols-6 gap-3"></div>
+
+            <div class="grid grid-cols-1 xl:grid-cols-2 gap-6">
+                <section class="detail-section p-4 sm:p-5 min-w-0">
+                    <div class="flex flex-wrap items-center justify-between gap-3 mb-3">
+                        <div class="flex items-center gap-2">
+                            <h2 class="text-base font-semibold text-white">Total staked</h2>
+                            <button type="button" class="inline-flex text-gray-300 hover:text-white cursor-help" aria-label="About the chart"
+                                data-tooltip-content="DATA staked by operators in sponsorships, across the whole network.<br>One point per day (30D), per week (1Y) or every two weeks (All).">
+                                <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+                            </button>
+                        </div>
+                        <div id="overview-stake-range" class="flex bg-[#2C2C2C] p-0.5 rounded-md" role="group" aria-label="Chart range">
+                                <button type="button" data-range="30d" class="px-2.5 py-1 rounded text-xs font-semibold text-gray-300 hover:text-white transition-colors">30D</button>
+                                <button type="button" data-range="1y" class="px-2.5 py-1 rounded text-xs font-semibold text-gray-300 hover:text-white transition-colors">1Y</button>
+                                <button type="button" data-range="all" class="px-2.5 py-1 rounded text-xs font-semibold text-gray-300 hover:text-white transition-colors">All</button>
+                            </div>
+                    </div>
+                    <div id="overview-stake-chart" class="h-64"></div>
+                </section>
+
+                <section class="detail-section p-4 sm:p-5 min-w-0">
+                    <div class="flex flex-wrap items-center justify-between gap-3 mb-3">
+                        <div class="flex items-center gap-2">
+                            <svg class="w-6 h-6 flex-shrink-0" viewBox="0 0 56 56" aria-hidden="true"><circle cx="28" cy="28" r="28" fill="#F7600A"/><path fill-rule="evenodd" clip-rule="evenodd" d="M32.9091 10.2118V9.08164C32.9091 8.69418 32.5861 8.38241 32.199 8.4008C24.6009 8.76169 18.5119 14.8843 18.2056 22.4955C18.2219 22.9725 18.608 23.0974 18.8351 23.0974H19.983C20.3463 23.0974 20.6441 22.8122 20.6629 22.4495C20.989 16.1879 26.0134 11.1697 32.278 10.8522C32.7558 10.7908 32.9091 10.5297 32.9091 10.2118ZM22.5761 23.0974H23.6747C24.0313 23.0974 24.3221 22.8195 24.348 22.4638C24.6586 18.2097 28.0701 14.8164 32.3324 14.5336C32.523 14.521 32.9091 14.3783 32.9091 13.8844V12.7659C32.9091 12.3707 32.5739 12.0603 32.1795 12.0861C26.6654 12.4459 22.256 16.8547 21.8961 22.3679C21.8704 22.7623 22.1808 23.0974 22.5761 23.0974ZM37.1763 32.9026C37.4035 32.9026 37.7895 33.0275 37.8058 33.5045C37.4995 41.1158 31.4105 47.2383 23.8124 47.5993C23.4253 47.6176 23.1023 47.3059 23.1023 46.9183V45.7883C23.1023 45.4704 23.2556 45.2093 23.7333 45.1479C29.9981 44.8304 35.0224 39.8121 35.3485 33.5505C35.3673 33.1878 35.6651 32.9026 36.0284 32.9026H37.1763ZM33.4353 32.9026C33.8306 32.9026 34.141 33.2377 34.1153 33.6321C33.7554 39.1454 29.346 43.5542 23.8319 43.914C23.4375 43.9398 23.1023 43.6293 23.1023 43.2341V42.1155C23.1023 41.6217 23.4884 41.4791 23.679 41.4664C27.9413 41.1837 31.3529 37.7903 31.6633 33.5362C31.6893 33.1805 31.9801 32.9026 32.3367 32.9026H33.4353ZM29.7445 32.9026C30.1445 32.9026 30.463 33.246 30.4231 33.6441C30.0758 37.1151 27.3154 39.8751 23.8438 40.2224C23.4458 40.2623 23.1023 39.9438 23.1023 39.5438V38.4201C23.1023 37.9604 23.5015 37.795 23.6961 37.7715C25.9261 37.5025 27.6953 35.7373 27.9703 33.5095C28.0129 33.1647 28.2999 32.9026 28.6474 32.9026H29.7445ZM10.212 23.0945C10.53 23.0945 10.7911 23.2477 10.8525 23.7254C11.1701 29.9892 16.189 35.0129 22.4516 35.3389C22.8143 35.3577 23.0996 35.6555 23.0996 36.0187V37.1666C23.0996 37.3936 22.9746 37.7796 22.4976 37.7959C14.8853 37.4896 8.76181 31.4015 8.4008 23.8045C8.3824 23.4174 8.69423 23.0945 9.0818 23.0945H10.212ZM13.8853 23.0945C14.3792 23.0945 14.5219 23.4805 14.5346 23.6711C14.8173 27.9328 18.2111 31.3439 22.4659 31.6543C22.8216 31.6803 23.0996 31.971 23.0996 32.3276V33.426C23.0996 33.8212 22.7644 34.1316 22.3699 34.1059C16.8559 33.746 12.4464 29.3373 12.0866 23.824C12.0608 23.4296 12.3713 23.0945 12.7666 23.0945H13.8853ZM33.5024 18.1729C41.1148 18.4792 47.2382 24.5673 47.5993 32.1644C47.6176 32.5514 47.3058 32.8744 46.9183 32.8744H45.788C45.4701 32.8744 45.2089 32.7211 45.1475 32.2434C44.8299 25.9795 39.811 20.956 33.5485 20.6299C33.1857 20.6111 32.9005 20.3133 32.9005 19.9501V18.8023C32.9005 18.5752 33.0253 18.1892 33.5024 18.1729ZM33.6301 21.8629C39.1442 22.2227 43.5536 26.6315 43.9135 32.1448C43.9392 32.5392 43.6288 32.8744 43.2335 32.8744H42.1148C41.6208 32.8744 41.4782 32.4883 41.4655 32.2977C41.1828 28.036 37.7889 24.6249 33.5342 24.3145C33.1784 24.2886 32.9005 23.9978 32.9005 23.6412V22.5428C32.9005 22.1476 33.2357 21.8372 33.6301 21.8629ZM33.642 25.5545C37.1136 25.9019 39.874 28.6619 40.2213 32.1329C40.2612 32.5309 39.9427 32.8744 39.5427 32.8744H38.4188C37.959 32.8744 37.7936 32.4752 37.7701 32.2806C37.501 30.0509 35.7356 28.282 33.5075 28.0071C33.1626 27.9645 32.9005 27.6775 32.9005 27.33V26.2331C32.9005 25.8331 33.244 25.5147 33.642 25.5545ZM17.5812 23.0945C18.0411 23.0945 18.2064 23.4936 18.2299 23.6882C18.4991 25.9179 20.2644 27.6868 22.4926 27.9618C22.8374 28.0043 23.0996 28.2913 23.0996 28.6388V29.7357C23.0996 30.1357 22.7561 30.4541 22.358 30.4144C18.8865 30.0669 16.1261 27.3069 15.7786 23.8359C15.7388 23.4379 16.0573 23.0945 16.4574 23.0945H17.5812ZM32.9091 16.4562V17.5798C32.9091 18.0396 32.51 18.205 32.3152 18.2285C30.0853 18.4976 28.3161 20.2627 28.0411 22.4905C27.9985 22.8353 27.7115 23.0974 27.364 23.0974H26.2669C25.8669 23.0974 25.5484 22.7539 25.5882 22.3559C25.9357 18.885 28.6961 16.125 32.1675 15.7776C32.5656 15.7378 32.9091 16.0562 32.9091 16.4562Z" fill="white"/></svg><h2 class="text-base font-semibold text-white">DATA / USD</h2>
+                            <a href="/swap" class="ml-1 text-xs font-medium text-gray-300 hover:text-white transition-colors">Swap</a>
+                        </div>
+                        <div id="overview-price-range" class="flex bg-[#2C2C2C] p-0.5 rounded-md" role="group" aria-label="Chart range">
+                                <button type="button" data-range="30d" class="px-2.5 py-1 rounded text-xs font-semibold text-gray-300 hover:text-white transition-colors">30D</button>
+                                <button type="button" data-range="1y" class="px-2.5 py-1 rounded text-xs font-semibold text-gray-300 hover:text-white transition-colors">1Y</button>
+                                <button type="button" data-range="all" class="px-2.5 py-1 rounded text-xs font-semibold text-gray-300 hover:text-white transition-colors">All</button>
+                            </div>
+                    </div>
+                    <div id="overview-price-chart" class="h-64"></div>
+                </section>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-4 gap-6">
+                <section class="detail-section p-4 sm:p-5 flex flex-col min-w-0">
+                    <div class="flex items-center justify-between gap-3 mb-3">
+                        <h2 class="text-base font-semibold text-white">Top operators</h2>
+                        <a href="/operators" class="text-xs font-medium text-gray-300 hover:text-white transition-colors">View all</a>
+                    </div>
+                    <div id="overview-operators" class="space-y-1"></div>
+                </section>
+                <section class="detail-section p-4 sm:p-5 flex flex-col min-w-0">
+                    <div class="flex items-center justify-between gap-3 mb-3">
+                        <h2 class="text-base font-semibold text-white">Best sponsorships</h2>
+                        <a href="/streams" class="text-xs font-medium text-gray-300 hover:text-white transition-colors">View all</a>
+                    </div>
+                    <div id="overview-best" class="space-y-1"></div>
+                </section>
+                <section class="detail-section p-4 sm:p-5 flex flex-col min-w-0">
+                    <div class="flex items-center justify-between gap-3 mb-3">
+                        <h2 class="text-base font-semibold text-white">Ending soon</h2>
+                        <a href="/streams" class="text-xs font-medium text-gray-300 hover:text-white transition-colors">View all</a>
+                    </div>
+                    <div id="overview-ending" class="space-y-1"></div>
+                </section>
+                <section class="detail-section p-4 sm:p-5 flex flex-col min-w-0">
+                    <div class="flex items-center justify-between gap-3 mb-3">
+                        <h2 class="text-base font-semibold text-white">Governance</h2>
+                        <a href="/governance" class="text-xs font-medium text-gray-300 hover:text-white transition-colors">View all</a>
+                    </div>
+                    <div id="overview-flags" class="space-y-1"></div>
+                </section>
             </div>
         </div>
 

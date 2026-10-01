@@ -37,6 +37,7 @@ class NavigationController {
         
         // Page titles map
         this.pageTitles = {
+            'overview': 'Overview',
             'operators': 'Operators',
             'visual': 'Network Map',
             'race': 'Leaderboard',
@@ -50,6 +51,7 @@ class NavigationController {
 
         // Per-page descriptions for search engines (the link previews use the static tags in index.html)
         this.pageDescriptions = {
+            'overview': 'The Streamr Network at a glance: total stake, delegations, operators, sponsorships, network APY and the DATA price.',
             'operators': 'All Streamr Network operators: stake, APY, delegators, nodes and earnings. Delegate DATA or become an operator.',
             'visual': 'Live map of the Streamr Network: operators, sponsorships and nodes, and how the stake flows between them.',
             'race': 'Leaderboard of Streamr operators by stake and earnings over time.',
@@ -61,11 +63,11 @@ class NavigationController {
             'bridge': 'Bridge DATA between Ethereum and Polygon with the official Polygon PoS bridge.'
         };
         
-        this.currentPage = 'operators';
+        this.currentPage = 'overview';
 
         // Detail pages with a header back button: fallback used when the page was opened directly
         this.backRoutes = [
-            { match: /^\/operator\//, fallback: '/' },
+            { match: /^\/operator\//, fallback: '/operators' },
             { match: /^\/delegator\//, fallback: '/delegators' },
             { match: /^\/stream\//, fallback: '/streams' },
         ];
@@ -114,10 +116,10 @@ class NavigationController {
      * Get page name from URL path
      */
     getPageFromPath(path = window.location.pathname) {
-        if (path === '/' || path === '') return 'operators';
+        if (path === '/' || path === '') return 'overview';
         
         const segments = path.split('/').filter(Boolean);
-        if (segments.length === 0) return 'operators';
+        if (segments.length === 0) return 'overview';
         
         // Check for operator detail view
         if (segments[0] === 'operator') return 'operators';
@@ -126,7 +128,7 @@ class NavigationController {
         const page = segments[0];
         if (this.pageTitles[page]) return page;
         
-        return 'operators';
+        return 'overview';
     }
     
     /**
@@ -344,7 +346,7 @@ class NavigationController {
     navigateTo(pageId, href = null) {
         // Use router if available
         if (window.router && typeof window.router.navigate === 'function') {
-            const path = href || '/' + (pageId === 'operators' ? '' : pageId);
+            const path = href || '/' + (pageId === 'overview' ? '' : pageId);
             window.router.navigate(path);
         } else {
             // Fallback to direct navigation
@@ -382,7 +384,7 @@ class NavigationController {
      * Update page title in headers
      */
     updatePageTitle(pageId, customTitle = null) {
-        const title = customTitle || this.pageTitles[pageId] || 'Operators';
+        const title = customTitle || this.pageTitles[pageId] || 'Overview';
         
         if (this.mobilePageTitle) {
             this.mobilePageTitle.textContent = title;

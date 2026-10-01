@@ -1524,8 +1524,32 @@ function setupRouter() {
     // Make router available globally for navigation controller
     window.router = router;
 
-    // Home route - operators list
+    // Home route - network overview (stops itself when the route changes)
     router.addRoute('/', async () => {
+        OperatorLogic.stop();
+        Services.unsubscribeFromCoordinationStream();
+        if (RaceLogic) RaceLogic.stop();
+        if (VisualLogic) VisualLogic.stop();
+        if (DelegatorsLogic) DelegatorsLogic.deactivate();
+        if (StreamsLogic) StreamsLogic.stop();
+        if (GovernanceLogic) GovernanceLogic.stop();
+        if (SubgraphLogic) SubgraphLogic.stop();
+
+        UI.displayView('overview');
+        UI.hideProfileButtons();
+        navigationController.updateActiveState('overview');
+
+        try {
+            const { OverviewLogic } = await import('./src/features/overview.js');
+            OverviewLogic.show();
+        } catch (error) {
+            console.error('Failed to load overview module:', error);
+            UI.showToast({ type: 'error', title: 'Failed to load Overview', message: error.message, duration: 5000 });
+        }
+    });
+
+    // Operators list route
+    router.addRoute('/operators', async () => {
         OperatorLogic.stop();
         Services.unsubscribeFromCoordinationStream();
         if (RaceLogic) RaceLogic.stop();

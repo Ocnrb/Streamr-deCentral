@@ -466,6 +466,9 @@
   .m-px {
     margin: 1px;
   }
+  .-mx-2 {
+    margin-inline: calc(var(--spacing) * -2);
+  }
   .-mx-3 {
     margin-inline: calc(var(--spacing) * -3);
   }
@@ -884,8 +887,8 @@
   .min-w-\[40px\] {
     min-width: 40px;
   }
-  .min-w-\[56px\] {
-    min-width: 56px;
+  .min-w-\[48px\] {
+    min-width: 48px;
   }
   .min-w-\[60px\] {
     min-width: 60px;
