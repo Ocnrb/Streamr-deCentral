@@ -3110,8 +3110,8 @@
                     </button>
                     <p class="text-xs font-semibold uppercase tracking-wider text-blue-400">The Streamr Network</p>
                     <h2 id="overview-hero-title" class="mt-2 pr-8 text-2xl sm:text-4xl font-bold tracking-tight text-white">Real-time data, peer to peer</h2>
-                    <p class="mt-3 max-w-2xl text-sm sm:text-base leading-relaxed text-gray-300">Streamr is pub/sub without a broker. Every stream forms its own constellation of publishers and subscribers, a self-organizing overlay linked directly peer to peer, and thousands of them share one global mesh. No servers, no trackers, no permission needed. Free and open source, and every node that joins, even a browser, adds capacity.</p>
-                    <p id="overview-hero-live" class="mt-4 flex items-center gap-2 text-sm text-gray-400 min-h-[1.25rem]"></p>
+                    <p class="mt-3 max-w-2xl text-sm sm:text-base leading-relaxed text-gray-200">Streamr is pub/sub without a broker. Every stream forms its own constellation of publishers and subscribers, a self-organizing overlay linked directly peer to peer, and thousands of them share one global mesh. No servers, no trackers, no permission needed. Free and open source, and every node that joins, even a browser, adds capacity.</p>
+                    <p id="overview-hero-live" class="mt-4 flex items-center gap-2 text-sm text-gray-300 min-h-[1.25rem]"></p>
                     <button id="overview-hero-more-toggle" type="button" aria-expanded="false" aria-controls="overview-hero-more" class="md:hidden group/more mt-4 inline-flex items-center gap-1 text-sm font-semibold text-gray-300 hover:text-white transition-colors">How it works <svg class="w-4 h-4 transition-transform group-aria-expanded/more:rotate-180" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>
                     <!-- Phones: shown with How it works -->
                     <div id="overview-hero-more" class="max-md:hidden">
@@ -3119,17 +3119,17 @@
                         <div class="rounded-lg border border-white/[0.06] bg-[#181818]/80 backdrop-blur-sm p-4">
                             <p class="text-[11px] font-semibold uppercase tracking-wider text-blue-400">Layer 0 · Global DHT</p>
                             <h3 class="mt-1.5 text-sm font-semibold text-white">A phone book for the whole network</h3>
-                            <p class="mt-1 text-xs sm:text-sm leading-relaxed text-gray-400">An r-Kademlia DHT spans every node. It brings new nodes in, keeps where each stream can be joined and routes messages to any node in a few hops, including the signaling that opens direct links through firewalls and NATs.</p>
+                            <p class="mt-1 text-xs sm:text-sm leading-relaxed text-gray-300">An r-Kademlia DHT spans every node. It brings new nodes in, keeps where each stream can be joined and routes messages to any node in a few hops, including the signaling that opens direct links through firewalls and NATs.</p>
                         </div>
                         <div class="rounded-lg border border-white/[0.06] bg-[#181818]/80 backdrop-blur-sm p-4">
                             <p class="text-[11px] font-semibold uppercase tracking-wider text-blue-400">Layer 1 · Stream coordination</p>
                             <h3 class="mt-1.5 text-sm font-semibold text-white">Every stream finds its peers</h3>
-                            <p class="mt-1 text-xs sm:text-sm leading-relaxed text-gray-400">Each stream has its own hybrid DHT, Kademlia for robustness and a locality-aware ring for closeness. It finds peers nearby for speed and farther away for resilience, with no connections of its own.</p>
+                            <p class="mt-1 text-xs sm:text-sm leading-relaxed text-gray-300">Each stream has its own hybrid DHT, Kademlia for robustness and a locality-aware ring for closeness. It finds peers nearby for speed and farther away for resilience, with no connections of its own.</p>
                         </div>
                         <div class="rounded-lg border border-white/[0.06] bg-[#181818]/80 backdrop-blur-sm p-4">
                             <p class="text-[11px] font-semibold uppercase tracking-wider text-blue-400">Layer 2 · Data delivery</p>
                             <h3 class="mt-1.5 text-sm font-semibold text-white">A mesh that stays fast</h3>
-                            <p class="mt-1 text-xs sm:text-sm leading-relaxed text-gray-400">Subscribers link directly to at least four peers, mostly close by, over WebSocket where a node is reachable and WebRTC everywhere else, even in a browser. In tests with 2 000 nodes, messages reached everyone in under 120 ms on average.</p>
+                            <p class="mt-1 text-xs sm:text-sm leading-relaxed text-gray-300">Subscribers link directly to at least four peers, mostly close by, over WebSocket where a node is reachable and WebRTC everywhere else, even in a browser. In tests with 2 000 nodes, messages reached everyone in under 120 ms on average.</p>
                         </div>
                     </div>
                     <div class="mt-3 grid gap-3 md:grid-cols-2">
@@ -3137,28 +3137,28 @@
                         <svg class="w-5 h-5 flex-shrink-0 mt-0.5 text-blue-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
                         <div>
                             <h3 class="text-sm font-semibold text-white">On-chain where it counts</h3>
-                            <p class="mt-1 text-xs sm:text-sm leading-relaxed text-gray-400">Streams, their permissions and the incentives live in smart contracts on Polygon, and identities are Ethereum keys that sign every message. Stream names can use ENS. The data itself flows off-chain, so creating a stream is one transaction and publishing or subscribing costs nothing.</p>
+                            <p class="mt-1 text-xs sm:text-sm leading-relaxed text-gray-300">Streams, their permissions and the incentives live in smart contracts on Polygon, and identities are Ethereum keys that sign every message. The data itself flows off-chain, so creating a stream is one transaction and publishing or subscribing costs nothing.</p>
                         </div>
                     </div>
                     <div class="flex gap-3 rounded-lg border border-white/[0.06] bg-[#181818]/80 backdrop-blur-sm p-4">
                         <svg class="w-5 h-5 flex-shrink-0 mt-0.5 text-blue-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22v-5"/><path d="M9 8V2"/><path d="M15 8V2"/><path d="M18 8v5a4 4 0 0 1-4 4h-4a4 4 0 0 1-4-4V8Z"/></svg>
                         <div>
                             <h3 class="text-sm font-semibold text-white">Plugs into anything</h3>
-                            <p class="mt-1 text-xs sm:text-sm leading-relaxed text-gray-400">Build with the TypeScript SDK in Node.js or the browser, or run a Streamr node and publish or subscribe through its MQTT, WebSocket and HTTP interfaces, from any language or device.</p>
+                            <p class="mt-1 text-xs sm:text-sm leading-relaxed text-gray-300">Build with the TypeScript SDK in Node.js or the browser, or run a Streamr node and publish or subscribe through its MQTT, WebSocket and HTTP interfaces, from any language or device.</p>
                         </div>
                     </div>
                     </div>
                     <!-- Scaling tests of the trackerless network (early 2025, about 2 000 nodes in 17 regions) -->
                     <div class="mt-5 flex flex-wrap items-end justify-between gap-x-8 gap-y-3">
                         <dl class="grid grid-cols-2 sm:flex sm:flex-wrap gap-x-10 gap-y-3">
-                            <div><dt class="text-[11px] font-semibold uppercase tracking-wider text-gray-500">Time to data</dt><dd class="mt-0.5 text-lg sm:text-xl font-bold text-white">~1 s</dd></div>
-                            <div><dt class="text-[11px] font-semibold uppercase tracking-wider text-gray-500">Hops at 2 000 nodes</dt><dd class="mt-0.5 text-lg sm:text-xl font-bold text-white">&lt; 3</dd></div>
-                            <div><dt class="text-[11px] font-semibold uppercase tracking-wider text-gray-500">Delivery at 2 000 nodes</dt><dd class="mt-0.5 text-lg sm:text-xl font-bold text-white">&lt; 120 ms</dd></div>
-                            <div><dt class="text-[11px] font-semibold uppercase tracking-wider text-gray-500">Connections per node</dt><dd class="mt-0.5 text-lg sm:text-xl font-bold text-white">~4</dd></div>
+                            <div><dt class="text-[11px] font-semibold uppercase tracking-wider text-gray-400">Time to data</dt><dd class="mt-0.5 text-lg sm:text-xl font-bold text-white">~1 s</dd></div>
+                            <div><dt class="text-[11px] font-semibold uppercase tracking-wider text-gray-400">Hops at 2 000 nodes</dt><dd class="mt-0.5 text-lg sm:text-xl font-bold text-white">&lt; 3</dd></div>
+                            <div><dt class="text-[11px] font-semibold uppercase tracking-wider text-gray-400">Delivery at 2 000 nodes</dt><dd class="mt-0.5 text-lg sm:text-xl font-bold text-white">&lt; 120 ms</dd></div>
+                            <div><dt class="text-[11px] font-semibold uppercase tracking-wider text-gray-400">Connections per node</dt><dd class="mt-0.5 text-lg sm:text-xl font-bold text-white">~4</dd></div>
                         </dl>
                         <div class="flex flex-col items-end gap-2">
-                            <a href="https://blog.streamr.network/leveling-up-streamr-the-trackerless-network-results-part-2/" target="_blank" rel="noopener noreferrer" class="text-xs font-medium text-gray-400 hover:text-white transition-colors" data-tooltip-content="Scaling tests in early 2025 with about 2 000 nodes in 17 regions">Tested across 17 regions ↗</a>
-                            <a href="https://github.com/streamr-dev" target="_blank" rel="noopener noreferrer" class="text-gray-500 hover:text-white transition-colors" aria-label="Streamr on GitHub" data-tooltip-content="Streamr on GitHub">
+                            <a href="https://blog.streamr.network/leveling-up-streamr-the-trackerless-network-results-part-2/" target="_blank" rel="noopener noreferrer" class="text-xs font-medium text-gray-300 hover:text-white transition-colors" data-tooltip-content="Scaling tests in early 2025 with about 2 000 nodes in 17 regions">Tested across 17 regions ↗</a>
+                            <a href="https://github.com/streamr-dev" target="_blank" rel="noopener noreferrer" class="text-gray-400 hover:text-white transition-colors" aria-label="Streamr on GitHub" data-tooltip-content="Streamr on GitHub">
                                 <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>
                             </a>
                         </div>
@@ -3169,19 +3169,19 @@
                         <div class="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
                             <div class="rounded-lg border border-white/[0.06] bg-[#181818]/80 backdrop-blur-sm p-4">
                                 <h3 class="text-sm font-semibold text-white">Incentives are opt-in</h3>
-                                <p class="mt-1 text-xs sm:text-sm leading-relaxed text-gray-400">Using the network is free. Sponsored nodes are plug-and-play relays, like TURN servers for a stream, adding bandwidth for wide broadcasts, relaying for publishers behind NATs or on weak links and keeping the stream reachable 24/7.</p>
+                                <p class="mt-1 text-xs sm:text-sm leading-relaxed text-gray-300">Using the network is free. Sponsored nodes are plug-and-play relays, like TURN servers for a stream, adding bandwidth for wide broadcasts, relaying for publishers behind NATs or on weak links and keeping the stream reachable 24/7.</p>
                             </div>
                             <div class="rounded-lg border border-white/[0.06] bg-[#181818]/80 backdrop-blur-sm p-4">
                                 <h3 class="text-sm font-semibold text-white">Paid in DATA</h3>
-                                <p class="mt-1 text-xs sm:text-sm leading-relaxed text-gray-400">DATA is the ERC-20 utility token of Streamr. Sponsors pay it into sponsorships, smart contracts that tie off-chain streaming to on-chain rewards. Operators stake it there and earn for relaying the data, and delegators back them. The result is a decentralized live CDN.</p>
+                                <p class="mt-1 text-xs sm:text-sm leading-relaxed text-gray-300">DATA is the ERC-20 utility token of Streamr. Sponsors pay it into sponsorships, smart contracts that tie off-chain streaming to on-chain rewards. Operators stake it there and earn for relaying the data, and delegators back them. The result is a decentralized live CDN.</p>
                             </div>
                             <div class="rounded-lg border border-white/[0.06] bg-[#181818]/80 backdrop-blur-sm p-4">
                                 <h3 class="text-sm font-semibold text-white">Checked by the operators</h3>
-                                <p class="mt-1 text-xs sm:text-sm leading-relaxed text-gray-400">Inside each sponsorship, operators keep each other honest. A node that does not do its job can be flagged, operators picked as reviewers vote on it, and a kick slashes part of its stake. These are the flags and votes on the Governance page.</p>
+                                <p class="mt-1 text-xs sm:text-sm leading-relaxed text-gray-300">Inside each sponsorship, operators keep each other honest. A node that does not do its job can be flagged, operators picked as reviewers vote on it, and a kick slashes part of its stake. These are the flags and votes on the Governance page.</p>
                             </div>
                             <div class="rounded-lg border border-white/[0.06] bg-[#181818]/80 backdrop-blur-sm p-4">
                                 <h3 class="text-sm font-semibold text-white">DAO governance</h3>
-                                <p class="mt-1 text-xs sm:text-sm leading-relaxed text-gray-400">Apart from that work, DATA is voting power in the Streamr DAO. Token holders <a href="https://snapshot.box/#/s:streamr.eth/" target="_blank" rel="noopener noreferrer" class="text-gray-300 underline decoration-gray-600 underline-offset-2 hover:text-white hover:decoration-gray-400 transition-colors">vote on proposals</a> that set the rules and economic parameters of the network.</p>
+                                <p class="mt-1 text-xs sm:text-sm leading-relaxed text-gray-300">Apart from that work, DATA is voting power in the Streamr DAO. Token holders <a href="https://snapshot.box/#/s:streamr.eth/" target="_blank" rel="noopener noreferrer" class="text-gray-100 underline decoration-gray-500 underline-offset-2 hover:text-white hover:decoration-gray-300 transition-colors">vote on proposals</a> that set the rules and economic parameters of the network.</p>
                             </div>
                         </div>
                     </details>

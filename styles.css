@@ -65,6 +65,7 @@
     --color-pink-600: oklch(59.2% 0.249 0.584);
     --color-rose-500: oklch(64.5% 0.246 16.439);
     --color-rose-600: oklch(58.6% 0.253 17.585);
+    --color-gray-100: oklch(96.7% 0.003 264.542);
     --color-gray-200: oklch(92.8% 0.006 264.531);
     --color-gray-300: oklch(87.2% 0.01 258.338);
     --color-gray-400: oklch(70.7% 0.022 261.325);
@@ -2396,6 +2397,9 @@
   .text-emerald-400 {
     color: var(--color-emerald-400);
   }
+  .text-gray-100 {
+    color: var(--color-gray-100);
+  }
   .text-gray-200 {
     color: var(--color-gray-200);
   }
@@ -2478,8 +2482,8 @@
   .underline {
     text-decoration-line: underline;
   }
-  .decoration-gray-600 {
-    text-decoration-color: var(--color-gray-600);
+  .decoration-gray-500 {
+    text-decoration-color: var(--color-gray-500);
   }
   .underline-offset-2 {
     text-underline-offset: 2px;
@@ -3292,10 +3296,10 @@
       }
     }
   }
-  .hover\:decoration-gray-400 {
+  .hover\:decoration-gray-300 {
     &:hover {
       @media (hover: hover) {
-        text-decoration-color: var(--color-gray-400);
+        text-decoration-color: var(--color-gray-300);
       }
     }
   }
