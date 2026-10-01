@@ -1,3 +1,4 @@
+import './src/core/libs.js';   // first: the libraries the other modules use as globals
 import * as Constants from './src/core/constants.js';
 import * as Utils from './src/core/utils.js';
 import * as UI from './src/ui/ui.js';

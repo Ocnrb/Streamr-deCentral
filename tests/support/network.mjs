@@ -1,16 +1,9 @@
 // The outside world for the tests: an in-memory subgraph that runs the app's queries (validated against the
 // subgraph's schema), the Etherscan logs API, a Polygon RPC and a Streamr client. Nothing leaves the machine.
 import fs from 'node:fs';
-import { fileURLToPath } from 'node:url';
 import { buildSchema, parse, validate } from 'graphql';
+import { ethers } from 'ethers';   // the app's version (v5), to encode the event logs
 
-const root = fileURLToPath(new URL('../..', import.meta.url));
-// The app's own ethers build (v5), to encode the event logs
-const ethers = (() => {
-    const m = { exports: {} };
-    new Function('module', 'exports', 'self', 'window', fs.readFileSync(`${root}public/libs/ethers.umd.min.js`, 'utf8'))(m, m.exports, {}, {});
-    return m.exports.ethers || m.exports;
-})();
 const schema = buildSchema(fs.readFileSync(new URL('../fixtures/subgraph-schema.graphql', import.meta.url), 'utf8'));
 
 export const NOW = Math.floor(Date.now() / 1000);

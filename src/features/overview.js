@@ -1622,7 +1622,6 @@ function renderLists() {
 // Intro: hidden for good when closed, a live line and the mesh drawn behind it
 // ============================================
 
-const HERO_HIDDEN_KEY = 'overview.hero.hidden';
 const MESH_LINK = 120;            // px: nodes closer than this are neighbors
 const MESH_HOP_MS = 450;          // a message crossing one link
 const MESH_MAX_HOPS = 4;
@@ -1635,13 +1634,9 @@ function heroHidden() {
     return document.documentElement.classList.contains('hero-closed');
 }
 
-function setHeroHidden(hidden) {
-    try {
-        if (hidden) localStorage.setItem(HERO_HIDDEN_KEY, '1');
-        else localStorage.removeItem(HERO_HIDDEN_KEY);
-    } catch (e) { /* storage blocked: for this visit only */ }
-    document.documentElement.classList.toggle('hero-closed', hidden);
-    if (!hidden) meshResize();
+/** The intro was closed or opened (early.js handles the click from the first paint on, before this module loads) */
+function onHeroToggled(e) {
+    if (!e.detail?.hidden) meshResize();
     meshUpdate();
 }
 
@@ -1883,13 +1878,12 @@ function init() {
         if (!document.hidden && state.active) refresh();
         meshUpdate();
     });
-    $('overview-hero-close')?.addEventListener('click', () => setHeroHidden(true));
+    document.addEventListener('overview:hero', onHeroToggled);
     $('overview-hero-more-toggle')?.addEventListener('click', (e) => {
         const open = $('overview-hero-more').classList.toggle('max-md:hidden') === false;
         e.currentTarget.setAttribute('aria-expanded', String(open));
         meshResize();
     });
-    $('overview-hero-reopen')?.querySelector('button')?.addEventListener('click', () => setHeroHidden(false));
     Services.onHistoricalDataLoaded(setPriceHistory);
     readNodesCache();
 }

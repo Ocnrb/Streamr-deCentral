@@ -27,5 +27,12 @@
     "graphql": "^16.14.2",
     "tailwindcss": "^4.3.3",
     "vite": "^7.3.6"
+  },
+  "dependencies": {
+    "chart.js": "4.5.1",
+    "d3": "7.9.0",
+    "ethers": "5.7.2",
+    "leaflet": "1.9.4",
+    "lucide": "1.49.0"
   }
 }

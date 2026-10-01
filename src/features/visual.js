@@ -1,4 +1,6 @@
+import * as d3 from 'd3';
 import { formatBigNumber, parseOperatorMetadata, escapeHtml } from '../core/utils.js';
+import { renderIcons } from '../core/icons.js';
 import { loadOperatorAvatarImage } from '../core/streamAvatar.js';
 import { getGraphUrl } from '../core/constants.js';
 
@@ -245,8 +247,8 @@ export const VisualLogic = {
             if (panel) {
                 panel.classList.toggle('hidden');
                 
-                if (!panel.classList.contains('hidden') && window.lucide) {
-                    setTimeout(() => window.lucide.createIcons(), 0);
+                if (!panel.classList.contains('hidden')) {
+                    setTimeout(() => renderIcons(), 0);
                 }
             }
             
@@ -336,7 +338,7 @@ export const VisualLogic = {
         
         this.initSettingsSliders();
 
-        if (window.lucide) lucide.createIcons();
+        renderIcons();
         await this.fetchMetadata();
         this.loadData(); 
     },
@@ -592,7 +594,7 @@ export const VisualLogic = {
                 </div>
             `).join('');
             
-            if (window.lucide) window.lucide.createIcons({ root: resultsContainer });
+            renderIcons({ root: resultsContainer });
 
             resultsContainer.querySelectorAll('.search-item').forEach(item => {
                 item.addEventListener('click', () => {
@@ -728,7 +730,7 @@ export const VisualLogic = {
             if(p2pContainer) p2pContainer.classList.add('hidden'); 
         }
         
-        if (window.lucide) window.lucide.createIcons();
+        renderIcons();
         
         if (activate) {
             if (!this.streamrClient) {
@@ -1296,8 +1298,8 @@ export const VisualLogic = {
             gotoOperatorBtn.dataset.operatorId = node.id;
             
             // Initialize Lucide icons for the new button
-            if (window.lucide) {
-                setTimeout(() => window.lucide.createIcons(), 0);
+            {
+                setTimeout(() => renderIcons(), 0);
             }
             
             const imgCache = this.imageCache.get(node.id);
@@ -1413,7 +1415,7 @@ export const VisualLogic = {
             btn.innerHTML = '<i data-lucide="pause" class="w-3 h-3 fill-current"></i>';
             btn.classList.add('pulse-active');
             // Recreate Lucide icons after innerHTML change
-            if (window.lucide) window.lucide.createIcons();
+            renderIcons();
             const slider = document.getElementById('vis-time-slider');
             if(parseFloat(slider.value) >= 100) {
                 slider.value = 0;
@@ -1427,9 +1429,9 @@ export const VisualLogic = {
             btn.innerHTML = '<i data-lucide="play" class="w-3 h-3 ml-0.5 fill-current"></i>';
             btn.classList.remove('pulse-active');
             // Recreate Lucide icons after innerHTML change
-            if (window.lucide) window.lucide.createIcons();
+            renderIcons();
         }
-        if (window.lucide) window.lucide.createIcons();
+        renderIcons();
     },
 
     advanceTimeline: function() {
