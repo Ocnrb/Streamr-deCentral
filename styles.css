@@ -488,6 +488,9 @@
   .mx-auto {
     margin-inline: auto;
   }
+  .-my-1 {
+    margin-block: calc(var(--spacing) * -1);
+  }
   .my-2 {
     margin-block: calc(var(--spacing) * 2);
   }
@@ -3300,9 +3303,20 @@
       outline-style: none;
     }
   }
+  .focus-visible\:outline-none {
+    &:focus-visible {
+      --tw-outline-style: none;
+      outline-style: none;
+    }
+  }
   .disabled\:pointer-events-none {
     &:disabled {
       pointer-events: none;
+    }
+  }
+  .disabled\:cursor-default {
+    &:disabled {
+      cursor: default;
     }
   }
   .disabled\:cursor-not-allowed {
@@ -3355,6 +3369,36 @@
           color: var(--color-gray-400);
         }
       }
+    }
+  }
+  .disabled\:hover\:text-gray-500 {
+    &:disabled {
+      &:hover {
+        @media (hover: hover) {
+          color: var(--color-gray-500);
+        }
+      }
+    }
+  }
+  .has-\[\[data-metric\]\:focus-visible\]\:ring-1 {
+    &:has(*:is([data-metric]:focus-visible)) {
+      --tw-ring-shadow: var(--tw-ring-inset,) 0 0 0 calc(1px + var(--tw-ring-offset-width)) var(--tw-ring-color, currentcolor);
+      box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+    }
+  }
+  .has-\[\[data-metric\]\:focus-visible\]\:ring-blue-500 {
+    &:has(*:is([data-metric]:focus-visible)) {
+      --tw-ring-color: var(--color-blue-500);
+    }
+  }
+  .has-\[\[data-metric\]\:focus-visible\]\:ring-inset {
+    &:has(*:is([data-metric]:focus-visible)) {
+      --tw-ring-inset: inset;
+    }
+  }
+  .max-sm\:hidden {
+    @media (width < 40rem) {
+      display: none;
     }
   }
   .sm\:right-6 {

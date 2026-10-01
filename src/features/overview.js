@@ -72,7 +72,7 @@ const METRICS = {
     apy: { label: 'Network APY', kind: 'percent', source: 'sponsorships',
         info: 'APY of the running sponsorships weighted by their stake: their yearly payouts over the DATA staked in them, before the operators\' cut.' },
     operators: { label: 'Operators', kind: 'count', source: 'operators',
-        info: 'Operators with stake in sponsorships.<br>Nodes: the nodes heard on these operators\' coordination streams in the last hour, as on the Network Map.' },
+        info: 'Operators with stake in sponsorships.<br>Nodes: the nodes heard on these operators\' coordination streams in the latest round, as on the Network Map.' },
     sponsorships: { label: 'Sponsorships', kind: 'count', source: 'sponsorships',
         info: 'Running sponsorships: funds left and DATA staked.<br>Over time: the daily records of each sponsorship.' },
     streams: { label: 'Streams', kind: 'count', source: 'streams',
@@ -567,6 +567,7 @@ async function listenOperator(client, operatorId, scan) {
             if (!nodeId) return;
             const known = state.nodes.has(nodeId) && Date.now() - state.nodes.get(nodeId) < NODE_TTL_MS;
             state.nodes.set(nodeId, Date.now());
+            scan.heard.add(nodeId);
             heartbeats.set(nodeId, (heartbeats.get(nodeId) || 0) + 1);
             if (!known && state.active) renderStats();
             if ([...heartbeats.values()].every(count => count >= 2)) finish();
@@ -586,8 +587,9 @@ async function scanNodes() {
     if (state.nodesScan) return;
     const client = Services.getStreamrClient();
     if (!client) return;   // asked again on the next round
-    const scan = { stopped: false, listeners: new Set() };
+    const scan = { stopped: false, listeners: new Set(), heard: new Set() };
     state.nodesScan = scan;
+    if (state.active) renderStats();   // the refresh arrow turns
     try {
         if (!state.totals) await state.totalsPromise;
         const queue = state.allOperators
@@ -596,6 +598,10 @@ async function scanNodes() {
         await Promise.all(Array.from({ length: NODE_SUBSCRIPTIONS }, async () => {
             while (queue.length && !scan.stopped && state.active) await listenOperator(client, queue.shift(), scan);
         }));
+        // A whole round: the nodes it did not hear are gone
+        if (!scan.stopped && state.active && scan.heard.size) {
+            for (const id of [...state.nodes.keys()]) if (!scan.heard.has(id)) state.nodes.delete(id);
+        }
     } finally {
         if (state.nodesScan === scan) state.nodesScan = null;
         writeNodesCache();
@@ -879,7 +885,8 @@ function statSub(metric) {
         case 'operators': {
             if (!t) return '';
             const nodes = nodesCount();
-            return `of ${full(t.operatorsAll)}${nodes ? ` · ${full(nodes)} nodes` : ''}`;
+            // Phones: the nodes only (the line keeps room for the refresh arrow)
+            return nodes ? `<span class="max-sm:hidden">of ${full(t.operatorsAll)} · </span>${full(nodes)} nodes` : `of ${full(t.operatorsAll)}`;
         }
         case 'sponsorships': return t ? `running of ${full(t.sponsorshipsAll)}` : '';
         case 'streams': return state.streams ? '' : (state.streamsLoading ? 'Counting...' : '');
@@ -896,6 +903,16 @@ function statSub(metric) {
     }
 }
 
+/** The nodes' refresh arrow, after the operators' line (it turns while the nodes are counted) */
+function nodesRefreshButton() {
+    if (!state.totals || !Services.getStreamrClient()) return '';
+    const scanning = !!state.nodesScan;
+    const label = scanning ? 'Counting the nodes' : 'Count the nodes again';
+    return `<button type="button" data-action="nodes-refresh" ${scanning ? 'disabled' : ''} aria-label="${label}" data-tooltip-content="${label}"
+        class="flex-shrink-0 inline-flex -my-1 p-0.5 rounded text-gray-500 hover:text-gray-300 disabled:hover:text-gray-500 disabled:cursor-default transition-colors">
+        <svg class="w-3 h-3 ${scanning ? 'animate-spin' : ''}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg></button>`;
+}
+
 function renderStats() {
     const el = $('overview-stats');
     if (!el) return;
@@ -909,17 +926,21 @@ function renderStats() {
         const unit = def.kind === 'data' && value !== null ? ' <span class="text-xs font-semibold text-gray-400">DATA</span>' : '';
         const tip = value !== null && (def.kind === 'data' || def.kind === 'count') ? ` data-tooltip-content="${formatMetric(def.kind, value, true)}"` : '';
         const selected = state.metric === metric;
+        // The tile opens the chart: its button (label and value, for the keyboard) or anywhere on it; the line
+        // below sits outside the button, so it can hold a button of its own (the nodes' refresh)
         return `
-            <button type="button" data-metric="${metric}" aria-pressed="${selected}" aria-controls="overview-chart-panel"
-                class="overview-stat group relative text-left px-3 sm:px-4 py-3 min-w-0 transition-colors ${metric === 'price' ? 'col-span-2 sm:col-span-1' : ''} ${selected ? 'bg-[#262626]' : 'bg-[#1E1E1E] hover:bg-[#232323]'}">
+            <div data-stat="${metric}"
+                class="overview-stat group relative text-left px-3 sm:px-4 py-3 min-w-0 cursor-pointer transition-colors has-[[data-metric]:focus-visible]:ring-1 has-[[data-metric]:focus-visible]:ring-inset has-[[data-metric]:focus-visible]:ring-blue-500 ${metric === 'price' ? 'col-span-2 sm:col-span-1' : ''} ${selected ? 'bg-[#262626]' : 'bg-[#1E1E1E] hover:bg-[#232323]'}">
                 <span class="absolute inset-x-0 bottom-0 h-0.5 ${selected ? 'bg-blue-500' : 'bg-transparent'}"></span>
+                <button type="button" data-metric="${metric}" aria-pressed="${selected}" aria-controls="overview-chart-panel" class="block w-full text-left focus-visible:outline-none">
                 <span class="flex items-center justify-between gap-1 text-[11px] font-semibold sm:uppercase sm:tracking-wider ${selected ? 'text-gray-200' : 'text-gray-400'}">
                     <span class="truncate">${def.label}</span>
                     <svg class="w-3 h-3 flex-shrink-0 transition-transform ${selected ? 'rotate-180 text-blue-400' : 'text-gray-500 group-hover:text-gray-300'}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
                 </span>
                 <span class="block mt-1 text-base sm:text-xl font-bold text-white whitespace-nowrap"${tip}>${shown}${unit}</span>
-                <span class="block text-[11px] sm:text-xs text-gray-400 truncate min-h-[1rem]">${statSub(metric)}</span>
-            </button>`;
+                </button>
+                <span class="flex items-center gap-1 text-[11px] sm:text-xs text-gray-400 min-h-[1rem] min-w-0"><span class="truncate">${statSub(metric)}</span>${metric === 'operators' ? nodesRefreshButton() : ''}</span>
+            </div>`;
     }).join('');
 }
 
@@ -1339,8 +1360,12 @@ function init() {
     if (state.initialized) return;
     state.initialized = true;
     $('overview-stats')?.addEventListener('click', (e) => {
-        const btn = e.target.closest('[data-metric]');
-        if (btn) selectMetric(btn.dataset.metric);
+        if (e.target.closest('[data-action="nodes-refresh"]')) {
+            scanNodes();
+            return;
+        }
+        const tile = e.target.closest('[data-stat]');
+        if (tile) selectMetric(tile.dataset.stat);
     });
     document.querySelectorAll('#overview-range button').forEach(btn => btn.addEventListener('click', () => {
         state.range = btn.dataset.range;
