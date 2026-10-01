@@ -1488,7 +1488,7 @@ const PANELS = {
                 load: () => loadFeed('sponsorships'), at: () => state.feeds.sponsorships.at }
         }
     },
-    // The incentive layer: staking, delegations, earnings, flags and votes
+    // Operators and delegators: staking, delegations, earnings, flags and votes
     activity: {
         list: 'overview-activity',
         tabs: {
