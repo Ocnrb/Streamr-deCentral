@@ -630,6 +630,36 @@ async function loadLiquidity() {
     }
     state.liquidity = { pools, v4, complete: v4Complete && INTERMEDIATES.every(m => state.pools.has(pairKey(DATA, m))) };
     renderLiquidity();
+    SwapMarket.setPools(marketPools());
+}
+
+// Pools whose trades the market list shows: at least this much DATA (v2 / v3), any liquidity (v4)
+const MARKET_POOL_MIN_DATA = ethers.utils.parseUnits('10000', 18);
+const MARKET_POOLS_MAX = 8;
+const MARKET_COUNTERS = ['POL', 'WPOL', 'USDC', 'USDC.e', 'USDT', 'DAI'];   // the trades get a USD value
+
+/** The DATA pools with liquidity, for the market trades (the main v4 DATA/USDC pool is there already) */
+function marketPools() {
+    const { pools = [], v4 = [] } = state.liquidity || {};
+    const list = [];
+    for (const pool of v4) {
+        const counter = KNOWN_TOKENS[lower(pool.counter)];
+        if (!counter || !MARKET_COUNTERS.includes(counter.symbol) || !pool.liquidity || pool.liquidity.isZero()) continue;
+        list.push({
+            kind: 'v4', venue: 'v4', id: v4PoolId(pool.key), dataIs0: lower(pool.key.currency0) === lower(DATA),
+            counterSymbol: counter.symbol, counterDecimals: counter.decimals, label: `Uniswap v4 ${pool.fee / 10000}%`
+        });
+    }
+    for (const pool of pools) {
+        const counter = KNOWN_TOKENS[lower(pool.partner)];
+        if (!counter || !MARKET_COUNTERS.includes(counter.symbol) || pool.data.lt(MARKET_POOL_MIN_DATA)) continue;
+        list.push({
+            kind: pool.venue === 'qv2' || pool.venue === 'sushi' ? 'v2' : 'v3', venue: pool.venue, address: lower(pool.address),
+            dataIs0: lower(DATA) < lower(pool.partner), counterSymbol: counter.symbol, counterDecimals: counter.decimals,
+            label: `${VENUES[pool.venue].name}${pool.fee ? ` ${pool.fee / 10000}%` : ''}`
+        });
+    }
+    return list.slice(0, MARKET_POOLS_MAX);
 }
 
 function renderLiquidity() {
@@ -1520,7 +1550,7 @@ function renderHistory() {
     }).join('');
     fillPolPrices();
     fillRoutes();
-    SwapMarket.setOwnTxHashes(state.history.map(h => h.txHash));
+    SwapMarket.setOwnSwaps(state.history.map(h => ({ txHash: h.txHash, pay: h.pay?.symbol, receive: h.receive?.symbol })));
 }
 
 /** Spins a refresh button's icon while the work runs (at least half a second, so it is noticed) */
@@ -1850,7 +1880,10 @@ export const SwapLogic = {
         }
         renderHistory();
         refreshHistory().catch(e => logger.warn('Swap: history refresh failed', e));
+        SwapMarket.setPolUsdSource(polUsdAt);
+        SwapMarket.setTokenChip(tokenChip);
         SwapMarket.show();
+        if (state.liquidity) SwapMarket.setPools(marketPools());
         if (!state.flow) {
             $('swap-progress')?.classList.add('hidden');
             showSuccess('');
