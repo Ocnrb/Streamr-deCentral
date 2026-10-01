@@ -402,11 +402,18 @@ export const RaceLogic = {
     processTimelineWithWorker: function(buckets, operatorIds) {
         return new Promise((resolve, reject) => {
             const worker = getRaceProcessorWorker();
+            // Synchronous processing instead: its errors (e.g. no data) reach the caller, not the worker's handler
+            const processHere = () => {
+                try {
+                    this.processTimelineSync(buckets, operatorIds);
+                    resolve();
+                } catch (err) {
+                    reject(err);
+                }
+            };
             
             if (!worker) {
-                // Fallback to synchronous processing
-                this.processTimelineSync(buckets, operatorIds);
-                resolve();
+                processHere();
                 return;
             }
             
@@ -423,8 +430,7 @@ export const RaceLogic = {
             const timeoutId = setTimeout(() => {
                 if (!settle()) return;
                 console.warn('Race processor timeout, falling back to sync');
-                this.processTimelineSync(buckets, operatorIds);
-                resolve();
+                processHere();
             }, 30000); // 30 second timeout
             
             worker.onmessage = (e) => {
@@ -441,16 +447,14 @@ export const RaceLogic = {
                     resolve();
                 } else {
                     console.warn('Worker error, falling back to sync:', e.data.error);
-                    this.processTimelineSync(buckets, operatorIds);
-                    resolve();
+                    processHere();
                 }
             };
             
             worker.onerror = (error) => {
                 if (!settle()) return;
                 console.warn('Race Worker error, falling back to sync:', error);
-                this.processTimelineSync(buckets, operatorIds);
-                resolve();
+                processHere();
             };
             
             // Send data to worker

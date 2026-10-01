@@ -1,0 +1,3667 @@
+scalar BigInt
+scalar BigDecimal
+scalar Bytes
+scalar Int8
+scalar Timestamp
+enum OrderDirection { asc desc }
+enum _SubgraphErrorPolicy_ { allow deny }
+input Block_height { hash: Bytes number: Int number_gte: Int }
+input BlockChangedFilter { number_gte: Int! }
+type _Block_ { hash: Bytes number: Int! timestamp: Int parentHash: Bytes }
+type _Meta_ { block: _Block_! deployment: String! hasIndexingErrors: Boolean! }
+type StreamPermission {
+  id: ID!
+  userAddress: Bytes!
+  userId: Bytes!
+  stream: Stream
+  canEdit: Boolean
+  canDelete: Boolean
+  publishExpiration: BigInt
+  subscribeExpiration: BigInt
+  canGrant: Boolean
+}
+input StreamPermission_filter {
+  id: ID
+  id_not: ID
+  id_gt: ID
+  id_lt: ID
+  id_gte: ID
+  id_lte: ID
+  id_in: [ID!]
+  id_not_in: [ID!]
+  userAddress: Bytes
+  userAddress_not: Bytes
+  userAddress_gt: Bytes
+  userAddress_lt: Bytes
+  userAddress_gte: Bytes
+  userAddress_lte: Bytes
+  userAddress_in: [Bytes!]
+  userAddress_not_in: [Bytes!]
+  userAddress_contains: Bytes
+  userAddress_not_contains: Bytes
+  userId: Bytes
+  userId_not: Bytes
+  userId_gt: Bytes
+  userId_lt: Bytes
+  userId_gte: Bytes
+  userId_lte: Bytes
+  userId_in: [Bytes!]
+  userId_not_in: [Bytes!]
+  userId_contains: Bytes
+  userId_not_contains: Bytes
+  stream: String
+  stream_not: String
+  stream_gt: String
+  stream_lt: String
+  stream_gte: String
+  stream_lte: String
+  stream_in: [String!]
+  stream_not_in: [String!]
+  stream_contains: String
+  stream_contains_nocase: String
+  stream_not_contains: String
+  stream_not_contains_nocase: String
+  stream_starts_with: String
+  stream_starts_with_nocase: String
+  stream_not_starts_with: String
+  stream_not_starts_with_nocase: String
+  stream_ends_with: String
+  stream_ends_with_nocase: String
+  stream_not_ends_with: String
+  stream_not_ends_with_nocase: String
+  stream_: Stream_filter
+  canEdit: Boolean
+  canEdit_not: Boolean
+  canEdit_in: [Boolean!]
+  canEdit_not_in: [Boolean!]
+  canDelete: Boolean
+  canDelete_not: Boolean
+  canDelete_in: [Boolean!]
+  canDelete_not_in: [Boolean!]
+  publishExpiration: BigInt
+  publishExpiration_not: BigInt
+  publishExpiration_gt: BigInt
+  publishExpiration_lt: BigInt
+  publishExpiration_gte: BigInt
+  publishExpiration_lte: BigInt
+  publishExpiration_in: [BigInt!]
+  publishExpiration_not_in: [BigInt!]
+  subscribeExpiration: BigInt
+  subscribeExpiration_not: BigInt
+  subscribeExpiration_gt: BigInt
+  subscribeExpiration_lt: BigInt
+  subscribeExpiration_gte: BigInt
+  subscribeExpiration_lte: BigInt
+  subscribeExpiration_in: [BigInt!]
+  subscribeExpiration_not_in: [BigInt!]
+  canGrant: Boolean
+  canGrant_not: Boolean
+  canGrant_in: [Boolean!]
+  canGrant_not_in: [Boolean!]
+  _change_block: BlockChangedFilter
+  and: [StreamPermission_filter]
+  or: [StreamPermission_filter]
+}
+enum StreamPermission_orderBy {
+  id
+  userAddress
+  userId
+  stream
+  stream__id
+  stream__idAsString
+  stream__metadata
+  stream__createdAt
+  stream__updatedAt
+  canEdit
+  canDelete
+  publishExpiration
+  subscribeExpiration
+  canGrant
+}
+type Stream {
+  id: ID!
+  idAsString: String!
+  metadata: String!
+  permissions(skip: Int = 0, first: Int = 100, orderBy: StreamPermission_orderBy, orderDirection: OrderDirection, where: StreamPermission_filter): [StreamPermission!]
+  storageNodes(skip: Int = 0, first: Int = 100, orderBy: Node_orderBy, orderDirection: OrderDirection, where: Node_filter): [Node!]
+  createdAt: BigInt
+  updatedAt: BigInt
+  sponsorships(skip: Int = 0, first: Int = 100, orderBy: Sponsorship_orderBy, orderDirection: OrderDirection, where: Sponsorship_filter): [Sponsorship!]
+}
+input Stream_filter {
+  id: ID
+  id_not: ID
+  id_gt: ID
+  id_lt: ID
+  id_gte: ID
+  id_lte: ID
+  id_in: [ID!]
+  id_not_in: [ID!]
+  idAsString: String
+  idAsString_not: String
+  idAsString_gt: String
+  idAsString_lt: String
+  idAsString_gte: String
+  idAsString_lte: String
+  idAsString_in: [String!]
+  idAsString_not_in: [String!]
+  idAsString_contains: String
+  idAsString_contains_nocase: String
+  idAsString_not_contains: String
+  idAsString_not_contains_nocase: String
+  idAsString_starts_with: String
+  idAsString_starts_with_nocase: String
+  idAsString_not_starts_with: String
+  idAsString_not_starts_with_nocase: String
+  idAsString_ends_with: String
+  idAsString_ends_with_nocase: String
+  idAsString_not_ends_with: String
+  idAsString_not_ends_with_nocase: String
+  metadata: String
+  metadata_not: String
+  metadata_gt: String
+  metadata_lt: String
+  metadata_gte: String
+  metadata_lte: String
+  metadata_in: [String!]
+  metadata_not_in: [String!]
+  metadata_contains: String
+  metadata_contains_nocase: String
+  metadata_not_contains: String
+  metadata_not_contains_nocase: String
+  metadata_starts_with: String
+  metadata_starts_with_nocase: String
+  metadata_not_starts_with: String
+  metadata_not_starts_with_nocase: String
+  metadata_ends_with: String
+  metadata_ends_with_nocase: String
+  metadata_not_ends_with: String
+  metadata_not_ends_with_nocase: String
+  permissions_: StreamPermission_filter
+  storageNodes_: Node_filter
+  createdAt: BigInt
+  createdAt_not: BigInt
+  createdAt_gt: BigInt
+  createdAt_lt: BigInt
+  createdAt_gte: BigInt
+  createdAt_lte: BigInt
+  createdAt_in: [BigInt!]
+  createdAt_not_in: [BigInt!]
+  updatedAt: BigInt
+  updatedAt_not: BigInt
+  updatedAt_gt: BigInt
+  updatedAt_lt: BigInt
+  updatedAt_gte: BigInt
+  updatedAt_lte: BigInt
+  updatedAt_in: [BigInt!]
+  updatedAt_not_in: [BigInt!]
+  sponsorships_: Sponsorship_filter
+  _change_block: BlockChangedFilter
+  and: [Stream_filter]
+  or: [Stream_filter]
+}
+enum Stream_orderBy {
+  id
+  idAsString
+  metadata
+  permissions
+  storageNodes
+  createdAt
+  updatedAt
+  sponsorships
+}
+type Node {
+  id: ID!
+  metadata: String!
+  lastSeen: BigInt!
+  storedStreams(skip: Int = 0, first: Int = 100, orderBy: Stream_orderBy, orderDirection: OrderDirection, where: Stream_filter): [Stream!]
+  createdAt: BigInt
+}
+input Node_filter {
+  id: ID
+  id_not: ID
+  id_gt: ID
+  id_lt: ID
+  id_gte: ID
+  id_lte: ID
+  id_in: [ID!]
+  id_not_in: [ID!]
+  metadata: String
+  metadata_not: String
+  metadata_gt: String
+  metadata_lt: String
+  metadata_gte: String
+  metadata_lte: String
+  metadata_in: [String!]
+  metadata_not_in: [String!]
+  metadata_contains: String
+  metadata_contains_nocase: String
+  metadata_not_contains: String
+  metadata_not_contains_nocase: String
+  metadata_starts_with: String
+  metadata_starts_with_nocase: String
+  metadata_not_starts_with: String
+  metadata_not_starts_with_nocase: String
+  metadata_ends_with: String
+  metadata_ends_with_nocase: String
+  metadata_not_ends_with: String
+  metadata_not_ends_with_nocase: String
+  lastSeen: BigInt
+  lastSeen_not: BigInt
+  lastSeen_gt: BigInt
+  lastSeen_lt: BigInt
+  lastSeen_gte: BigInt
+  lastSeen_lte: BigInt
+  lastSeen_in: [BigInt!]
+  lastSeen_not_in: [BigInt!]
+  storedStreams: [String!]
+  storedStreams_not: [String!]
+  storedStreams_contains: [String!]
+  storedStreams_contains_nocase: [String!]
+  storedStreams_not_contains: [String!]
+  storedStreams_not_contains_nocase: [String!]
+  storedStreams_: Stream_filter
+  createdAt: BigInt
+  createdAt_not: BigInt
+  createdAt_gt: BigInt
+  createdAt_lt: BigInt
+  createdAt_gte: BigInt
+  createdAt_lte: BigInt
+  createdAt_in: [BigInt!]
+  createdAt_not_in: [BigInt!]
+  _change_block: BlockChangedFilter
+  and: [Node_filter]
+  or: [Node_filter]
+}
+enum Node_orderBy {
+  id
+  metadata
+  lastSeen
+  storedStreams
+  createdAt
+}
+type ProjectPermission {
+  id: ID!
+  userAddress: Bytes!
+  project: Project!
+  canBuy: Boolean
+  canDelete: Boolean
+  canEdit: Boolean
+  canGrant: Boolean
+}
+input ProjectPermission_filter {
+  id: ID
+  id_not: ID
+  id_gt: ID
+  id_lt: ID
+  id_gte: ID
+  id_lte: ID
+  id_in: [ID!]
+  id_not_in: [ID!]
+  userAddress: Bytes
+  userAddress_not: Bytes
+  userAddress_gt: Bytes
+  userAddress_lt: Bytes
+  userAddress_gte: Bytes
+  userAddress_lte: Bytes
+  userAddress_in: [Bytes!]
+  userAddress_not_in: [Bytes!]
+  userAddress_contains: Bytes
+  userAddress_not_contains: Bytes
+  project: String
+  project_not: String
+  project_gt: String
+  project_lt: String
+  project_gte: String
+  project_lte: String
+  project_in: [String!]
+  project_not_in: [String!]
+  project_contains: String
+  project_contains_nocase: String
+  project_not_contains: String
+  project_not_contains_nocase: String
+  project_starts_with: String
+  project_starts_with_nocase: String
+  project_not_starts_with: String
+  project_not_starts_with_nocase: String
+  project_ends_with: String
+  project_ends_with_nocase: String
+  project_not_ends_with: String
+  project_not_ends_with_nocase: String
+  project_: Project_filter
+  canBuy: Boolean
+  canBuy_not: Boolean
+  canBuy_in: [Boolean!]
+  canBuy_not_in: [Boolean!]
+  canDelete: Boolean
+  canDelete_not: Boolean
+  canDelete_in: [Boolean!]
+  canDelete_not_in: [Boolean!]
+  canEdit: Boolean
+  canEdit_not: Boolean
+  canEdit_in: [Boolean!]
+  canEdit_not_in: [Boolean!]
+  canGrant: Boolean
+  canGrant_not: Boolean
+  canGrant_in: [Boolean!]
+  canGrant_not_in: [Boolean!]
+  _change_block: BlockChangedFilter
+  and: [ProjectPermission_filter]
+  or: [ProjectPermission_filter]
+}
+enum ProjectPermission_orderBy {
+  id
+  userAddress
+  project
+  project__id
+  project__minimumSubscriptionSeconds
+  project__metadata
+  project__isDataUnion
+  project__createdAt
+  project__updatedAt
+  project__score
+  project__stakedWei
+  project__counter
+  canBuy
+  canDelete
+  canEdit
+  canGrant
+}
+type ProjectPaymentDetails {
+  id: ID!
+  project: Project!
+  domainId: BigInt
+  beneficiary: Bytes!
+  pricingTokenAddress: Bytes!
+  pricePerSecond: BigInt
+}
+input ProjectPaymentDetails_filter {
+  id: ID
+  id_not: ID
+  id_gt: ID
+  id_lt: ID
+  id_gte: ID
+  id_lte: ID
+  id_in: [ID!]
+  id_not_in: [ID!]
+  project: String
+  project_not: String
+  project_gt: String
+  project_lt: String
+  project_gte: String
+  project_lte: String
+  project_in: [String!]
+  project_not_in: [String!]
+  project_contains: String
+  project_contains_nocase: String
+  project_not_contains: String
+  project_not_contains_nocase: String
+  project_starts_with: String
+  project_starts_with_nocase: String
+  project_not_starts_with: String
+  project_not_starts_with_nocase: String
+  project_ends_with: String
+  project_ends_with_nocase: String
+  project_not_ends_with: String
+  project_not_ends_with_nocase: String
+  project_: Project_filter
+  domainId: BigInt
+  domainId_not: BigInt
+  domainId_gt: BigInt
+  domainId_lt: BigInt
+  domainId_gte: BigInt
+  domainId_lte: BigInt
+  domainId_in: [BigInt!]
+  domainId_not_in: [BigInt!]
+  beneficiary: Bytes
+  beneficiary_not: Bytes
+  beneficiary_gt: Bytes
+  beneficiary_lt: Bytes
+  beneficiary_gte: Bytes
+  beneficiary_lte: Bytes
+  beneficiary_in: [Bytes!]
+  beneficiary_not_in: [Bytes!]
+  beneficiary_contains: Bytes
+  beneficiary_not_contains: Bytes
+  pricingTokenAddress: Bytes
+  pricingTokenAddress_not: Bytes
+  pricingTokenAddress_gt: Bytes
+  pricingTokenAddress_lt: Bytes
+  pricingTokenAddress_gte: Bytes
+  pricingTokenAddress_lte: Bytes
+  pricingTokenAddress_in: [Bytes!]
+  pricingTokenAddress_not_in: [Bytes!]
+  pricingTokenAddress_contains: Bytes
+  pricingTokenAddress_not_contains: Bytes
+  pricePerSecond: BigInt
+  pricePerSecond_not: BigInt
+  pricePerSecond_gt: BigInt
+  pricePerSecond_lt: BigInt
+  pricePerSecond_gte: BigInt
+  pricePerSecond_lte: BigInt
+  pricePerSecond_in: [BigInt!]
+  pricePerSecond_not_in: [BigInt!]
+  _change_block: BlockChangedFilter
+  and: [ProjectPaymentDetails_filter]
+  or: [ProjectPaymentDetails_filter]
+}
+enum ProjectPaymentDetails_orderBy {
+  id
+  project
+  project__id
+  project__minimumSubscriptionSeconds
+  project__metadata
+  project__isDataUnion
+  project__createdAt
+  project__updatedAt
+  project__score
+  project__stakedWei
+  project__counter
+  domainId
+  beneficiary
+  pricingTokenAddress
+  pricePerSecond
+}
+type ProjectSubscription {
+  id: ID!
+  project: Project!
+  userAddress: Bytes!
+  endTimestamp: BigInt
+}
+input ProjectSubscription_filter {
+  id: ID
+  id_not: ID
+  id_gt: ID
+  id_lt: ID
+  id_gte: ID
+  id_lte: ID
+  id_in: [ID!]
+  id_not_in: [ID!]
+  project: String
+  project_not: String
+  project_gt: String
+  project_lt: String
+  project_gte: String
+  project_lte: String
+  project_in: [String!]
+  project_not_in: [String!]
+  project_contains: String
+  project_contains_nocase: String
+  project_not_contains: String
+  project_not_contains_nocase: String
+  project_starts_with: String
+  project_starts_with_nocase: String
+  project_not_starts_with: String
+  project_not_starts_with_nocase: String
+  project_ends_with: String
+  project_ends_with_nocase: String
+  project_not_ends_with: String
+  project_not_ends_with_nocase: String
+  project_: Project_filter
+  userAddress: Bytes
+  userAddress_not: Bytes
+  userAddress_gt: Bytes
+  userAddress_lt: Bytes
+  userAddress_gte: Bytes
+  userAddress_lte: Bytes
+  userAddress_in: [Bytes!]
+  userAddress_not_in: [Bytes!]
+  userAddress_contains: Bytes
+  userAddress_not_contains: Bytes
+  endTimestamp: BigInt
+  endTimestamp_not: BigInt
+  endTimestamp_gt: BigInt
+  endTimestamp_lt: BigInt
+  endTimestamp_gte: BigInt
+  endTimestamp_lte: BigInt
+  endTimestamp_in: [BigInt!]
+  endTimestamp_not_in: [BigInt!]
+  _change_block: BlockChangedFilter
+  and: [ProjectSubscription_filter]
+  or: [ProjectSubscription_filter]
+}
+enum ProjectSubscription_orderBy {
+  id
+  project
+  project__id
+  project__minimumSubscriptionSeconds
+  project__metadata
+  project__isDataUnion
+  project__createdAt
+  project__updatedAt
+  project__score
+  project__stakedWei
+  project__counter
+  userAddress
+  endTimestamp
+}
+type Project {
+  id: ID!
+  domainIds: [BigInt!]!
+  paymentDetails(skip: Int = 0, first: Int = 100, orderBy: ProjectPaymentDetails_orderBy, orderDirection: OrderDirection, where: ProjectPaymentDetails_filter): [ProjectPaymentDetails!]!
+  minimumSubscriptionSeconds: BigInt!
+  subscriptions(skip: Int = 0, first: Int = 100, orderBy: ProjectSubscription_orderBy, orderDirection: OrderDirection, where: ProjectSubscription_filter): [ProjectSubscription!]!
+  metadata: String!
+  isDataUnion: Boolean
+  streams: [String!]!
+  permissions(skip: Int = 0, first: Int = 100, orderBy: ProjectPermission_orderBy, orderDirection: OrderDirection, where: ProjectPermission_filter): [ProjectPermission!]!
+  createdAt: BigInt
+  updatedAt: BigInt
+  purchases(skip: Int = 0, first: Int = 100, orderBy: ProjectPurchase_orderBy, orderDirection: OrderDirection, where: ProjectPurchase_filter): [ProjectPurchase!]!
+  score: BigInt!
+  stakedWei: BigInt!
+  counter: Int
+}
+input Project_filter {
+  id: ID
+  id_not: ID
+  id_gt: ID
+  id_lt: ID
+  id_gte: ID
+  id_lte: ID
+  id_in: [ID!]
+  id_not_in: [ID!]
+  domainIds: [BigInt!]
+  domainIds_not: [BigInt!]
+  domainIds_contains: [BigInt!]
+  domainIds_contains_nocase: [BigInt!]
+  domainIds_not_contains: [BigInt!]
+  domainIds_not_contains_nocase: [BigInt!]
+  paymentDetails: [String!]
+  paymentDetails_not: [String!]
+  paymentDetails_contains: [String!]
+  paymentDetails_contains_nocase: [String!]
+  paymentDetails_not_contains: [String!]
+  paymentDetails_not_contains_nocase: [String!]
+  paymentDetails_: ProjectPaymentDetails_filter
+  minimumSubscriptionSeconds: BigInt
+  minimumSubscriptionSeconds_not: BigInt
+  minimumSubscriptionSeconds_gt: BigInt
+  minimumSubscriptionSeconds_lt: BigInt
+  minimumSubscriptionSeconds_gte: BigInt
+  minimumSubscriptionSeconds_lte: BigInt
+  minimumSubscriptionSeconds_in: [BigInt!]
+  minimumSubscriptionSeconds_not_in: [BigInt!]
+  subscriptions: [String!]
+  subscriptions_not: [String!]
+  subscriptions_contains: [String!]
+  subscriptions_contains_nocase: [String!]
+  subscriptions_not_contains: [String!]
+  subscriptions_not_contains_nocase: [String!]
+  subscriptions_: ProjectSubscription_filter
+  metadata: String
+  metadata_not: String
+  metadata_gt: String
+  metadata_lt: String
+  metadata_gte: String
+  metadata_lte: String
+  metadata_in: [String!]
+  metadata_not_in: [String!]
+  metadata_contains: String
+  metadata_contains_nocase: String
+  metadata_not_contains: String
+  metadata_not_contains_nocase: String
+  metadata_starts_with: String
+  metadata_starts_with_nocase: String
+  metadata_not_starts_with: String
+  metadata_not_starts_with_nocase: String
+  metadata_ends_with: String
+  metadata_ends_with_nocase: String
+  metadata_not_ends_with: String
+  metadata_not_ends_with_nocase: String
+  isDataUnion: Boolean
+  isDataUnion_not: Boolean
+  isDataUnion_in: [Boolean!]
+  isDataUnion_not_in: [Boolean!]
+  streams: [String!]
+  streams_not: [String!]
+  streams_contains: [String!]
+  streams_contains_nocase: [String!]
+  streams_not_contains: [String!]
+  streams_not_contains_nocase: [String!]
+  permissions: [String!]
+  permissions_not: [String!]
+  permissions_contains: [String!]
+  permissions_contains_nocase: [String!]
+  permissions_not_contains: [String!]
+  permissions_not_contains_nocase: [String!]
+  permissions_: ProjectPermission_filter
+  createdAt: BigInt
+  createdAt_not: BigInt
+  createdAt_gt: BigInt
+  createdAt_lt: BigInt
+  createdAt_gte: BigInt
+  createdAt_lte: BigInt
+  createdAt_in: [BigInt!]
+  createdAt_not_in: [BigInt!]
+  updatedAt: BigInt
+  updatedAt_not: BigInt
+  updatedAt_gt: BigInt
+  updatedAt_lt: BigInt
+  updatedAt_gte: BigInt
+  updatedAt_lte: BigInt
+  updatedAt_in: [BigInt!]
+  updatedAt_not_in: [BigInt!]
+  purchases: [String!]
+  purchases_not: [String!]
+  purchases_contains: [String!]
+  purchases_contains_nocase: [String!]
+  purchases_not_contains: [String!]
+  purchases_not_contains_nocase: [String!]
+  purchases_: ProjectPurchase_filter
+  score: BigInt
+  score_not: BigInt
+  score_gt: BigInt
+  score_lt: BigInt
+  score_gte: BigInt
+  score_lte: BigInt
+  score_in: [BigInt!]
+  score_not_in: [BigInt!]
+  stakedWei: BigInt
+  stakedWei_not: BigInt
+  stakedWei_gt: BigInt
+  stakedWei_lt: BigInt
+  stakedWei_gte: BigInt
+  stakedWei_lte: BigInt
+  stakedWei_in: [BigInt!]
+  stakedWei_not_in: [BigInt!]
+  counter: Int
+  counter_not: Int
+  counter_gt: Int
+  counter_lt: Int
+  counter_gte: Int
+  counter_lte: Int
+  counter_in: [Int!]
+  counter_not_in: [Int!]
+  _change_block: BlockChangedFilter
+  and: [Project_filter]
+  or: [Project_filter]
+}
+enum Project_orderBy {
+  id
+  domainIds
+  paymentDetails
+  minimumSubscriptionSeconds
+  subscriptions
+  metadata
+  isDataUnion
+  streams
+  permissions
+  createdAt
+  updatedAt
+  purchases
+  score
+  stakedWei
+  counter
+}
+type ProjectPurchase {
+  id: ID!
+  project: Project!
+  subscriber: Bytes!
+  subscriptionSeconds: BigInt!
+  price: BigInt!
+  fee: BigInt!
+  purchasedAt: BigInt
+}
+input ProjectPurchase_filter {
+  id: ID
+  id_not: ID
+  id_gt: ID
+  id_lt: ID
+  id_gte: ID
+  id_lte: ID
+  id_in: [ID!]
+  id_not_in: [ID!]
+  project: String
+  project_not: String
+  project_gt: String
+  project_lt: String
+  project_gte: String
+  project_lte: String
+  project_in: [String!]
+  project_not_in: [String!]
+  project_contains: String
+  project_contains_nocase: String
+  project_not_contains: String
+  project_not_contains_nocase: String
+  project_starts_with: String
+  project_starts_with_nocase: String
+  project_not_starts_with: String
+  project_not_starts_with_nocase: String
+  project_ends_with: String
+  project_ends_with_nocase: String
+  project_not_ends_with: String
+  project_not_ends_with_nocase: String
+  project_: Project_filter
+  subscriber: Bytes
+  subscriber_not: Bytes
+  subscriber_gt: Bytes
+  subscriber_lt: Bytes
+  subscriber_gte: Bytes
+  subscriber_lte: Bytes
+  subscriber_in: [Bytes!]
+  subscriber_not_in: [Bytes!]
+  subscriber_contains: Bytes
+  subscriber_not_contains: Bytes
+  subscriptionSeconds: BigInt
+  subscriptionSeconds_not: BigInt
+  subscriptionSeconds_gt: BigInt
+  subscriptionSeconds_lt: BigInt
+  subscriptionSeconds_gte: BigInt
+  subscriptionSeconds_lte: BigInt
+  subscriptionSeconds_in: [BigInt!]
+  subscriptionSeconds_not_in: [BigInt!]
+  price: BigInt
+  price_not: BigInt
+  price_gt: BigInt
+  price_lt: BigInt
+  price_gte: BigInt
+  price_lte: BigInt
+  price_in: [BigInt!]
+  price_not_in: [BigInt!]
+  fee: BigInt
+  fee_not: BigInt
+  fee_gt: BigInt
+  fee_lt: BigInt
+  fee_gte: BigInt
+  fee_lte: BigInt
+  fee_in: [BigInt!]
+  fee_not_in: [BigInt!]
+  purchasedAt: BigInt
+  purchasedAt_not: BigInt
+  purchasedAt_gt: BigInt
+  purchasedAt_lt: BigInt
+  purchasedAt_gte: BigInt
+  purchasedAt_lte: BigInt
+  purchasedAt_in: [BigInt!]
+  purchasedAt_not_in: [BigInt!]
+  _change_block: BlockChangedFilter
+  and: [ProjectPurchase_filter]
+  or: [ProjectPurchase_filter]
+}
+enum ProjectPurchase_orderBy {
+  id
+  project
+  project__id
+  project__minimumSubscriptionSeconds
+  project__metadata
+  project__isDataUnion
+  project__createdAt
+  project__updatedAt
+  project__score
+  project__stakedWei
+  project__counter
+  subscriber
+  subscriptionSeconds
+  price
+  fee
+  purchasedAt
+}
+type ProjectStakeByUser {
+  id: ID!
+  project: Project!
+  user: Bytes!
+  userStake: BigInt!
+}
+input ProjectStakeByUser_filter {
+  id: ID
+  id_not: ID
+  id_gt: ID
+  id_lt: ID
+  id_gte: ID
+  id_lte: ID
+  id_in: [ID!]
+  id_not_in: [ID!]
+  project: String
+  project_not: String
+  project_gt: String
+  project_lt: String
+  project_gte: String
+  project_lte: String
+  project_in: [String!]
+  project_not_in: [String!]
+  project_contains: String
+  project_contains_nocase: String
+  project_not_contains: String
+  project_not_contains_nocase: String
+  project_starts_with: String
+  project_starts_with_nocase: String
+  project_not_starts_with: String
+  project_not_starts_with_nocase: String
+  project_ends_with: String
+  project_ends_with_nocase: String
+  project_not_ends_with: String
+  project_not_ends_with_nocase: String
+  project_: Project_filter
+  user: Bytes
+  user_not: Bytes
+  user_gt: Bytes
+  user_lt: Bytes
+  user_gte: Bytes
+  user_lte: Bytes
+  user_in: [Bytes!]
+  user_not_in: [Bytes!]
+  user_contains: Bytes
+  user_not_contains: Bytes
+  userStake: BigInt
+  userStake_not: BigInt
+  userStake_gt: BigInt
+  userStake_lt: BigInt
+  userStake_gte: BigInt
+  userStake_lte: BigInt
+  userStake_in: [BigInt!]
+  userStake_not_in: [BigInt!]
+  _change_block: BlockChangedFilter
+  and: [ProjectStakeByUser_filter]
+  or: [ProjectStakeByUser_filter]
+}
+enum ProjectStakeByUser_orderBy {
+  id
+  project
+  project__id
+  project__minimumSubscriptionSeconds
+  project__metadata
+  project__isDataUnion
+  project__createdAt
+  project__updatedAt
+  project__score
+  project__stakedWei
+  project__counter
+  user
+  userStake
+}
+type ProjectStakingDayBucket {
+  id: ID!
+  project: Project!
+  date: BigInt!
+  stakeAtStart: BigInt!
+  stakeChange: BigInt!
+  stakingsWei: BigInt!
+  unstakingsWei: BigInt!
+}
+input ProjectStakingDayBucket_filter {
+  id: ID
+  id_not: ID
+  id_gt: ID
+  id_lt: ID
+  id_gte: ID
+  id_lte: ID
+  id_in: [ID!]
+  id_not_in: [ID!]
+  project: String
+  project_not: String
+  project_gt: String
+  project_lt: String
+  project_gte: String
+  project_lte: String
+  project_in: [String!]
+  project_not_in: [String!]
+  project_contains: String
+  project_contains_nocase: String
+  project_not_contains: String
+  project_not_contains_nocase: String
+  project_starts_with: String
+  project_starts_with_nocase: String
+  project_not_starts_with: String
+  project_not_starts_with_nocase: String
+  project_ends_with: String
+  project_ends_with_nocase: String
+  project_not_ends_with: String
+  project_not_ends_with_nocase: String
+  project_: Project_filter
+  date: BigInt
+  date_not: BigInt
+  date_gt: BigInt
+  date_lt: BigInt
+  date_gte: BigInt
+  date_lte: BigInt
+  date_in: [BigInt!]
+  date_not_in: [BigInt!]
+  stakeAtStart: BigInt
+  stakeAtStart_not: BigInt
+  stakeAtStart_gt: BigInt
+  stakeAtStart_lt: BigInt
+  stakeAtStart_gte: BigInt
+  stakeAtStart_lte: BigInt
+  stakeAtStart_in: [BigInt!]
+  stakeAtStart_not_in: [BigInt!]
+  stakeChange: BigInt
+  stakeChange_not: BigInt
+  stakeChange_gt: BigInt
+  stakeChange_lt: BigInt
+  stakeChange_gte: BigInt
+  stakeChange_lte: BigInt
+  stakeChange_in: [BigInt!]
+  stakeChange_not_in: [BigInt!]
+  stakingsWei: BigInt
+  stakingsWei_not: BigInt
+  stakingsWei_gt: BigInt
+  stakingsWei_lt: BigInt
+  stakingsWei_gte: BigInt
+  stakingsWei_lte: BigInt
+  stakingsWei_in: [BigInt!]
+  stakingsWei_not_in: [BigInt!]
+  unstakingsWei: BigInt
+  unstakingsWei_not: BigInt
+  unstakingsWei_gt: BigInt
+  unstakingsWei_lt: BigInt
+  unstakingsWei_gte: BigInt
+  unstakingsWei_lte: BigInt
+  unstakingsWei_in: [BigInt!]
+  unstakingsWei_not_in: [BigInt!]
+  _change_block: BlockChangedFilter
+  and: [ProjectStakingDayBucket_filter]
+  or: [ProjectStakingDayBucket_filter]
+}
+enum ProjectStakingDayBucket_orderBy {
+  id
+  project
+  project__id
+  project__minimumSubscriptionSeconds
+  project__metadata
+  project__isDataUnion
+  project__createdAt
+  project__updatedAt
+  project__score
+  project__stakedWei
+  project__counter
+  date
+  stakeAtStart
+  stakeChange
+  stakingsWei
+  unstakingsWei
+}
+type Network {
+  id: ID!
+  totalStake: BigInt!
+  totalDelegated: BigInt!
+  totalUndelegated: BigInt!
+  sponsorshipsCount: Int!
+  fundedSponsorshipsCount: Int!
+  operatorsCount: Int!
+  eligibleVotersCount: Int!
+  slashingFraction: BigInt!
+  earlyLeaverPenaltyWei: BigInt!
+  minimumDelegationWei: BigInt!
+  minimumSelfDelegationFraction: BigInt!
+  maxPenaltyPeriodSeconds: Int!
+  maxQueueSeconds: Int!
+  maxAllowedEarningsFraction: BigInt!
+  fishermanRewardFraction: BigInt!
+  protocolFeeFraction: BigInt!
+  protocolFeeBeneficiary: String!
+  minEligibleVoterAge: Int!
+  minEligibleVoterFractionOfAllStake: BigInt!
+  flagReviewerCount: Int!
+  flagReviewerRewardWei: BigInt!
+  flaggerRewardWei: BigInt!
+  flagReviewerSelectionIterations: Int!
+  flagStakeWei: BigInt!
+  reviewPeriodSeconds: Int!
+  votingPeriodSeconds: Int!
+  flagProtectionSeconds: Int!
+  randomOracle: String
+  trustedForwarder: String
+  sponsorshipFactory: String
+  operatorFactory: String
+  voterRegistry: String
+  operatorContractOnlyJoinPolicy: String
+  streamRegistryAddress: String
+  minimumDelegationSeconds: Int!
+  minimumStakeWei: BigInt!
+}
+input Network_filter {
+  id: ID
+  id_not: ID
+  id_gt: ID
+  id_lt: ID
+  id_gte: ID
+  id_lte: ID
+  id_in: [ID!]
+  id_not_in: [ID!]
+  totalStake: BigInt
+  totalStake_not: BigInt
+  totalStake_gt: BigInt
+  totalStake_lt: BigInt
+  totalStake_gte: BigInt
+  totalStake_lte: BigInt
+  totalStake_in: [BigInt!]
+  totalStake_not_in: [BigInt!]
+  totalDelegated: BigInt
+  totalDelegated_not: BigInt
+  totalDelegated_gt: BigInt
+  totalDelegated_lt: BigInt
+  totalDelegated_gte: BigInt
+  totalDelegated_lte: BigInt
+  totalDelegated_in: [BigInt!]
+  totalDelegated_not_in: [BigInt!]
+  totalUndelegated: BigInt
+  totalUndelegated_not: BigInt
+  totalUndelegated_gt: BigInt
+  totalUndelegated_lt: BigInt
+  totalUndelegated_gte: BigInt
+  totalUndelegated_lte: BigInt
+  totalUndelegated_in: [BigInt!]
+  totalUndelegated_not_in: [BigInt!]
+  sponsorshipsCount: Int
+  sponsorshipsCount_not: Int
+  sponsorshipsCount_gt: Int
+  sponsorshipsCount_lt: Int
+  sponsorshipsCount_gte: Int
+  sponsorshipsCount_lte: Int
+  sponsorshipsCount_in: [Int!]
+  sponsorshipsCount_not_in: [Int!]
+  fundedSponsorshipsCount: Int
+  fundedSponsorshipsCount_not: Int
+  fundedSponsorshipsCount_gt: Int
+  fundedSponsorshipsCount_lt: Int
+  fundedSponsorshipsCount_gte: Int
+  fundedSponsorshipsCount_lte: Int
+  fundedSponsorshipsCount_in: [Int!]
+  fundedSponsorshipsCount_not_in: [Int!]
+  operatorsCount: Int
+  operatorsCount_not: Int
+  operatorsCount_gt: Int
+  operatorsCount_lt: Int
+  operatorsCount_gte: Int
+  operatorsCount_lte: Int
+  operatorsCount_in: [Int!]
+  operatorsCount_not_in: [Int!]
+  eligibleVotersCount: Int
+  eligibleVotersCount_not: Int
+  eligibleVotersCount_gt: Int
+  eligibleVotersCount_lt: Int
+  eligibleVotersCount_gte: Int
+  eligibleVotersCount_lte: Int
+  eligibleVotersCount_in: [Int!]
+  eligibleVotersCount_not_in: [Int!]
+  slashingFraction: BigInt
+  slashingFraction_not: BigInt
+  slashingFraction_gt: BigInt
+  slashingFraction_lt: BigInt
+  slashingFraction_gte: BigInt
+  slashingFraction_lte: BigInt
+  slashingFraction_in: [BigInt!]
+  slashingFraction_not_in: [BigInt!]
+  earlyLeaverPenaltyWei: BigInt
+  earlyLeaverPenaltyWei_not: BigInt
+  earlyLeaverPenaltyWei_gt: BigInt
+  earlyLeaverPenaltyWei_lt: BigInt
+  earlyLeaverPenaltyWei_gte: BigInt
+  earlyLeaverPenaltyWei_lte: BigInt
+  earlyLeaverPenaltyWei_in: [BigInt!]
+  earlyLeaverPenaltyWei_not_in: [BigInt!]
+  minimumDelegationWei: BigInt
+  minimumDelegationWei_not: BigInt
+  minimumDelegationWei_gt: BigInt
+  minimumDelegationWei_lt: BigInt
+  minimumDelegationWei_gte: BigInt
+  minimumDelegationWei_lte: BigInt
+  minimumDelegationWei_in: [BigInt!]
+  minimumDelegationWei_not_in: [BigInt!]
+  minimumSelfDelegationFraction: BigInt
+  minimumSelfDelegationFraction_not: BigInt
+  minimumSelfDelegationFraction_gt: BigInt
+  minimumSelfDelegationFraction_lt: BigInt
+  minimumSelfDelegationFraction_gte: BigInt
+  minimumSelfDelegationFraction_lte: BigInt
+  minimumSelfDelegationFraction_in: [BigInt!]
+  minimumSelfDelegationFraction_not_in: [BigInt!]
+  maxPenaltyPeriodSeconds: Int
+  maxPenaltyPeriodSeconds_not: Int
+  maxPenaltyPeriodSeconds_gt: Int
+  maxPenaltyPeriodSeconds_lt: Int
+  maxPenaltyPeriodSeconds_gte: Int
+  maxPenaltyPeriodSeconds_lte: Int
+  maxPenaltyPeriodSeconds_in: [Int!]
+  maxPenaltyPeriodSeconds_not_in: [Int!]
+  maxQueueSeconds: Int
+  maxQueueSeconds_not: Int
+  maxQueueSeconds_gt: Int
+  maxQueueSeconds_lt: Int
+  maxQueueSeconds_gte: Int
+  maxQueueSeconds_lte: Int
+  maxQueueSeconds_in: [Int!]
+  maxQueueSeconds_not_in: [Int!]
+  maxAllowedEarningsFraction: BigInt
+  maxAllowedEarningsFraction_not: BigInt
+  maxAllowedEarningsFraction_gt: BigInt
+  maxAllowedEarningsFraction_lt: BigInt
+  maxAllowedEarningsFraction_gte: BigInt
+  maxAllowedEarningsFraction_lte: BigInt
+  maxAllowedEarningsFraction_in: [BigInt!]
+  maxAllowedEarningsFraction_not_in: [BigInt!]
+  fishermanRewardFraction: BigInt
+  fishermanRewardFraction_not: BigInt
+  fishermanRewardFraction_gt: BigInt
+  fishermanRewardFraction_lt: BigInt
+  fishermanRewardFraction_gte: BigInt
+  fishermanRewardFraction_lte: BigInt
+  fishermanRewardFraction_in: [BigInt!]
+  fishermanRewardFraction_not_in: [BigInt!]
+  protocolFeeFraction: BigInt
+  protocolFeeFraction_not: BigInt
+  protocolFeeFraction_gt: BigInt
+  protocolFeeFraction_lt: BigInt
+  protocolFeeFraction_gte: BigInt
+  protocolFeeFraction_lte: BigInt
+  protocolFeeFraction_in: [BigInt!]
+  protocolFeeFraction_not_in: [BigInt!]
+  protocolFeeBeneficiary: String
+  protocolFeeBeneficiary_not: String
+  protocolFeeBeneficiary_gt: String
+  protocolFeeBeneficiary_lt: String
+  protocolFeeBeneficiary_gte: String
+  protocolFeeBeneficiary_lte: String
+  protocolFeeBeneficiary_in: [String!]
+  protocolFeeBeneficiary_not_in: [String!]
+  protocolFeeBeneficiary_contains: String
+  protocolFeeBeneficiary_contains_nocase: String
+  protocolFeeBeneficiary_not_contains: String
+  protocolFeeBeneficiary_not_contains_nocase: String
+  protocolFeeBeneficiary_starts_with: String
+  protocolFeeBeneficiary_starts_with_nocase: String
+  protocolFeeBeneficiary_not_starts_with: String
+  protocolFeeBeneficiary_not_starts_with_nocase: String
+  protocolFeeBeneficiary_ends_with: String
+  protocolFeeBeneficiary_ends_with_nocase: String
+  protocolFeeBeneficiary_not_ends_with: String
+  protocolFeeBeneficiary_not_ends_with_nocase: String
+  minEligibleVoterAge: Int
+  minEligibleVoterAge_not: Int
+  minEligibleVoterAge_gt: Int
+  minEligibleVoterAge_lt: Int
+  minEligibleVoterAge_gte: Int
+  minEligibleVoterAge_lte: Int
+  minEligibleVoterAge_in: [Int!]
+  minEligibleVoterAge_not_in: [Int!]
+  minEligibleVoterFractionOfAllStake: BigInt
+  minEligibleVoterFractionOfAllStake_not: BigInt
+  minEligibleVoterFractionOfAllStake_gt: BigInt
+  minEligibleVoterFractionOfAllStake_lt: BigInt
+  minEligibleVoterFractionOfAllStake_gte: BigInt
+  minEligibleVoterFractionOfAllStake_lte: BigInt
+  minEligibleVoterFractionOfAllStake_in: [BigInt!]
+  minEligibleVoterFractionOfAllStake_not_in: [BigInt!]
+  flagReviewerCount: Int
+  flagReviewerCount_not: Int
+  flagReviewerCount_gt: Int
+  flagReviewerCount_lt: Int
+  flagReviewerCount_gte: Int
+  flagReviewerCount_lte: Int
+  flagReviewerCount_in: [Int!]
+  flagReviewerCount_not_in: [Int!]
+  flagReviewerRewardWei: BigInt
+  flagReviewerRewardWei_not: BigInt
+  flagReviewerRewardWei_gt: BigInt
+  flagReviewerRewardWei_lt: BigInt
+  flagReviewerRewardWei_gte: BigInt
+  flagReviewerRewardWei_lte: BigInt
+  flagReviewerRewardWei_in: [BigInt!]
+  flagReviewerRewardWei_not_in: [BigInt!]
+  flaggerRewardWei: BigInt
+  flaggerRewardWei_not: BigInt
+  flaggerRewardWei_gt: BigInt
+  flaggerRewardWei_lt: BigInt
+  flaggerRewardWei_gte: BigInt
+  flaggerRewardWei_lte: BigInt
+  flaggerRewardWei_in: [BigInt!]
+  flaggerRewardWei_not_in: [BigInt!]
+  flagReviewerSelectionIterations: Int
+  flagReviewerSelectionIterations_not: Int
+  flagReviewerSelectionIterations_gt: Int
+  flagReviewerSelectionIterations_lt: Int
+  flagReviewerSelectionIterations_gte: Int
+  flagReviewerSelectionIterations_lte: Int
+  flagReviewerSelectionIterations_in: [Int!]
+  flagReviewerSelectionIterations_not_in: [Int!]
+  flagStakeWei: BigInt
+  flagStakeWei_not: BigInt
+  flagStakeWei_gt: BigInt
+  flagStakeWei_lt: BigInt
+  flagStakeWei_gte: BigInt
+  flagStakeWei_lte: BigInt
+  flagStakeWei_in: [BigInt!]
+  flagStakeWei_not_in: [BigInt!]
+  reviewPeriodSeconds: Int
+  reviewPeriodSeconds_not: Int
+  reviewPeriodSeconds_gt: Int
+  reviewPeriodSeconds_lt: Int
+  reviewPeriodSeconds_gte: Int
+  reviewPeriodSeconds_lte: Int
+  reviewPeriodSeconds_in: [Int!]
+  reviewPeriodSeconds_not_in: [Int!]
+  votingPeriodSeconds: Int
+  votingPeriodSeconds_not: Int
+  votingPeriodSeconds_gt: Int
+  votingPeriodSeconds_lt: Int
+  votingPeriodSeconds_gte: Int
+  votingPeriodSeconds_lte: Int
+  votingPeriodSeconds_in: [Int!]
+  votingPeriodSeconds_not_in: [Int!]
+  flagProtectionSeconds: Int
+  flagProtectionSeconds_not: Int
+  flagProtectionSeconds_gt: Int
+  flagProtectionSeconds_lt: Int
+  flagProtectionSeconds_gte: Int
+  flagProtectionSeconds_lte: Int
+  flagProtectionSeconds_in: [Int!]
+  flagProtectionSeconds_not_in: [Int!]
+  randomOracle: String
+  randomOracle_not: String
+  randomOracle_gt: String
+  randomOracle_lt: String
+  randomOracle_gte: String
+  randomOracle_lte: String
+  randomOracle_in: [String!]
+  randomOracle_not_in: [String!]
+  randomOracle_contains: String
+  randomOracle_contains_nocase: String
+  randomOracle_not_contains: String
+  randomOracle_not_contains_nocase: String
+  randomOracle_starts_with: String
+  randomOracle_starts_with_nocase: String
+  randomOracle_not_starts_with: String
+  randomOracle_not_starts_with_nocase: String
+  randomOracle_ends_with: String
+  randomOracle_ends_with_nocase: String
+  randomOracle_not_ends_with: String
+  randomOracle_not_ends_with_nocase: String
+  trustedForwarder: String
+  trustedForwarder_not: String
+  trustedForwarder_gt: String
+  trustedForwarder_lt: String
+  trustedForwarder_gte: String
+  trustedForwarder_lte: String
+  trustedForwarder_in: [String!]
+  trustedForwarder_not_in: [String!]
+  trustedForwarder_contains: String
+  trustedForwarder_contains_nocase: String
+  trustedForwarder_not_contains: String
+  trustedForwarder_not_contains_nocase: String
+  trustedForwarder_starts_with: String
+  trustedForwarder_starts_with_nocase: String
+  trustedForwarder_not_starts_with: String
+  trustedForwarder_not_starts_with_nocase: String
+  trustedForwarder_ends_with: String
+  trustedForwarder_ends_with_nocase: String
+  trustedForwarder_not_ends_with: String
+  trustedForwarder_not_ends_with_nocase: String
+  sponsorshipFactory: String
+  sponsorshipFactory_not: String
+  sponsorshipFactory_gt: String
+  sponsorshipFactory_lt: String
+  sponsorshipFactory_gte: String
+  sponsorshipFactory_lte: String
+  sponsorshipFactory_in: [String!]
+  sponsorshipFactory_not_in: [String!]
+  sponsorshipFactory_contains: String
+  sponsorshipFactory_contains_nocase: String
+  sponsorshipFactory_not_contains: String
+  sponsorshipFactory_not_contains_nocase: String
+  sponsorshipFactory_starts_with: String
+  sponsorshipFactory_starts_with_nocase: String
+  sponsorshipFactory_not_starts_with: String
+  sponsorshipFactory_not_starts_with_nocase: String
+  sponsorshipFactory_ends_with: String
+  sponsorshipFactory_ends_with_nocase: String
+  sponsorshipFactory_not_ends_with: String
+  sponsorshipFactory_not_ends_with_nocase: String
+  operatorFactory: String
+  operatorFactory_not: String
+  operatorFactory_gt: String
+  operatorFactory_lt: String
+  operatorFactory_gte: String
+  operatorFactory_lte: String
+  operatorFactory_in: [String!]
+  operatorFactory_not_in: [String!]
+  operatorFactory_contains: String
+  operatorFactory_contains_nocase: String
+  operatorFactory_not_contains: String
+  operatorFactory_not_contains_nocase: String
+  operatorFactory_starts_with: String
+  operatorFactory_starts_with_nocase: String
+  operatorFactory_not_starts_with: String
+  operatorFactory_not_starts_with_nocase: String
+  operatorFactory_ends_with: String
+  operatorFactory_ends_with_nocase: String
+  operatorFactory_not_ends_with: String
+  operatorFactory_not_ends_with_nocase: String
+  voterRegistry: String
+  voterRegistry_not: String
+  voterRegistry_gt: String
+  voterRegistry_lt: String
+  voterRegistry_gte: String
+  voterRegistry_lte: String
+  voterRegistry_in: [String!]
+  voterRegistry_not_in: [String!]
+  voterRegistry_contains: String
+  voterRegistry_contains_nocase: String
+  voterRegistry_not_contains: String
+  voterRegistry_not_contains_nocase: String
+  voterRegistry_starts_with: String
+  voterRegistry_starts_with_nocase: String
+  voterRegistry_not_starts_with: String
+  voterRegistry_not_starts_with_nocase: String
+  voterRegistry_ends_with: String
+  voterRegistry_ends_with_nocase: String
+  voterRegistry_not_ends_with: String
+  voterRegistry_not_ends_with_nocase: String
+  operatorContractOnlyJoinPolicy: String
+  operatorContractOnlyJoinPolicy_not: String
+  operatorContractOnlyJoinPolicy_gt: String
+  operatorContractOnlyJoinPolicy_lt: String
+  operatorContractOnlyJoinPolicy_gte: String
+  operatorContractOnlyJoinPolicy_lte: String
+  operatorContractOnlyJoinPolicy_in: [String!]
+  operatorContractOnlyJoinPolicy_not_in: [String!]
+  operatorContractOnlyJoinPolicy_contains: String
+  operatorContractOnlyJoinPolicy_contains_nocase: String
+  operatorContractOnlyJoinPolicy_not_contains: String
+  operatorContractOnlyJoinPolicy_not_contains_nocase: String
+  operatorContractOnlyJoinPolicy_starts_with: String
+  operatorContractOnlyJoinPolicy_starts_with_nocase: String
+  operatorContractOnlyJoinPolicy_not_starts_with: String
+  operatorContractOnlyJoinPolicy_not_starts_with_nocase: String
+  operatorContractOnlyJoinPolicy_ends_with: String
+  operatorContractOnlyJoinPolicy_ends_with_nocase: String
+  operatorContractOnlyJoinPolicy_not_ends_with: String
+  operatorContractOnlyJoinPolicy_not_ends_with_nocase: String
+  streamRegistryAddress: String
+  streamRegistryAddress_not: String
+  streamRegistryAddress_gt: String
+  streamRegistryAddress_lt: String
+  streamRegistryAddress_gte: String
+  streamRegistryAddress_lte: String
+  streamRegistryAddress_in: [String!]
+  streamRegistryAddress_not_in: [String!]
+  streamRegistryAddress_contains: String
+  streamRegistryAddress_contains_nocase: String
+  streamRegistryAddress_not_contains: String
+  streamRegistryAddress_not_contains_nocase: String
+  streamRegistryAddress_starts_with: String
+  streamRegistryAddress_starts_with_nocase: String
+  streamRegistryAddress_not_starts_with: String
+  streamRegistryAddress_not_starts_with_nocase: String
+  streamRegistryAddress_ends_with: String
+  streamRegistryAddress_ends_with_nocase: String
+  streamRegistryAddress_not_ends_with: String
+  streamRegistryAddress_not_ends_with_nocase: String
+  minimumDelegationSeconds: Int
+  minimumDelegationSeconds_not: Int
+  minimumDelegationSeconds_gt: Int
+  minimumDelegationSeconds_lt: Int
+  minimumDelegationSeconds_gte: Int
+  minimumDelegationSeconds_lte: Int
+  minimumDelegationSeconds_in: [Int!]
+  minimumDelegationSeconds_not_in: [Int!]
+  minimumStakeWei: BigInt
+  minimumStakeWei_not: BigInt
+  minimumStakeWei_gt: BigInt
+  minimumStakeWei_lt: BigInt
+  minimumStakeWei_gte: BigInt
+  minimumStakeWei_lte: BigInt
+  minimumStakeWei_in: [BigInt!]
+  minimumStakeWei_not_in: [BigInt!]
+  _change_block: BlockChangedFilter
+  and: [Network_filter]
+  or: [Network_filter]
+}
+enum Network_orderBy {
+  id
+  totalStake
+  totalDelegated
+  totalUndelegated
+  sponsorshipsCount
+  fundedSponsorshipsCount
+  operatorsCount
+  eligibleVotersCount
+  slashingFraction
+  earlyLeaverPenaltyWei
+  minimumDelegationWei
+  minimumSelfDelegationFraction
+  maxPenaltyPeriodSeconds
+  maxQueueSeconds
+  maxAllowedEarningsFraction
+  fishermanRewardFraction
+  protocolFeeFraction
+  protocolFeeBeneficiary
+  minEligibleVoterAge
+  minEligibleVoterFractionOfAllStake
+  flagReviewerCount
+  flagReviewerRewardWei
+  flaggerRewardWei
+  flagReviewerSelectionIterations
+  flagStakeWei
+  reviewPeriodSeconds
+  votingPeriodSeconds
+  flagProtectionSeconds
+  randomOracle
+  trustedForwarder
+  sponsorshipFactory
+  operatorFactory
+  voterRegistry
+  operatorContractOnlyJoinPolicy
+  streamRegistryAddress
+  minimumDelegationSeconds
+  minimumStakeWei
+}
+type Operator {
+  id: ID!
+  stakes(skip: Int = 0, first: Int = 100, orderBy: Stake_orderBy, orderDirection: OrderDirection, where: Stake_filter): [Stake!]!
+  delegations(skip: Int = 0, first: Int = 100, orderBy: Delegation_orderBy, orderDirection: OrderDirection, where: Delegation_filter): [Delegation!]!
+  slashingEvents(skip: Int = 0, first: Int = 100, orderBy: SlashingEvent_orderBy, orderDirection: OrderDirection, where: SlashingEvent_filter): [SlashingEvent!]!
+  stakingEvents(skip: Int = 0, first: Int = 100, orderBy: StakingEvent_orderBy, orderDirection: OrderDirection, where: StakingEvent_filter): [StakingEvent!]!
+  raisedFlags(skip: Int = 0, first: Int = 100, orderBy: Flag_orderBy, orderDirection: OrderDirection, where: Flag_filter): [Flag!]!
+  receivedFlags(skip: Int = 0, first: Int = 100, orderBy: Flag_orderBy, orderDirection: OrderDirection, where: Flag_filter): [Flag!]!
+  delegatorCount: Int!
+  valueWithoutEarnings: BigInt!
+  totalStakeInSponsorshipsWei: BigInt!
+  dataTokenBalanceWei: BigInt!
+  valueUpdateTimestamp: BigInt!
+  valueUpdateBlockNumber: BigInt!
+  operatorTokenTotalSupplyWei: BigInt!
+  exchangeRate: BigDecimal!
+  latestHeartbeatMetadata: String
+  latestHeartbeatTimestamp: BigInt
+  cumulativeProfitsWei: BigInt!
+  cumulativeOperatorsCutWei: BigInt!
+  cumulativeEarningsWei: BigInt!
+  metadataJsonString: String!
+  owner: String!
+  slashingsCount: Int!
+  nodes: [String!]!
+  operatorsCutFraction: BigInt!
+  contractVersion: BigInt!
+  isEligibleToVote: Boolean!
+  protectionEndTimestamp: Int
+  controllers: [String!]!
+  flagsOpened(skip: Int = 0, first: Int = 100, orderBy: Flag_orderBy, orderDirection: OrderDirection, where: Flag_filter): [Flag!]!
+  flagsTargeted(skip: Int = 0, first: Int = 100, orderBy: Flag_orderBy, orderDirection: OrderDirection, where: Flag_filter): [Flag!]!
+  votesOnFlags(skip: Int = 0, first: Int = 100, orderBy: Vote_orderBy, orderDirection: OrderDirection, where: Vote_filter): [Vote!]!
+  queueEntries(skip: Int = 0, first: Int = 100, orderBy: QueueEntry_orderBy, orderDirection: OrderDirection, where: QueueEntry_filter): [QueueEntry!]!
+}
+input Operator_filter {
+  id: ID
+  id_not: ID
+  id_gt: ID
+  id_lt: ID
+  id_gte: ID
+  id_lte: ID
+  id_in: [ID!]
+  id_not_in: [ID!]
+  stakes_: Stake_filter
+  delegations_: Delegation_filter
+  slashingEvents_: SlashingEvent_filter
+  stakingEvents_: StakingEvent_filter
+  raisedFlags_: Flag_filter
+  receivedFlags_: Flag_filter
+  delegatorCount: Int
+  delegatorCount_not: Int
+  delegatorCount_gt: Int
+  delegatorCount_lt: Int
+  delegatorCount_gte: Int
+  delegatorCount_lte: Int
+  delegatorCount_in: [Int!]
+  delegatorCount_not_in: [Int!]
+  valueWithoutEarnings: BigInt
+  valueWithoutEarnings_not: BigInt
+  valueWithoutEarnings_gt: BigInt
+  valueWithoutEarnings_lt: BigInt
+  valueWithoutEarnings_gte: BigInt
+  valueWithoutEarnings_lte: BigInt
+  valueWithoutEarnings_in: [BigInt!]
+  valueWithoutEarnings_not_in: [BigInt!]
+  totalStakeInSponsorshipsWei: BigInt
+  totalStakeInSponsorshipsWei_not: BigInt
+  totalStakeInSponsorshipsWei_gt: BigInt
+  totalStakeInSponsorshipsWei_lt: BigInt
+  totalStakeInSponsorshipsWei_gte: BigInt
+  totalStakeInSponsorshipsWei_lte: BigInt
+  totalStakeInSponsorshipsWei_in: [BigInt!]
+  totalStakeInSponsorshipsWei_not_in: [BigInt!]
+  dataTokenBalanceWei: BigInt
+  dataTokenBalanceWei_not: BigInt
+  dataTokenBalanceWei_gt: BigInt
+  dataTokenBalanceWei_lt: BigInt
+  dataTokenBalanceWei_gte: BigInt
+  dataTokenBalanceWei_lte: BigInt
+  dataTokenBalanceWei_in: [BigInt!]
+  dataTokenBalanceWei_not_in: [BigInt!]
+  valueUpdateTimestamp: BigInt
+  valueUpdateTimestamp_not: BigInt
+  valueUpdateTimestamp_gt: BigInt
+  valueUpdateTimestamp_lt: BigInt
+  valueUpdateTimestamp_gte: BigInt
+  valueUpdateTimestamp_lte: BigInt
+  valueUpdateTimestamp_in: [BigInt!]
+  valueUpdateTimestamp_not_in: [BigInt!]
+  valueUpdateBlockNumber: BigInt
+  valueUpdateBlockNumber_not: BigInt
+  valueUpdateBlockNumber_gt: BigInt
+  valueUpdateBlockNumber_lt: BigInt
+  valueUpdateBlockNumber_gte: BigInt
+  valueUpdateBlockNumber_lte: BigInt
+  valueUpdateBlockNumber_in: [BigInt!]
+  valueUpdateBlockNumber_not_in: [BigInt!]
+  operatorTokenTotalSupplyWei: BigInt
+  operatorTokenTotalSupplyWei_not: BigInt
+  operatorTokenTotalSupplyWei_gt: BigInt
+  operatorTokenTotalSupplyWei_lt: BigInt
+  operatorTokenTotalSupplyWei_gte: BigInt
+  operatorTokenTotalSupplyWei_lte: BigInt
+  operatorTokenTotalSupplyWei_in: [BigInt!]
+  operatorTokenTotalSupplyWei_not_in: [BigInt!]
+  exchangeRate: BigDecimal
+  exchangeRate_not: BigDecimal
+  exchangeRate_gt: BigDecimal
+  exchangeRate_lt: BigDecimal
+  exchangeRate_gte: BigDecimal
+  exchangeRate_lte: BigDecimal
+  exchangeRate_in: [BigDecimal!]
+  exchangeRate_not_in: [BigDecimal!]
+  latestHeartbeatMetadata: String
+  latestHeartbeatMetadata_not: String
+  latestHeartbeatMetadata_gt: String
+  latestHeartbeatMetadata_lt: String
+  latestHeartbeatMetadata_gte: String
+  latestHeartbeatMetadata_lte: String
+  latestHeartbeatMetadata_in: [String!]
+  latestHeartbeatMetadata_not_in: [String!]
+  latestHeartbeatMetadata_contains: String
+  latestHeartbeatMetadata_contains_nocase: String
+  latestHeartbeatMetadata_not_contains: String
+  latestHeartbeatMetadata_not_contains_nocase: String
+  latestHeartbeatMetadata_starts_with: String
+  latestHeartbeatMetadata_starts_with_nocase: String
+  latestHeartbeatMetadata_not_starts_with: String
+  latestHeartbeatMetadata_not_starts_with_nocase: String
+  latestHeartbeatMetadata_ends_with: String
+  latestHeartbeatMetadata_ends_with_nocase: String
+  latestHeartbeatMetadata_not_ends_with: String
+  latestHeartbeatMetadata_not_ends_with_nocase: String
+  latestHeartbeatTimestamp: BigInt
+  latestHeartbeatTimestamp_not: BigInt
+  latestHeartbeatTimestamp_gt: BigInt
+  latestHeartbeatTimestamp_lt: BigInt
+  latestHeartbeatTimestamp_gte: BigInt
+  latestHeartbeatTimestamp_lte: BigInt
+  latestHeartbeatTimestamp_in: [BigInt!]
+  latestHeartbeatTimestamp_not_in: [BigInt!]
+  cumulativeProfitsWei: BigInt
+  cumulativeProfitsWei_not: BigInt
+  cumulativeProfitsWei_gt: BigInt
+  cumulativeProfitsWei_lt: BigInt
+  cumulativeProfitsWei_gte: BigInt
+  cumulativeProfitsWei_lte: BigInt
+  cumulativeProfitsWei_in: [BigInt!]
+  cumulativeProfitsWei_not_in: [BigInt!]
+  cumulativeOperatorsCutWei: BigInt
+  cumulativeOperatorsCutWei_not: BigInt
+  cumulativeOperatorsCutWei_gt: BigInt
+  cumulativeOperatorsCutWei_lt: BigInt
+  cumulativeOperatorsCutWei_gte: BigInt
+  cumulativeOperatorsCutWei_lte: BigInt
+  cumulativeOperatorsCutWei_in: [BigInt!]
+  cumulativeOperatorsCutWei_not_in: [BigInt!]
+  cumulativeEarningsWei: BigInt
+  cumulativeEarningsWei_not: BigInt
+  cumulativeEarningsWei_gt: BigInt
+  cumulativeEarningsWei_lt: BigInt
+  cumulativeEarningsWei_gte: BigInt
+  cumulativeEarningsWei_lte: BigInt
+  cumulativeEarningsWei_in: [BigInt!]
+  cumulativeEarningsWei_not_in: [BigInt!]
+  metadataJsonString: String
+  metadataJsonString_not: String
+  metadataJsonString_gt: String
+  metadataJsonString_lt: String
+  metadataJsonString_gte: String
+  metadataJsonString_lte: String
+  metadataJsonString_in: [String!]
+  metadataJsonString_not_in: [String!]
+  metadataJsonString_contains: String
+  metadataJsonString_contains_nocase: String
+  metadataJsonString_not_contains: String
+  metadataJsonString_not_contains_nocase: String
+  metadataJsonString_starts_with: String
+  metadataJsonString_starts_with_nocase: String
+  metadataJsonString_not_starts_with: String
+  metadataJsonString_not_starts_with_nocase: String
+  metadataJsonString_ends_with: String
+  metadataJsonString_ends_with_nocase: String
+  metadataJsonString_not_ends_with: String
+  metadataJsonString_not_ends_with_nocase: String
+  owner: String
+  owner_not: String
+  owner_gt: String
+  owner_lt: String
+  owner_gte: String
+  owner_lte: String
+  owner_in: [String!]
+  owner_not_in: [String!]
+  owner_contains: String
+  owner_contains_nocase: String
+  owner_not_contains: String
+  owner_not_contains_nocase: String
+  owner_starts_with: String
+  owner_starts_with_nocase: String
+  owner_not_starts_with: String
+  owner_not_starts_with_nocase: String
+  owner_ends_with: String
+  owner_ends_with_nocase: String
+  owner_not_ends_with: String
+  owner_not_ends_with_nocase: String
+  slashingsCount: Int
+  slashingsCount_not: Int
+  slashingsCount_gt: Int
+  slashingsCount_lt: Int
+  slashingsCount_gte: Int
+  slashingsCount_lte: Int
+  slashingsCount_in: [Int!]
+  slashingsCount_not_in: [Int!]
+  nodes: [String!]
+  nodes_not: [String!]
+  nodes_contains: [String!]
+  nodes_contains_nocase: [String!]
+  nodes_not_contains: [String!]
+  nodes_not_contains_nocase: [String!]
+  operatorsCutFraction: BigInt
+  operatorsCutFraction_not: BigInt
+  operatorsCutFraction_gt: BigInt
+  operatorsCutFraction_lt: BigInt
+  operatorsCutFraction_gte: BigInt
+  operatorsCutFraction_lte: BigInt
+  operatorsCutFraction_in: [BigInt!]
+  operatorsCutFraction_not_in: [BigInt!]
+  contractVersion: BigInt
+  contractVersion_not: BigInt
+  contractVersion_gt: BigInt
+  contractVersion_lt: BigInt
+  contractVersion_gte: BigInt
+  contractVersion_lte: BigInt
+  contractVersion_in: [BigInt!]
+  contractVersion_not_in: [BigInt!]
+  isEligibleToVote: Boolean
+  isEligibleToVote_not: Boolean
+  isEligibleToVote_in: [Boolean!]
+  isEligibleToVote_not_in: [Boolean!]
+  protectionEndTimestamp: Int
+  protectionEndTimestamp_not: Int
+  protectionEndTimestamp_gt: Int
+  protectionEndTimestamp_lt: Int
+  protectionEndTimestamp_gte: Int
+  protectionEndTimestamp_lte: Int
+  protectionEndTimestamp_in: [Int!]
+  protectionEndTimestamp_not_in: [Int!]
+  controllers: [String!]
+  controllers_not: [String!]
+  controllers_contains: [String!]
+  controllers_contains_nocase: [String!]
+  controllers_not_contains: [String!]
+  controllers_not_contains_nocase: [String!]
+  flagsOpened_: Flag_filter
+  flagsTargeted_: Flag_filter
+  votesOnFlags_: Vote_filter
+  queueEntries_: QueueEntry_filter
+  _change_block: BlockChangedFilter
+  and: [Operator_filter]
+  or: [Operator_filter]
+}
+enum Operator_orderBy {
+  id
+  stakes
+  delegations
+  slashingEvents
+  stakingEvents
+  raisedFlags
+  receivedFlags
+  delegatorCount
+  valueWithoutEarnings
+  totalStakeInSponsorshipsWei
+  dataTokenBalanceWei
+  valueUpdateTimestamp
+  valueUpdateBlockNumber
+  operatorTokenTotalSupplyWei
+  exchangeRate
+  latestHeartbeatMetadata
+  latestHeartbeatTimestamp
+  cumulativeProfitsWei
+  cumulativeOperatorsCutWei
+  cumulativeEarningsWei
+  metadataJsonString
+  owner
+  slashingsCount
+  nodes
+  operatorsCutFraction
+  contractVersion
+  isEligibleToVote
+  protectionEndTimestamp
+  controllers
+  flagsOpened
+  flagsTargeted
+  votesOnFlags
+  queueEntries
+}
+type OperatorDailyBucket {
+  id: ID!
+  operator: Operator!
+  date: BigInt!
+  valueWithoutEarnings: BigInt!
+  totalStakeInSponsorshipsWei: BigInt!
+  dataTokenBalanceWei: BigInt!
+  delegatorCountAtStart: Int!
+  delegatorCountChange: Int!
+  totalDelegatedWei: BigInt!
+  totalUndelegatedWei: BigInt!
+  profitsWei: BigInt!
+  lossesWei: BigInt!
+  operatorsCutWei: BigInt!
+  cumulativeEarningsWei: BigInt!
+}
+input OperatorDailyBucket_filter {
+  id: ID
+  id_not: ID
+  id_gt: ID
+  id_lt: ID
+  id_gte: ID
+  id_lte: ID
+  id_in: [ID!]
+  id_not_in: [ID!]
+  operator: String
+  operator_not: String
+  operator_gt: String
+  operator_lt: String
+  operator_gte: String
+  operator_lte: String
+  operator_in: [String!]
+  operator_not_in: [String!]
+  operator_contains: String
+  operator_contains_nocase: String
+  operator_not_contains: String
+  operator_not_contains_nocase: String
+  operator_starts_with: String
+  operator_starts_with_nocase: String
+  operator_not_starts_with: String
+  operator_not_starts_with_nocase: String
+  operator_ends_with: String
+  operator_ends_with_nocase: String
+  operator_not_ends_with: String
+  operator_not_ends_with_nocase: String
+  operator_: Operator_filter
+  date: BigInt
+  date_not: BigInt
+  date_gt: BigInt
+  date_lt: BigInt
+  date_gte: BigInt
+  date_lte: BigInt
+  date_in: [BigInt!]
+  date_not_in: [BigInt!]
+  valueWithoutEarnings: BigInt
+  valueWithoutEarnings_not: BigInt
+  valueWithoutEarnings_gt: BigInt
+  valueWithoutEarnings_lt: BigInt
+  valueWithoutEarnings_gte: BigInt
+  valueWithoutEarnings_lte: BigInt
+  valueWithoutEarnings_in: [BigInt!]
+  valueWithoutEarnings_not_in: [BigInt!]
+  totalStakeInSponsorshipsWei: BigInt
+  totalStakeInSponsorshipsWei_not: BigInt
+  totalStakeInSponsorshipsWei_gt: BigInt
+  totalStakeInSponsorshipsWei_lt: BigInt
+  totalStakeInSponsorshipsWei_gte: BigInt
+  totalStakeInSponsorshipsWei_lte: BigInt
+  totalStakeInSponsorshipsWei_in: [BigInt!]
+  totalStakeInSponsorshipsWei_not_in: [BigInt!]
+  dataTokenBalanceWei: BigInt
+  dataTokenBalanceWei_not: BigInt
+  dataTokenBalanceWei_gt: BigInt
+  dataTokenBalanceWei_lt: BigInt
+  dataTokenBalanceWei_gte: BigInt
+  dataTokenBalanceWei_lte: BigInt
+  dataTokenBalanceWei_in: [BigInt!]
+  dataTokenBalanceWei_not_in: [BigInt!]
+  delegatorCountAtStart: Int
+  delegatorCountAtStart_not: Int
+  delegatorCountAtStart_gt: Int
+  delegatorCountAtStart_lt: Int
+  delegatorCountAtStart_gte: Int
+  delegatorCountAtStart_lte: Int
+  delegatorCountAtStart_in: [Int!]
+  delegatorCountAtStart_not_in: [Int!]
+  delegatorCountChange: Int
+  delegatorCountChange_not: Int
+  delegatorCountChange_gt: Int
+  delegatorCountChange_lt: Int
+  delegatorCountChange_gte: Int
+  delegatorCountChange_lte: Int
+  delegatorCountChange_in: [Int!]
+  delegatorCountChange_not_in: [Int!]
+  totalDelegatedWei: BigInt
+  totalDelegatedWei_not: BigInt
+  totalDelegatedWei_gt: BigInt
+  totalDelegatedWei_lt: BigInt
+  totalDelegatedWei_gte: BigInt
+  totalDelegatedWei_lte: BigInt
+  totalDelegatedWei_in: [BigInt!]
+  totalDelegatedWei_not_in: [BigInt!]
+  totalUndelegatedWei: BigInt
+  totalUndelegatedWei_not: BigInt
+  totalUndelegatedWei_gt: BigInt
+  totalUndelegatedWei_lt: BigInt
+  totalUndelegatedWei_gte: BigInt
+  totalUndelegatedWei_lte: BigInt
+  totalUndelegatedWei_in: [BigInt!]
+  totalUndelegatedWei_not_in: [BigInt!]
+  profitsWei: BigInt
+  profitsWei_not: BigInt
+  profitsWei_gt: BigInt
+  profitsWei_lt: BigInt
+  profitsWei_gte: BigInt
+  profitsWei_lte: BigInt
+  profitsWei_in: [BigInt!]
+  profitsWei_not_in: [BigInt!]
+  lossesWei: BigInt
+  lossesWei_not: BigInt
+  lossesWei_gt: BigInt
+  lossesWei_lt: BigInt
+  lossesWei_gte: BigInt
+  lossesWei_lte: BigInt
+  lossesWei_in: [BigInt!]
+  lossesWei_not_in: [BigInt!]
+  operatorsCutWei: BigInt
+  operatorsCutWei_not: BigInt
+  operatorsCutWei_gt: BigInt
+  operatorsCutWei_lt: BigInt
+  operatorsCutWei_gte: BigInt
+  operatorsCutWei_lte: BigInt
+  operatorsCutWei_in: [BigInt!]
+  operatorsCutWei_not_in: [BigInt!]
+  cumulativeEarningsWei: BigInt
+  cumulativeEarningsWei_not: BigInt
+  cumulativeEarningsWei_gt: BigInt
+  cumulativeEarningsWei_lt: BigInt
+  cumulativeEarningsWei_gte: BigInt
+  cumulativeEarningsWei_lte: BigInt
+  cumulativeEarningsWei_in: [BigInt!]
+  cumulativeEarningsWei_not_in: [BigInt!]
+  _change_block: BlockChangedFilter
+  and: [OperatorDailyBucket_filter]
+  or: [OperatorDailyBucket_filter]
+}
+enum OperatorDailyBucket_orderBy {
+  id
+  operator
+  operator__id
+  operator__delegatorCount
+  operator__valueWithoutEarnings
+  operator__totalStakeInSponsorshipsWei
+  operator__dataTokenBalanceWei
+  operator__valueUpdateTimestamp
+  operator__valueUpdateBlockNumber
+  operator__operatorTokenTotalSupplyWei
+  operator__exchangeRate
+  operator__latestHeartbeatMetadata
+  operator__latestHeartbeatTimestamp
+  operator__cumulativeProfitsWei
+  operator__cumulativeOperatorsCutWei
+  operator__cumulativeEarningsWei
+  operator__metadataJsonString
+  operator__owner
+  operator__slashingsCount
+  operator__operatorsCutFraction
+  operator__contractVersion
+  operator__isEligibleToVote
+  operator__protectionEndTimestamp
+  date
+  valueWithoutEarnings
+  totalStakeInSponsorshipsWei
+  dataTokenBalanceWei
+  delegatorCountAtStart
+  delegatorCountChange
+  totalDelegatedWei
+  totalUndelegatedWei
+  profitsWei
+  lossesWei
+  operatorsCutWei
+  cumulativeEarningsWei
+}
+type Delegation {
+  id: ID!
+  operator: Operator!
+  delegator: Delegator!
+  isSelfDelegation: Boolean!
+  operatorTokenBalanceWei: BigInt!
+  _valueDataWei: BigInt!
+  latestDelegationTimestamp: Int!
+  earliestUndelegationTimestamp: Int!
+}
+input Delegation_filter {
+  id: ID
+  id_not: ID
+  id_gt: ID
+  id_lt: ID
+  id_gte: ID
+  id_lte: ID
+  id_in: [ID!]
+  id_not_in: [ID!]
+  operator: String
+  operator_not: String
+  operator_gt: String
+  operator_lt: String
+  operator_gte: String
+  operator_lte: String
+  operator_in: [String!]
+  operator_not_in: [String!]
+  operator_contains: String
+  operator_contains_nocase: String
+  operator_not_contains: String
+  operator_not_contains_nocase: String
+  operator_starts_with: String
+  operator_starts_with_nocase: String
+  operator_not_starts_with: String
+  operator_not_starts_with_nocase: String
+  operator_ends_with: String
+  operator_ends_with_nocase: String
+  operator_not_ends_with: String
+  operator_not_ends_with_nocase: String
+  operator_: Operator_filter
+  delegator: String
+  delegator_not: String
+  delegator_gt: String
+  delegator_lt: String
+  delegator_gte: String
+  delegator_lte: String
+  delegator_in: [String!]
+  delegator_not_in: [String!]
+  delegator_contains: String
+  delegator_contains_nocase: String
+  delegator_not_contains: String
+  delegator_not_contains_nocase: String
+  delegator_starts_with: String
+  delegator_starts_with_nocase: String
+  delegator_not_starts_with: String
+  delegator_not_starts_with_nocase: String
+  delegator_ends_with: String
+  delegator_ends_with_nocase: String
+  delegator_not_ends_with: String
+  delegator_not_ends_with_nocase: String
+  delegator_: Delegator_filter
+  isSelfDelegation: Boolean
+  isSelfDelegation_not: Boolean
+  isSelfDelegation_in: [Boolean!]
+  isSelfDelegation_not_in: [Boolean!]
+  operatorTokenBalanceWei: BigInt
+  operatorTokenBalanceWei_not: BigInt
+  operatorTokenBalanceWei_gt: BigInt
+  operatorTokenBalanceWei_lt: BigInt
+  operatorTokenBalanceWei_gte: BigInt
+  operatorTokenBalanceWei_lte: BigInt
+  operatorTokenBalanceWei_in: [BigInt!]
+  operatorTokenBalanceWei_not_in: [BigInt!]
+  _valueDataWei: BigInt
+  _valueDataWei_not: BigInt
+  _valueDataWei_gt: BigInt
+  _valueDataWei_lt: BigInt
+  _valueDataWei_gte: BigInt
+  _valueDataWei_lte: BigInt
+  _valueDataWei_in: [BigInt!]
+  _valueDataWei_not_in: [BigInt!]
+  latestDelegationTimestamp: Int
+  latestDelegationTimestamp_not: Int
+  latestDelegationTimestamp_gt: Int
+  latestDelegationTimestamp_lt: Int
+  latestDelegationTimestamp_gte: Int
+  latestDelegationTimestamp_lte: Int
+  latestDelegationTimestamp_in: [Int!]
+  latestDelegationTimestamp_not_in: [Int!]
+  earliestUndelegationTimestamp: Int
+  earliestUndelegationTimestamp_not: Int
+  earliestUndelegationTimestamp_gt: Int
+  earliestUndelegationTimestamp_lt: Int
+  earliestUndelegationTimestamp_gte: Int
+  earliestUndelegationTimestamp_lte: Int
+  earliestUndelegationTimestamp_in: [Int!]
+  earliestUndelegationTimestamp_not_in: [Int!]
+  _change_block: BlockChangedFilter
+  and: [Delegation_filter]
+  or: [Delegation_filter]
+}
+enum Delegation_orderBy {
+  id
+  operator
+  operator__id
+  operator__delegatorCount
+  operator__valueWithoutEarnings
+  operator__totalStakeInSponsorshipsWei
+  operator__dataTokenBalanceWei
+  operator__valueUpdateTimestamp
+  operator__valueUpdateBlockNumber
+  operator__operatorTokenTotalSupplyWei
+  operator__exchangeRate
+  operator__latestHeartbeatMetadata
+  operator__latestHeartbeatTimestamp
+  operator__cumulativeProfitsWei
+  operator__cumulativeOperatorsCutWei
+  operator__cumulativeEarningsWei
+  operator__metadataJsonString
+  operator__owner
+  operator__slashingsCount
+  operator__operatorsCutFraction
+  operator__contractVersion
+  operator__isEligibleToVote
+  operator__protectionEndTimestamp
+  delegator
+  delegator__id
+  delegator__numberOfDelegations
+  delegator__totalValueDataWei
+  delegator__cumulativeEarningsWei
+  isSelfDelegation
+  operatorTokenBalanceWei
+  _valueDataWei
+  latestDelegationTimestamp
+  earliestUndelegationTimestamp
+}
+type PastDelegationCount {
+  id: ID!
+  count: Int!
+}
+input PastDelegationCount_filter {
+  id: ID
+  id_not: ID
+  id_gt: ID
+  id_lt: ID
+  id_gte: ID
+  id_lte: ID
+  id_in: [ID!]
+  id_not_in: [ID!]
+  count: Int
+  count_not: Int
+  count_gt: Int
+  count_lt: Int
+  count_gte: Int
+  count_lte: Int
+  count_in: [Int!]
+  count_not_in: [Int!]
+  _change_block: BlockChangedFilter
+  and: [PastDelegationCount_filter]
+  or: [PastDelegationCount_filter]
+}
+enum PastDelegationCount_orderBy {
+  id
+  count
+}
+type Delegator {
+  id: ID!
+  delegations(skip: Int = 0, first: Int = 100, orderBy: Delegation_orderBy, orderDirection: OrderDirection, where: Delegation_filter): [Delegation!]!
+  queueEntries(skip: Int = 0, first: Int = 100, orderBy: QueueEntry_orderBy, orderDirection: OrderDirection, where: QueueEntry_filter): [QueueEntry!]!
+  numberOfDelegations: Int!
+  totalValueDataWei: BigInt!
+  cumulativeEarningsWei: BigInt!
+}
+input Delegator_filter {
+  id: ID
+  id_not: ID
+  id_gt: ID
+  id_lt: ID
+  id_gte: ID
+  id_lte: ID
+  id_in: [ID!]
+  id_not_in: [ID!]
+  delegations_: Delegation_filter
+  queueEntries_: QueueEntry_filter
+  numberOfDelegations: Int
+  numberOfDelegations_not: Int
+  numberOfDelegations_gt: Int
+  numberOfDelegations_lt: Int
+  numberOfDelegations_gte: Int
+  numberOfDelegations_lte: Int
+  numberOfDelegations_in: [Int!]
+  numberOfDelegations_not_in: [Int!]
+  totalValueDataWei: BigInt
+  totalValueDataWei_not: BigInt
+  totalValueDataWei_gt: BigInt
+  totalValueDataWei_lt: BigInt
+  totalValueDataWei_gte: BigInt
+  totalValueDataWei_lte: BigInt
+  totalValueDataWei_in: [BigInt!]
+  totalValueDataWei_not_in: [BigInt!]
+  cumulativeEarningsWei: BigInt
+  cumulativeEarningsWei_not: BigInt
+  cumulativeEarningsWei_gt: BigInt
+  cumulativeEarningsWei_lt: BigInt
+  cumulativeEarningsWei_gte: BigInt
+  cumulativeEarningsWei_lte: BigInt
+  cumulativeEarningsWei_in: [BigInt!]
+  cumulativeEarningsWei_not_in: [BigInt!]
+  _change_block: BlockChangedFilter
+  and: [Delegator_filter]
+  or: [Delegator_filter]
+}
+enum Delegator_orderBy {
+  id
+  delegations
+  queueEntries
+  numberOfDelegations
+  totalValueDataWei
+  cumulativeEarningsWei
+}
+type DelegatorDailyBucket {
+  id: ID!
+  delegator: Delegator!
+  date: BigInt!
+  totalValueDataWei: BigInt!
+  operatorCount: Int!
+  cumulativeEarningsWei: BigInt!
+}
+input DelegatorDailyBucket_filter {
+  id: ID
+  id_not: ID
+  id_gt: ID
+  id_lt: ID
+  id_gte: ID
+  id_lte: ID
+  id_in: [ID!]
+  id_not_in: [ID!]
+  delegator: String
+  delegator_not: String
+  delegator_gt: String
+  delegator_lt: String
+  delegator_gte: String
+  delegator_lte: String
+  delegator_in: [String!]
+  delegator_not_in: [String!]
+  delegator_contains: String
+  delegator_contains_nocase: String
+  delegator_not_contains: String
+  delegator_not_contains_nocase: String
+  delegator_starts_with: String
+  delegator_starts_with_nocase: String
+  delegator_not_starts_with: String
+  delegator_not_starts_with_nocase: String
+  delegator_ends_with: String
+  delegator_ends_with_nocase: String
+  delegator_not_ends_with: String
+  delegator_not_ends_with_nocase: String
+  delegator_: Delegator_filter
+  date: BigInt
+  date_not: BigInt
+  date_gt: BigInt
+  date_lt: BigInt
+  date_gte: BigInt
+  date_lte: BigInt
+  date_in: [BigInt!]
+  date_not_in: [BigInt!]
+  totalValueDataWei: BigInt
+  totalValueDataWei_not: BigInt
+  totalValueDataWei_gt: BigInt
+  totalValueDataWei_lt: BigInt
+  totalValueDataWei_gte: BigInt
+  totalValueDataWei_lte: BigInt
+  totalValueDataWei_in: [BigInt!]
+  totalValueDataWei_not_in: [BigInt!]
+  operatorCount: Int
+  operatorCount_not: Int
+  operatorCount_gt: Int
+  operatorCount_lt: Int
+  operatorCount_gte: Int
+  operatorCount_lte: Int
+  operatorCount_in: [Int!]
+  operatorCount_not_in: [Int!]
+  cumulativeEarningsWei: BigInt
+  cumulativeEarningsWei_not: BigInt
+  cumulativeEarningsWei_gt: BigInt
+  cumulativeEarningsWei_lt: BigInt
+  cumulativeEarningsWei_gte: BigInt
+  cumulativeEarningsWei_lte: BigInt
+  cumulativeEarningsWei_in: [BigInt!]
+  cumulativeEarningsWei_not_in: [BigInt!]
+  _change_block: BlockChangedFilter
+  and: [DelegatorDailyBucket_filter]
+  or: [DelegatorDailyBucket_filter]
+}
+enum DelegatorDailyBucket_orderBy {
+  id
+  delegator
+  delegator__id
+  delegator__numberOfDelegations
+  delegator__totalValueDataWei
+  delegator__cumulativeEarningsWei
+  date
+  totalValueDataWei
+  operatorCount
+  cumulativeEarningsWei
+}
+type Sponsorship {
+  id: ID!
+  stream: Stream
+  metadata: String
+  creator: String!
+  totalPayoutWeiPerSec: BigInt!
+  minimumStakingPeriodSeconds: BigInt!
+  maxOperators: Int
+  minOperators: Int!
+  operatorCount: Int!
+  isRunning: Boolean!
+  totalStakedWei: BigInt!
+  stakes(skip: Int = 0, first: Int = 100, orderBy: Stake_orderBy, orderDirection: OrderDirection, where: Stake_filter): [Stake!]!
+  cumulativeSponsoring: BigInt!
+  remainingWei: BigInt!
+  remainingWeiUpdateTimestamp: BigInt
+  projectedInsolvency: BigInt
+  spotAPY: BigDecimal!
+  flags(skip: Int = 0, first: Int = 100, orderBy: Flag_orderBy, orderDirection: OrderDirection, where: Flag_filter): [Flag!]!
+  slashingEvents(skip: Int = 0, first: Int = 100, orderBy: SlashingEvent_orderBy, orderDirection: OrderDirection, where: SlashingEvent_filter): [SlashingEvent!]!
+  stakingEvents(skip: Int = 0, first: Int = 100, orderBy: StakingEvent_orderBy, orderDirection: OrderDirection, where: StakingEvent_filter): [StakingEvent!]!
+  sponsoringEvents(skip: Int = 0, first: Int = 100, orderBy: SponsoringEvent_orderBy, orderDirection: OrderDirection, where: SponsoringEvent_filter): [SponsoringEvent!]!
+}
+input Sponsorship_filter {
+  id: ID
+  id_not: ID
+  id_gt: ID
+  id_lt: ID
+  id_gte: ID
+  id_lte: ID
+  id_in: [ID!]
+  id_not_in: [ID!]
+  stream: String
+  stream_not: String
+  stream_gt: String
+  stream_lt: String
+  stream_gte: String
+  stream_lte: String
+  stream_in: [String!]
+  stream_not_in: [String!]
+  stream_contains: String
+  stream_contains_nocase: String
+  stream_not_contains: String
+  stream_not_contains_nocase: String
+  stream_starts_with: String
+  stream_starts_with_nocase: String
+  stream_not_starts_with: String
+  stream_not_starts_with_nocase: String
+  stream_ends_with: String
+  stream_ends_with_nocase: String
+  stream_not_ends_with: String
+  stream_not_ends_with_nocase: String
+  stream_: Stream_filter
+  metadata: String
+  metadata_not: String
+  metadata_gt: String
+  metadata_lt: String
+  metadata_gte: String
+  metadata_lte: String
+  metadata_in: [String!]
+  metadata_not_in: [String!]
+  metadata_contains: String
+  metadata_contains_nocase: String
+  metadata_not_contains: String
+  metadata_not_contains_nocase: String
+  metadata_starts_with: String
+  metadata_starts_with_nocase: String
+  metadata_not_starts_with: String
+  metadata_not_starts_with_nocase: String
+  metadata_ends_with: String
+  metadata_ends_with_nocase: String
+  metadata_not_ends_with: String
+  metadata_not_ends_with_nocase: String
+  creator: String
+  creator_not: String
+  creator_gt: String
+  creator_lt: String
+  creator_gte: String
+  creator_lte: String
+  creator_in: [String!]
+  creator_not_in: [String!]
+  creator_contains: String
+  creator_contains_nocase: String
+  creator_not_contains: String
+  creator_not_contains_nocase: String
+  creator_starts_with: String
+  creator_starts_with_nocase: String
+  creator_not_starts_with: String
+  creator_not_starts_with_nocase: String
+  creator_ends_with: String
+  creator_ends_with_nocase: String
+  creator_not_ends_with: String
+  creator_not_ends_with_nocase: String
+  totalPayoutWeiPerSec: BigInt
+  totalPayoutWeiPerSec_not: BigInt
+  totalPayoutWeiPerSec_gt: BigInt
+  totalPayoutWeiPerSec_lt: BigInt
+  totalPayoutWeiPerSec_gte: BigInt
+  totalPayoutWeiPerSec_lte: BigInt
+  totalPayoutWeiPerSec_in: [BigInt!]
+  totalPayoutWeiPerSec_not_in: [BigInt!]
+  minimumStakingPeriodSeconds: BigInt
+  minimumStakingPeriodSeconds_not: BigInt
+  minimumStakingPeriodSeconds_gt: BigInt
+  minimumStakingPeriodSeconds_lt: BigInt
+  minimumStakingPeriodSeconds_gte: BigInt
+  minimumStakingPeriodSeconds_lte: BigInt
+  minimumStakingPeriodSeconds_in: [BigInt!]
+  minimumStakingPeriodSeconds_not_in: [BigInt!]
+  maxOperators: Int
+  maxOperators_not: Int
+  maxOperators_gt: Int
+  maxOperators_lt: Int
+  maxOperators_gte: Int
+  maxOperators_lte: Int
+  maxOperators_in: [Int!]
+  maxOperators_not_in: [Int!]
+  minOperators: Int
+  minOperators_not: Int
+  minOperators_gt: Int
+  minOperators_lt: Int
+  minOperators_gte: Int
+  minOperators_lte: Int
+  minOperators_in: [Int!]
+  minOperators_not_in: [Int!]
+  operatorCount: Int
+  operatorCount_not: Int
+  operatorCount_gt: Int
+  operatorCount_lt: Int
+  operatorCount_gte: Int
+  operatorCount_lte: Int
+  operatorCount_in: [Int!]
+  operatorCount_not_in: [Int!]
+  isRunning: Boolean
+  isRunning_not: Boolean
+  isRunning_in: [Boolean!]
+  isRunning_not_in: [Boolean!]
+  totalStakedWei: BigInt
+  totalStakedWei_not: BigInt
+  totalStakedWei_gt: BigInt
+  totalStakedWei_lt: BigInt
+  totalStakedWei_gte: BigInt
+  totalStakedWei_lte: BigInt
+  totalStakedWei_in: [BigInt!]
+  totalStakedWei_not_in: [BigInt!]
+  stakes_: Stake_filter
+  cumulativeSponsoring: BigInt
+  cumulativeSponsoring_not: BigInt
+  cumulativeSponsoring_gt: BigInt
+  cumulativeSponsoring_lt: BigInt
+  cumulativeSponsoring_gte: BigInt
+  cumulativeSponsoring_lte: BigInt
+  cumulativeSponsoring_in: [BigInt!]
+  cumulativeSponsoring_not_in: [BigInt!]
+  remainingWei: BigInt
+  remainingWei_not: BigInt
+  remainingWei_gt: BigInt
+  remainingWei_lt: BigInt
+  remainingWei_gte: BigInt
+  remainingWei_lte: BigInt
+  remainingWei_in: [BigInt!]
+  remainingWei_not_in: [BigInt!]
+  remainingWeiUpdateTimestamp: BigInt
+  remainingWeiUpdateTimestamp_not: BigInt
+  remainingWeiUpdateTimestamp_gt: BigInt
+  remainingWeiUpdateTimestamp_lt: BigInt
+  remainingWeiUpdateTimestamp_gte: BigInt
+  remainingWeiUpdateTimestamp_lte: BigInt
+  remainingWeiUpdateTimestamp_in: [BigInt!]
+  remainingWeiUpdateTimestamp_not_in: [BigInt!]
+  projectedInsolvency: BigInt
+  projectedInsolvency_not: BigInt
+  projectedInsolvency_gt: BigInt
+  projectedInsolvency_lt: BigInt
+  projectedInsolvency_gte: BigInt
+  projectedInsolvency_lte: BigInt
+  projectedInsolvency_in: [BigInt!]
+  projectedInsolvency_not_in: [BigInt!]
+  spotAPY: BigDecimal
+  spotAPY_not: BigDecimal
+  spotAPY_gt: BigDecimal
+  spotAPY_lt: BigDecimal
+  spotAPY_gte: BigDecimal
+  spotAPY_lte: BigDecimal
+  spotAPY_in: [BigDecimal!]
+  spotAPY_not_in: [BigDecimal!]
+  flags_: Flag_filter
+  slashingEvents_: SlashingEvent_filter
+  stakingEvents_: StakingEvent_filter
+  sponsoringEvents_: SponsoringEvent_filter
+  _change_block: BlockChangedFilter
+  and: [Sponsorship_filter]
+  or: [Sponsorship_filter]
+}
+enum Sponsorship_orderBy {
+  id
+  stream
+  stream__id
+  stream__idAsString
+  stream__metadata
+  stream__createdAt
+  stream__updatedAt
+  metadata
+  creator
+  totalPayoutWeiPerSec
+  minimumStakingPeriodSeconds
+  maxOperators
+  minOperators
+  operatorCount
+  isRunning
+  totalStakedWei
+  stakes
+  cumulativeSponsoring
+  remainingWei
+  remainingWeiUpdateTimestamp
+  projectedInsolvency
+  spotAPY
+  flags
+  slashingEvents
+  stakingEvents
+  sponsoringEvents
+}
+type SponsorshipDailyBucket {
+  id: ID!
+  sponsorship: Sponsorship!
+  date: BigInt!
+  totalStakedWei: BigInt!
+  remainingWei: BigInt!
+  projectedInsolvency: BigInt
+  spotAPY: BigDecimal!
+  operatorCount: Int!
+}
+input SponsorshipDailyBucket_filter {
+  id: ID
+  id_not: ID
+  id_gt: ID
+  id_lt: ID
+  id_gte: ID
+  id_lte: ID
+  id_in: [ID!]
+  id_not_in: [ID!]
+  sponsorship: String
+  sponsorship_not: String
+  sponsorship_gt: String
+  sponsorship_lt: String
+  sponsorship_gte: String
+  sponsorship_lte: String
+  sponsorship_in: [String!]
+  sponsorship_not_in: [String!]
+  sponsorship_contains: String
+  sponsorship_contains_nocase: String
+  sponsorship_not_contains: String
+  sponsorship_not_contains_nocase: String
+  sponsorship_starts_with: String
+  sponsorship_starts_with_nocase: String
+  sponsorship_not_starts_with: String
+  sponsorship_not_starts_with_nocase: String
+  sponsorship_ends_with: String
+  sponsorship_ends_with_nocase: String
+  sponsorship_not_ends_with: String
+  sponsorship_not_ends_with_nocase: String
+  sponsorship_: Sponsorship_filter
+  date: BigInt
+  date_not: BigInt
+  date_gt: BigInt
+  date_lt: BigInt
+  date_gte: BigInt
+  date_lte: BigInt
+  date_in: [BigInt!]
+  date_not_in: [BigInt!]
+  totalStakedWei: BigInt
+  totalStakedWei_not: BigInt
+  totalStakedWei_gt: BigInt
+  totalStakedWei_lt: BigInt
+  totalStakedWei_gte: BigInt
+  totalStakedWei_lte: BigInt
+  totalStakedWei_in: [BigInt!]
+  totalStakedWei_not_in: [BigInt!]
+  remainingWei: BigInt
+  remainingWei_not: BigInt
+  remainingWei_gt: BigInt
+  remainingWei_lt: BigInt
+  remainingWei_gte: BigInt
+  remainingWei_lte: BigInt
+  remainingWei_in: [BigInt!]
+  remainingWei_not_in: [BigInt!]
+  projectedInsolvency: BigInt
+  projectedInsolvency_not: BigInt
+  projectedInsolvency_gt: BigInt
+  projectedInsolvency_lt: BigInt
+  projectedInsolvency_gte: BigInt
+  projectedInsolvency_lte: BigInt
+  projectedInsolvency_in: [BigInt!]
+  projectedInsolvency_not_in: [BigInt!]
+  spotAPY: BigDecimal
+  spotAPY_not: BigDecimal
+  spotAPY_gt: BigDecimal
+  spotAPY_lt: BigDecimal
+  spotAPY_gte: BigDecimal
+  spotAPY_lte: BigDecimal
+  spotAPY_in: [BigDecimal!]
+  spotAPY_not_in: [BigDecimal!]
+  operatorCount: Int
+  operatorCount_not: Int
+  operatorCount_gt: Int
+  operatorCount_lt: Int
+  operatorCount_gte: Int
+  operatorCount_lte: Int
+  operatorCount_in: [Int!]
+  operatorCount_not_in: [Int!]
+  _change_block: BlockChangedFilter
+  and: [SponsorshipDailyBucket_filter]
+  or: [SponsorshipDailyBucket_filter]
+}
+enum SponsorshipDailyBucket_orderBy {
+  id
+  sponsorship
+  sponsorship__id
+  sponsorship__metadata
+  sponsorship__creator
+  sponsorship__totalPayoutWeiPerSec
+  sponsorship__minimumStakingPeriodSeconds
+  sponsorship__maxOperators
+  sponsorship__minOperators
+  sponsorship__operatorCount
+  sponsorship__isRunning
+  sponsorship__totalStakedWei
+  sponsorship__cumulativeSponsoring
+  sponsorship__remainingWei
+  sponsorship__remainingWeiUpdateTimestamp
+  sponsorship__projectedInsolvency
+  sponsorship__spotAPY
+  date
+  totalStakedWei
+  remainingWei
+  projectedInsolvency
+  spotAPY
+  operatorCount
+}
+type Stake {
+  id: ID!
+  sponsorship: Sponsorship!
+  operator: Operator!
+  amountWei: BigInt!
+  lockedWei: BigInt!
+  minimumStakeWei: BigInt!
+  earningsWei: BigInt!
+  updateTimestamp: Int!
+  joinTimestamp: Int!
+}
+input Stake_filter {
+  id: ID
+  id_not: ID
+  id_gt: ID
+  id_lt: ID
+  id_gte: ID
+  id_lte: ID
+  id_in: [ID!]
+  id_not_in: [ID!]
+  sponsorship: String
+  sponsorship_not: String
+  sponsorship_gt: String
+  sponsorship_lt: String
+  sponsorship_gte: String
+  sponsorship_lte: String
+  sponsorship_in: [String!]
+  sponsorship_not_in: [String!]
+  sponsorship_contains: String
+  sponsorship_contains_nocase: String
+  sponsorship_not_contains: String
+  sponsorship_not_contains_nocase: String
+  sponsorship_starts_with: String
+  sponsorship_starts_with_nocase: String
+  sponsorship_not_starts_with: String
+  sponsorship_not_starts_with_nocase: String
+  sponsorship_ends_with: String
+  sponsorship_ends_with_nocase: String
+  sponsorship_not_ends_with: String
+  sponsorship_not_ends_with_nocase: String
+  sponsorship_: Sponsorship_filter
+  operator: String
+  operator_not: String
+  operator_gt: String
+  operator_lt: String
+  operator_gte: String
+  operator_lte: String
+  operator_in: [String!]
+  operator_not_in: [String!]
+  operator_contains: String
+  operator_contains_nocase: String
+  operator_not_contains: String
+  operator_not_contains_nocase: String
+  operator_starts_with: String
+  operator_starts_with_nocase: String
+  operator_not_starts_with: String
+  operator_not_starts_with_nocase: String
+  operator_ends_with: String
+  operator_ends_with_nocase: String
+  operator_not_ends_with: String
+  operator_not_ends_with_nocase: String
+  operator_: Operator_filter
+  amountWei: BigInt
+  amountWei_not: BigInt
+  amountWei_gt: BigInt
+  amountWei_lt: BigInt
+  amountWei_gte: BigInt
+  amountWei_lte: BigInt
+  amountWei_in: [BigInt!]
+  amountWei_not_in: [BigInt!]
+  lockedWei: BigInt
+  lockedWei_not: BigInt
+  lockedWei_gt: BigInt
+  lockedWei_lt: BigInt
+  lockedWei_gte: BigInt
+  lockedWei_lte: BigInt
+  lockedWei_in: [BigInt!]
+  lockedWei_not_in: [BigInt!]
+  minimumStakeWei: BigInt
+  minimumStakeWei_not: BigInt
+  minimumStakeWei_gt: BigInt
+  minimumStakeWei_lt: BigInt
+  minimumStakeWei_gte: BigInt
+  minimumStakeWei_lte: BigInt
+  minimumStakeWei_in: [BigInt!]
+  minimumStakeWei_not_in: [BigInt!]
+  earningsWei: BigInt
+  earningsWei_not: BigInt
+  earningsWei_gt: BigInt
+  earningsWei_lt: BigInt
+  earningsWei_gte: BigInt
+  earningsWei_lte: BigInt
+  earningsWei_in: [BigInt!]
+  earningsWei_not_in: [BigInt!]
+  updateTimestamp: Int
+  updateTimestamp_not: Int
+  updateTimestamp_gt: Int
+  updateTimestamp_lt: Int
+  updateTimestamp_gte: Int
+  updateTimestamp_lte: Int
+  updateTimestamp_in: [Int!]
+  updateTimestamp_not_in: [Int!]
+  joinTimestamp: Int
+  joinTimestamp_not: Int
+  joinTimestamp_gt: Int
+  joinTimestamp_lt: Int
+  joinTimestamp_gte: Int
+  joinTimestamp_lte: Int
+  joinTimestamp_in: [Int!]
+  joinTimestamp_not_in: [Int!]
+  _change_block: BlockChangedFilter
+  and: [Stake_filter]
+  or: [Stake_filter]
+}
+enum Stake_orderBy {
+  id
+  sponsorship
+  sponsorship__id
+  sponsorship__metadata
+  sponsorship__creator
+  sponsorship__totalPayoutWeiPerSec
+  sponsorship__minimumStakingPeriodSeconds
+  sponsorship__maxOperators
+  sponsorship__minOperators
+  sponsorship__operatorCount
+  sponsorship__isRunning
+  sponsorship__totalStakedWei
+  sponsorship__cumulativeSponsoring
+  sponsorship__remainingWei
+  sponsorship__remainingWeiUpdateTimestamp
+  sponsorship__projectedInsolvency
+  sponsorship__spotAPY
+  operator
+  operator__id
+  operator__delegatorCount
+  operator__valueWithoutEarnings
+  operator__totalStakeInSponsorshipsWei
+  operator__dataTokenBalanceWei
+  operator__valueUpdateTimestamp
+  operator__valueUpdateBlockNumber
+  operator__operatorTokenTotalSupplyWei
+  operator__exchangeRate
+  operator__latestHeartbeatMetadata
+  operator__latestHeartbeatTimestamp
+  operator__cumulativeProfitsWei
+  operator__cumulativeOperatorsCutWei
+  operator__cumulativeEarningsWei
+  operator__metadataJsonString
+  operator__owner
+  operator__slashingsCount
+  operator__operatorsCutFraction
+  operator__contractVersion
+  operator__isEligibleToVote
+  operator__protectionEndTimestamp
+  amountWei
+  lockedWei
+  minimumStakeWei
+  earningsWei
+  updateTimestamp
+  joinTimestamp
+}
+type Flag {
+  id: ID!
+  lastFlagIndex: Int!
+  sponsorship: Sponsorship!
+  target: Operator!
+  flagger: Operator!
+  flaggingTimestamp: Int!
+  result: String!
+  flagResolutionTimestamp: Int!
+  votesForKick: BigInt!
+  votesAgainstKick: BigInt!
+  votes(skip: Int = 0, first: Int = 100, orderBy: Vote_orderBy, orderDirection: OrderDirection, where: Vote_filter): [Vote!]!
+  reviewerCount: Int!
+  targetStakeAtRiskWei: BigInt!
+  metadata: String!
+  voteStartTimestamp: Int!
+  voteEndTimestamp: Int!
+  protectionEndTimestamp: Int!
+  reviewers(skip: Int = 0, first: Int = 100, orderBy: Operator_orderBy, orderDirection: OrderDirection, where: Operator_filter): [Operator!]!
+}
+input Flag_filter {
+  id: ID
+  id_not: ID
+  id_gt: ID
+  id_lt: ID
+  id_gte: ID
+  id_lte: ID
+  id_in: [ID!]
+  id_not_in: [ID!]
+  lastFlagIndex: Int
+  lastFlagIndex_not: Int
+  lastFlagIndex_gt: Int
+  lastFlagIndex_lt: Int
+  lastFlagIndex_gte: Int
+  lastFlagIndex_lte: Int
+  lastFlagIndex_in: [Int!]
+  lastFlagIndex_not_in: [Int!]
+  sponsorship: String
+  sponsorship_not: String
+  sponsorship_gt: String
+  sponsorship_lt: String
+  sponsorship_gte: String
+  sponsorship_lte: String
+  sponsorship_in: [String!]
+  sponsorship_not_in: [String!]
+  sponsorship_contains: String
+  sponsorship_contains_nocase: String
+  sponsorship_not_contains: String
+  sponsorship_not_contains_nocase: String
+  sponsorship_starts_with: String
+  sponsorship_starts_with_nocase: String
+  sponsorship_not_starts_with: String
+  sponsorship_not_starts_with_nocase: String
+  sponsorship_ends_with: String
+  sponsorship_ends_with_nocase: String
+  sponsorship_not_ends_with: String
+  sponsorship_not_ends_with_nocase: String
+  sponsorship_: Sponsorship_filter
+  target: String
+  target_not: String
+  target_gt: String
+  target_lt: String
+  target_gte: String
+  target_lte: String
+  target_in: [String!]
+  target_not_in: [String!]
+  target_contains: String
+  target_contains_nocase: String
+  target_not_contains: String
+  target_not_contains_nocase: String
+  target_starts_with: String
+  target_starts_with_nocase: String
+  target_not_starts_with: String
+  target_not_starts_with_nocase: String
+  target_ends_with: String
+  target_ends_with_nocase: String
+  target_not_ends_with: String
+  target_not_ends_with_nocase: String
+  target_: Operator_filter
+  flagger: String
+  flagger_not: String
+  flagger_gt: String
+  flagger_lt: String
+  flagger_gte: String
+  flagger_lte: String
+  flagger_in: [String!]
+  flagger_not_in: [String!]
+  flagger_contains: String
+  flagger_contains_nocase: String
+  flagger_not_contains: String
+  flagger_not_contains_nocase: String
+  flagger_starts_with: String
+  flagger_starts_with_nocase: String
+  flagger_not_starts_with: String
+  flagger_not_starts_with_nocase: String
+  flagger_ends_with: String
+  flagger_ends_with_nocase: String
+  flagger_not_ends_with: String
+  flagger_not_ends_with_nocase: String
+  flagger_: Operator_filter
+  flaggingTimestamp: Int
+  flaggingTimestamp_not: Int
+  flaggingTimestamp_gt: Int
+  flaggingTimestamp_lt: Int
+  flaggingTimestamp_gte: Int
+  flaggingTimestamp_lte: Int
+  flaggingTimestamp_in: [Int!]
+  flaggingTimestamp_not_in: [Int!]
+  result: String
+  result_not: String
+  result_gt: String
+  result_lt: String
+  result_gte: String
+  result_lte: String
+  result_in: [String!]
+  result_not_in: [String!]
+  result_contains: String
+  result_contains_nocase: String
+  result_not_contains: String
+  result_not_contains_nocase: String
+  result_starts_with: String
+  result_starts_with_nocase: String
+  result_not_starts_with: String
+  result_not_starts_with_nocase: String
+  result_ends_with: String
+  result_ends_with_nocase: String
+  result_not_ends_with: String
+  result_not_ends_with_nocase: String
+  flagResolutionTimestamp: Int
+  flagResolutionTimestamp_not: Int
+  flagResolutionTimestamp_gt: Int
+  flagResolutionTimestamp_lt: Int
+  flagResolutionTimestamp_gte: Int
+  flagResolutionTimestamp_lte: Int
+  flagResolutionTimestamp_in: [Int!]
+  flagResolutionTimestamp_not_in: [Int!]
+  votesForKick: BigInt
+  votesForKick_not: BigInt
+  votesForKick_gt: BigInt
+  votesForKick_lt: BigInt
+  votesForKick_gte: BigInt
+  votesForKick_lte: BigInt
+  votesForKick_in: [BigInt!]
+  votesForKick_not_in: [BigInt!]
+  votesAgainstKick: BigInt
+  votesAgainstKick_not: BigInt
+  votesAgainstKick_gt: BigInt
+  votesAgainstKick_lt: BigInt
+  votesAgainstKick_gte: BigInt
+  votesAgainstKick_lte: BigInt
+  votesAgainstKick_in: [BigInt!]
+  votesAgainstKick_not_in: [BigInt!]
+  votes_: Vote_filter
+  reviewerCount: Int
+  reviewerCount_not: Int
+  reviewerCount_gt: Int
+  reviewerCount_lt: Int
+  reviewerCount_gte: Int
+  reviewerCount_lte: Int
+  reviewerCount_in: [Int!]
+  reviewerCount_not_in: [Int!]
+  targetStakeAtRiskWei: BigInt
+  targetStakeAtRiskWei_not: BigInt
+  targetStakeAtRiskWei_gt: BigInt
+  targetStakeAtRiskWei_lt: BigInt
+  targetStakeAtRiskWei_gte: BigInt
+  targetStakeAtRiskWei_lte: BigInt
+  targetStakeAtRiskWei_in: [BigInt!]
+  targetStakeAtRiskWei_not_in: [BigInt!]
+  metadata: String
+  metadata_not: String
+  metadata_gt: String
+  metadata_lt: String
+  metadata_gte: String
+  metadata_lte: String
+  metadata_in: [String!]
+  metadata_not_in: [String!]
+  metadata_contains: String
+  metadata_contains_nocase: String
+  metadata_not_contains: String
+  metadata_not_contains_nocase: String
+  metadata_starts_with: String
+  metadata_starts_with_nocase: String
+  metadata_not_starts_with: String
+  metadata_not_starts_with_nocase: String
+  metadata_ends_with: String
+  metadata_ends_with_nocase: String
+  metadata_not_ends_with: String
+  metadata_not_ends_with_nocase: String
+  voteStartTimestamp: Int
+  voteStartTimestamp_not: Int
+  voteStartTimestamp_gt: Int
+  voteStartTimestamp_lt: Int
+  voteStartTimestamp_gte: Int
+  voteStartTimestamp_lte: Int
+  voteStartTimestamp_in: [Int!]
+  voteStartTimestamp_not_in: [Int!]
+  voteEndTimestamp: Int
+  voteEndTimestamp_not: Int
+  voteEndTimestamp_gt: Int
+  voteEndTimestamp_lt: Int
+  voteEndTimestamp_gte: Int
+  voteEndTimestamp_lte: Int
+  voteEndTimestamp_in: [Int!]
+  voteEndTimestamp_not_in: [Int!]
+  protectionEndTimestamp: Int
+  protectionEndTimestamp_not: Int
+  protectionEndTimestamp_gt: Int
+  protectionEndTimestamp_lt: Int
+  protectionEndTimestamp_gte: Int
+  protectionEndTimestamp_lte: Int
+  protectionEndTimestamp_in: [Int!]
+  protectionEndTimestamp_not_in: [Int!]
+  reviewers: [String!]
+  reviewers_not: [String!]
+  reviewers_contains: [String!]
+  reviewers_contains_nocase: [String!]
+  reviewers_not_contains: [String!]
+  reviewers_not_contains_nocase: [String!]
+  reviewers_: Operator_filter
+  _change_block: BlockChangedFilter
+  and: [Flag_filter]
+  or: [Flag_filter]
+}
+enum Flag_orderBy {
+  id
+  lastFlagIndex
+  sponsorship
+  sponsorship__id
+  sponsorship__metadata
+  sponsorship__creator
+  sponsorship__totalPayoutWeiPerSec
+  sponsorship__minimumStakingPeriodSeconds
+  sponsorship__maxOperators
+  sponsorship__minOperators
+  sponsorship__operatorCount
+  sponsorship__isRunning
+  sponsorship__totalStakedWei
+  sponsorship__cumulativeSponsoring
+  sponsorship__remainingWei
+  sponsorship__remainingWeiUpdateTimestamp
+  sponsorship__projectedInsolvency
+  sponsorship__spotAPY
+  target
+  target__id
+  target__delegatorCount
+  target__valueWithoutEarnings
+  target__totalStakeInSponsorshipsWei
+  target__dataTokenBalanceWei
+  target__valueUpdateTimestamp
+  target__valueUpdateBlockNumber
+  target__operatorTokenTotalSupplyWei
+  target__exchangeRate
+  target__latestHeartbeatMetadata
+  target__latestHeartbeatTimestamp
+  target__cumulativeProfitsWei
+  target__cumulativeOperatorsCutWei
+  target__cumulativeEarningsWei
+  target__metadataJsonString
+  target__owner
+  target__slashingsCount
+  target__operatorsCutFraction
+  target__contractVersion
+  target__isEligibleToVote
+  target__protectionEndTimestamp
+  flagger
+  flagger__id
+  flagger__delegatorCount
+  flagger__valueWithoutEarnings
+  flagger__totalStakeInSponsorshipsWei
+  flagger__dataTokenBalanceWei
+  flagger__valueUpdateTimestamp
+  flagger__valueUpdateBlockNumber
+  flagger__operatorTokenTotalSupplyWei
+  flagger__exchangeRate
+  flagger__latestHeartbeatMetadata
+  flagger__latestHeartbeatTimestamp
+  flagger__cumulativeProfitsWei
+  flagger__cumulativeOperatorsCutWei
+  flagger__cumulativeEarningsWei
+  flagger__metadataJsonString
+  flagger__owner
+  flagger__slashingsCount
+  flagger__operatorsCutFraction
+  flagger__contractVersion
+  flagger__isEligibleToVote
+  flagger__protectionEndTimestamp
+  flaggingTimestamp
+  result
+  flagResolutionTimestamp
+  votesForKick
+  votesAgainstKick
+  votes
+  reviewerCount
+  targetStakeAtRiskWei
+  metadata
+  voteStartTimestamp
+  voteEndTimestamp
+  protectionEndTimestamp
+  reviewers
+}
+type Vote {
+  id: ID!
+  flag: Flag!
+  voter: Operator!
+  voterWeight: BigInt!
+  timestamp: Int!
+  votedKick: Boolean!
+}
+input Vote_filter {
+  id: ID
+  id_not: ID
+  id_gt: ID
+  id_lt: ID
+  id_gte: ID
+  id_lte: ID
+  id_in: [ID!]
+  id_not_in: [ID!]
+  flag: String
+  flag_not: String
+  flag_gt: String
+  flag_lt: String
+  flag_gte: String
+  flag_lte: String
+  flag_in: [String!]
+  flag_not_in: [String!]
+  flag_contains: String
+  flag_contains_nocase: String
+  flag_not_contains: String
+  flag_not_contains_nocase: String
+  flag_starts_with: String
+  flag_starts_with_nocase: String
+  flag_not_starts_with: String
+  flag_not_starts_with_nocase: String
+  flag_ends_with: String
+  flag_ends_with_nocase: String
+  flag_not_ends_with: String
+  flag_not_ends_with_nocase: String
+  flag_: Flag_filter
+  voter: String
+  voter_not: String
+  voter_gt: String
+  voter_lt: String
+  voter_gte: String
+  voter_lte: String
+  voter_in: [String!]
+  voter_not_in: [String!]
+  voter_contains: String
+  voter_contains_nocase: String
+  voter_not_contains: String
+  voter_not_contains_nocase: String
+  voter_starts_with: String
+  voter_starts_with_nocase: String
+  voter_not_starts_with: String
+  voter_not_starts_with_nocase: String
+  voter_ends_with: String
+  voter_ends_with_nocase: String
+  voter_not_ends_with: String
+  voter_not_ends_with_nocase: String
+  voter_: Operator_filter
+  voterWeight: BigInt
+  voterWeight_not: BigInt
+  voterWeight_gt: BigInt
+  voterWeight_lt: BigInt
+  voterWeight_gte: BigInt
+  voterWeight_lte: BigInt
+  voterWeight_in: [BigInt!]
+  voterWeight_not_in: [BigInt!]
+  timestamp: Int
+  timestamp_not: Int
+  timestamp_gt: Int
+  timestamp_lt: Int
+  timestamp_gte: Int
+  timestamp_lte: Int
+  timestamp_in: [Int!]
+  timestamp_not_in: [Int!]
+  votedKick: Boolean
+  votedKick_not: Boolean
+  votedKick_in: [Boolean!]
+  votedKick_not_in: [Boolean!]
+  _change_block: BlockChangedFilter
+  and: [Vote_filter]
+  or: [Vote_filter]
+}
+enum Vote_orderBy {
+  id
+  flag
+  flag__id
+  flag__lastFlagIndex
+  flag__flaggingTimestamp
+  flag__result
+  flag__flagResolutionTimestamp
+  flag__votesForKick
+  flag__votesAgainstKick
+  flag__reviewerCount
+  flag__targetStakeAtRiskWei
+  flag__metadata
+  flag__voteStartTimestamp
+  flag__voteEndTimestamp
+  flag__protectionEndTimestamp
+  voter
+  voter__id
+  voter__delegatorCount
+  voter__valueWithoutEarnings
+  voter__totalStakeInSponsorshipsWei
+  voter__dataTokenBalanceWei
+  voter__valueUpdateTimestamp
+  voter__valueUpdateBlockNumber
+  voter__operatorTokenTotalSupplyWei
+  voter__exchangeRate
+  voter__latestHeartbeatMetadata
+  voter__latestHeartbeatTimestamp
+  voter__cumulativeProfitsWei
+  voter__cumulativeOperatorsCutWei
+  voter__cumulativeEarningsWei
+  voter__metadataJsonString
+  voter__owner
+  voter__slashingsCount
+  voter__operatorsCutFraction
+  voter__contractVersion
+  voter__isEligibleToVote
+  voter__protectionEndTimestamp
+  voterWeight
+  timestamp
+  votedKick
+}
+type QueueEntry {
+  id: ID!
+  operator: Operator!
+  amount: BigInt!
+  date: BigInt!
+  delegator: Delegator!
+}
+input QueueEntry_filter {
+  id: ID
+  id_not: ID
+  id_gt: ID
+  id_lt: ID
+  id_gte: ID
+  id_lte: ID
+  id_in: [ID!]
+  id_not_in: [ID!]
+  operator: String
+  operator_not: String
+  operator_gt: String
+  operator_lt: String
+  operator_gte: String
+  operator_lte: String
+  operator_in: [String!]
+  operator_not_in: [String!]
+  operator_contains: String
+  operator_contains_nocase: String
+  operator_not_contains: String
+  operator_not_contains_nocase: String
+  operator_starts_with: String
+  operator_starts_with_nocase: String
+  operator_not_starts_with: String
+  operator_not_starts_with_nocase: String
+  operator_ends_with: String
+  operator_ends_with_nocase: String
+  operator_not_ends_with: String
+  operator_not_ends_with_nocase: String
+  operator_: Operator_filter
+  amount: BigInt
+  amount_not: BigInt
+  amount_gt: BigInt
+  amount_lt: BigInt
+  amount_gte: BigInt
+  amount_lte: BigInt
+  amount_in: [BigInt!]
+  amount_not_in: [BigInt!]
+  date: BigInt
+  date_not: BigInt
+  date_gt: BigInt
+  date_lt: BigInt
+  date_gte: BigInt
+  date_lte: BigInt
+  date_in: [BigInt!]
+  date_not_in: [BigInt!]
+  delegator: String
+  delegator_not: String
+  delegator_gt: String
+  delegator_lt: String
+  delegator_gte: String
+  delegator_lte: String
+  delegator_in: [String!]
+  delegator_not_in: [String!]
+  delegator_contains: String
+  delegator_contains_nocase: String
+  delegator_not_contains: String
+  delegator_not_contains_nocase: String
+  delegator_starts_with: String
+  delegator_starts_with_nocase: String
+  delegator_not_starts_with: String
+  delegator_not_starts_with_nocase: String
+  delegator_ends_with: String
+  delegator_ends_with_nocase: String
+  delegator_not_ends_with: String
+  delegator_not_ends_with_nocase: String
+  delegator_: Delegator_filter
+  _change_block: BlockChangedFilter
+  and: [QueueEntry_filter]
+  or: [QueueEntry_filter]
+}
+enum QueueEntry_orderBy {
+  id
+  operator
+  operator__id
+  operator__delegatorCount
+  operator__valueWithoutEarnings
+  operator__totalStakeInSponsorshipsWei
+  operator__dataTokenBalanceWei
+  operator__valueUpdateTimestamp
+  operator__valueUpdateBlockNumber
+  operator__operatorTokenTotalSupplyWei
+  operator__exchangeRate
+  operator__latestHeartbeatMetadata
+  operator__latestHeartbeatTimestamp
+  operator__cumulativeProfitsWei
+  operator__cumulativeOperatorsCutWei
+  operator__cumulativeEarningsWei
+  operator__metadataJsonString
+  operator__owner
+  operator__slashingsCount
+  operator__operatorsCutFraction
+  operator__contractVersion
+  operator__isEligibleToVote
+  operator__protectionEndTimestamp
+  amount
+  date
+  delegator
+  delegator__id
+  delegator__numberOfDelegations
+  delegator__totalValueDataWei
+  delegator__cumulativeEarningsWei
+}
+type SponsoringEvent {
+  id: ID!
+  sponsor: String!
+  amount: BigInt!
+  sponsorship: Sponsorship!
+  date: BigInt!
+}
+input SponsoringEvent_filter {
+  id: ID
+  id_not: ID
+  id_gt: ID
+  id_lt: ID
+  id_gte: ID
+  id_lte: ID
+  id_in: [ID!]
+  id_not_in: [ID!]
+  sponsor: String
+  sponsor_not: String
+  sponsor_gt: String
+  sponsor_lt: String
+  sponsor_gte: String
+  sponsor_lte: String
+  sponsor_in: [String!]
+  sponsor_not_in: [String!]
+  sponsor_contains: String
+  sponsor_contains_nocase: String
+  sponsor_not_contains: String
+  sponsor_not_contains_nocase: String
+  sponsor_starts_with: String
+  sponsor_starts_with_nocase: String
+  sponsor_not_starts_with: String
+  sponsor_not_starts_with_nocase: String
+  sponsor_ends_with: String
+  sponsor_ends_with_nocase: String
+  sponsor_not_ends_with: String
+  sponsor_not_ends_with_nocase: String
+  amount: BigInt
+  amount_not: BigInt
+  amount_gt: BigInt
+  amount_lt: BigInt
+  amount_gte: BigInt
+  amount_lte: BigInt
+  amount_in: [BigInt!]
+  amount_not_in: [BigInt!]
+  sponsorship: String
+  sponsorship_not: String
+  sponsorship_gt: String
+  sponsorship_lt: String
+  sponsorship_gte: String
+  sponsorship_lte: String
+  sponsorship_in: [String!]
+  sponsorship_not_in: [String!]
+  sponsorship_contains: String
+  sponsorship_contains_nocase: String
+  sponsorship_not_contains: String
+  sponsorship_not_contains_nocase: String
+  sponsorship_starts_with: String
+  sponsorship_starts_with_nocase: String
+  sponsorship_not_starts_with: String
+  sponsorship_not_starts_with_nocase: String
+  sponsorship_ends_with: String
+  sponsorship_ends_with_nocase: String
+  sponsorship_not_ends_with: String
+  sponsorship_not_ends_with_nocase: String
+  sponsorship_: Sponsorship_filter
+  date: BigInt
+  date_not: BigInt
+  date_gt: BigInt
+  date_lt: BigInt
+  date_gte: BigInt
+  date_lte: BigInt
+  date_in: [BigInt!]
+  date_not_in: [BigInt!]
+  _change_block: BlockChangedFilter
+  and: [SponsoringEvent_filter]
+  or: [SponsoringEvent_filter]
+}
+enum SponsoringEvent_orderBy {
+  id
+  sponsor
+  amount
+  sponsorship
+  sponsorship__id
+  sponsorship__metadata
+  sponsorship__creator
+  sponsorship__totalPayoutWeiPerSec
+  sponsorship__minimumStakingPeriodSeconds
+  sponsorship__maxOperators
+  sponsorship__minOperators
+  sponsorship__operatorCount
+  sponsorship__isRunning
+  sponsorship__totalStakedWei
+  sponsorship__cumulativeSponsoring
+  sponsorship__remainingWei
+  sponsorship__remainingWeiUpdateTimestamp
+  sponsorship__projectedInsolvency
+  sponsorship__spotAPY
+  date
+}
+type SlashingEvent {
+  id: ID!
+  operator: Operator!
+  amount: BigInt!
+  date: BigInt!
+  sponsorship: Sponsorship!
+}
+input SlashingEvent_filter {
+  id: ID
+  id_not: ID
+  id_gt: ID
+  id_lt: ID
+  id_gte: ID
+  id_lte: ID
+  id_in: [ID!]
+  id_not_in: [ID!]
+  operator: String
+  operator_not: String
+  operator_gt: String
+  operator_lt: String
+  operator_gte: String
+  operator_lte: String
+  operator_in: [String!]
+  operator_not_in: [String!]
+  operator_contains: String
+  operator_contains_nocase: String
+  operator_not_contains: String
+  operator_not_contains_nocase: String
+  operator_starts_with: String
+  operator_starts_with_nocase: String
+  operator_not_starts_with: String
+  operator_not_starts_with_nocase: String
+  operator_ends_with: String
+  operator_ends_with_nocase: String
+  operator_not_ends_with: String
+  operator_not_ends_with_nocase: String
+  operator_: Operator_filter
+  amount: BigInt
+  amount_not: BigInt
+  amount_gt: BigInt
+  amount_lt: BigInt
+  amount_gte: BigInt
+  amount_lte: BigInt
+  amount_in: [BigInt!]
+  amount_not_in: [BigInt!]
+  date: BigInt
+  date_not: BigInt
+  date_gt: BigInt
+  date_lt: BigInt
+  date_gte: BigInt
+  date_lte: BigInt
+  date_in: [BigInt!]
+  date_not_in: [BigInt!]
+  sponsorship: String
+  sponsorship_not: String
+  sponsorship_gt: String
+  sponsorship_lt: String
+  sponsorship_gte: String
+  sponsorship_lte: String
+  sponsorship_in: [String!]
+  sponsorship_not_in: [String!]
+  sponsorship_contains: String
+  sponsorship_contains_nocase: String
+  sponsorship_not_contains: String
+  sponsorship_not_contains_nocase: String
+  sponsorship_starts_with: String
+  sponsorship_starts_with_nocase: String
+  sponsorship_not_starts_with: String
+  sponsorship_not_starts_with_nocase: String
+  sponsorship_ends_with: String
+  sponsorship_ends_with_nocase: String
+  sponsorship_not_ends_with: String
+  sponsorship_not_ends_with_nocase: String
+  sponsorship_: Sponsorship_filter
+  _change_block: BlockChangedFilter
+  and: [SlashingEvent_filter]
+  or: [SlashingEvent_filter]
+}
+enum SlashingEvent_orderBy {
+  id
+  operator
+  operator__id
+  operator__delegatorCount
+  operator__valueWithoutEarnings
+  operator__totalStakeInSponsorshipsWei
+  operator__dataTokenBalanceWei
+  operator__valueUpdateTimestamp
+  operator__valueUpdateBlockNumber
+  operator__operatorTokenTotalSupplyWei
+  operator__exchangeRate
+  operator__latestHeartbeatMetadata
+  operator__latestHeartbeatTimestamp
+  operator__cumulativeProfitsWei
+  operator__cumulativeOperatorsCutWei
+  operator__cumulativeEarningsWei
+  operator__metadataJsonString
+  operator__owner
+  operator__slashingsCount
+  operator__operatorsCutFraction
+  operator__contractVersion
+  operator__isEligibleToVote
+  operator__protectionEndTimestamp
+  amount
+  date
+  sponsorship
+  sponsorship__id
+  sponsorship__metadata
+  sponsorship__creator
+  sponsorship__totalPayoutWeiPerSec
+  sponsorship__minimumStakingPeriodSeconds
+  sponsorship__maxOperators
+  sponsorship__minOperators
+  sponsorship__operatorCount
+  sponsorship__isRunning
+  sponsorship__totalStakedWei
+  sponsorship__cumulativeSponsoring
+  sponsorship__remainingWei
+  sponsorship__remainingWeiUpdateTimestamp
+  sponsorship__projectedInsolvency
+  sponsorship__spotAPY
+}
+type StakingEvent {
+  id: ID!
+  operator: Operator!
+  amount: BigInt!
+  date: BigInt!
+  sponsorship: Sponsorship!
+}
+input StakingEvent_filter {
+  id: ID
+  id_not: ID
+  id_gt: ID
+  id_lt: ID
+  id_gte: ID
+  id_lte: ID
+  id_in: [ID!]
+  id_not_in: [ID!]
+  operator: String
+  operator_not: String
+  operator_gt: String
+  operator_lt: String
+  operator_gte: String
+  operator_lte: String
+  operator_in: [String!]
+  operator_not_in: [String!]
+  operator_contains: String
+  operator_contains_nocase: String
+  operator_not_contains: String
+  operator_not_contains_nocase: String
+  operator_starts_with: String
+  operator_starts_with_nocase: String
+  operator_not_starts_with: String
+  operator_not_starts_with_nocase: String
+  operator_ends_with: String
+  operator_ends_with_nocase: String
+  operator_not_ends_with: String
+  operator_not_ends_with_nocase: String
+  operator_: Operator_filter
+  amount: BigInt
+  amount_not: BigInt
+  amount_gt: BigInt
+  amount_lt: BigInt
+  amount_gte: BigInt
+  amount_lte: BigInt
+  amount_in: [BigInt!]
+  amount_not_in: [BigInt!]
+  date: BigInt
+  date_not: BigInt
+  date_gt: BigInt
+  date_lt: BigInt
+  date_gte: BigInt
+  date_lte: BigInt
+  date_in: [BigInt!]
+  date_not_in: [BigInt!]
+  sponsorship: String
+  sponsorship_not: String
+  sponsorship_gt: String
+  sponsorship_lt: String
+  sponsorship_gte: String
+  sponsorship_lte: String
+  sponsorship_in: [String!]
+  sponsorship_not_in: [String!]
+  sponsorship_contains: String
+  sponsorship_contains_nocase: String
+  sponsorship_not_contains: String
+  sponsorship_not_contains_nocase: String
+  sponsorship_starts_with: String
+  sponsorship_starts_with_nocase: String
+  sponsorship_not_starts_with: String
+  sponsorship_not_starts_with_nocase: String
+  sponsorship_ends_with: String
+  sponsorship_ends_with_nocase: String
+  sponsorship_not_ends_with: String
+  sponsorship_not_ends_with_nocase: String
+  sponsorship_: Sponsorship_filter
+  _change_block: BlockChangedFilter
+  and: [StakingEvent_filter]
+  or: [StakingEvent_filter]
+}
+enum StakingEvent_orderBy {
+  id
+  operator
+  operator__id
+  operator__delegatorCount
+  operator__valueWithoutEarnings
+  operator__totalStakeInSponsorshipsWei
+  operator__dataTokenBalanceWei
+  operator__valueUpdateTimestamp
+  operator__valueUpdateBlockNumber
+  operator__operatorTokenTotalSupplyWei
+  operator__exchangeRate
+  operator__latestHeartbeatMetadata
+  operator__latestHeartbeatTimestamp
+  operator__cumulativeProfitsWei
+  operator__cumulativeOperatorsCutWei
+  operator__cumulativeEarningsWei
+  operator__metadataJsonString
+  operator__owner
+  operator__slashingsCount
+  operator__operatorsCutFraction
+  operator__contractVersion
+  operator__isEligibleToVote
+  operator__protectionEndTimestamp
+  amount
+  date
+  sponsorship
+  sponsorship__id
+  sponsorship__metadata
+  sponsorship__creator
+  sponsorship__totalPayoutWeiPerSec
+  sponsorship__minimumStakingPeriodSeconds
+  sponsorship__maxOperators
+  sponsorship__minOperators
+  sponsorship__operatorCount
+  sponsorship__isRunning
+  sponsorship__totalStakedWei
+  sponsorship__cumulativeSponsoring
+  sponsorship__remainingWei
+  sponsorship__remainingWeiUpdateTimestamp
+  sponsorship__projectedInsolvency
+  sponsorship__spotAPY
+}
+type Query {
+  _meta(block: Block_height): _Meta_
+  streamPermission(id: ID!, block: Block_height, subgraphError: _SubgraphErrorPolicy_! = deny): StreamPermission
+  streamPermissions(skip: Int = 0, first: Int = 100, orderBy: StreamPermission_orderBy, orderDirection: OrderDirection, where: StreamPermission_filter, block: Block_height, subgraphError: _SubgraphErrorPolicy_! = deny): [StreamPermission!]!
+  stream(id: ID!, block: Block_height, subgraphError: _SubgraphErrorPolicy_! = deny): Stream
+  streams(skip: Int = 0, first: Int = 100, orderBy: Stream_orderBy, orderDirection: OrderDirection, where: Stream_filter, block: Block_height, subgraphError: _SubgraphErrorPolicy_! = deny): [Stream!]!
+  node(id: ID!, block: Block_height, subgraphError: _SubgraphErrorPolicy_! = deny): Node
+  nodes(skip: Int = 0, first: Int = 100, orderBy: Node_orderBy, orderDirection: OrderDirection, where: Node_filter, block: Block_height, subgraphError: _SubgraphErrorPolicy_! = deny): [Node!]!
+  projectPermission(id: ID!, block: Block_height, subgraphError: _SubgraphErrorPolicy_! = deny): ProjectPermission
+  projectPermissions(skip: Int = 0, first: Int = 100, orderBy: ProjectPermission_orderBy, orderDirection: OrderDirection, where: ProjectPermission_filter, block: Block_height, subgraphError: _SubgraphErrorPolicy_! = deny): [ProjectPermission!]!
+  projectPaymentDetails(id: ID!, block: Block_height, subgraphError: _SubgraphErrorPolicy_! = deny): ProjectPaymentDetails
+  projectPaymentDetails_collection(skip: Int = 0, first: Int = 100, orderBy: ProjectPaymentDetails_orderBy, orderDirection: OrderDirection, where: ProjectPaymentDetails_filter, block: Block_height, subgraphError: _SubgraphErrorPolicy_! = deny): [ProjectPaymentDetails!]!
+  projectSubscription(id: ID!, block: Block_height, subgraphError: _SubgraphErrorPolicy_! = deny): ProjectSubscription
+  projectSubscriptions(skip: Int = 0, first: Int = 100, orderBy: ProjectSubscription_orderBy, orderDirection: OrderDirection, where: ProjectSubscription_filter, block: Block_height, subgraphError: _SubgraphErrorPolicy_! = deny): [ProjectSubscription!]!
+  project(id: ID!, block: Block_height, subgraphError: _SubgraphErrorPolicy_! = deny): Project
+  projects(skip: Int = 0, first: Int = 100, orderBy: Project_orderBy, orderDirection: OrderDirection, where: Project_filter, block: Block_height, subgraphError: _SubgraphErrorPolicy_! = deny): [Project!]!
+  projectPurchase(id: ID!, block: Block_height, subgraphError: _SubgraphErrorPolicy_! = deny): ProjectPurchase
+  projectPurchases(skip: Int = 0, first: Int = 100, orderBy: ProjectPurchase_orderBy, orderDirection: OrderDirection, where: ProjectPurchase_filter, block: Block_height, subgraphError: _SubgraphErrorPolicy_! = deny): [ProjectPurchase!]!
+  projectStakeByUser(id: ID!, block: Block_height, subgraphError: _SubgraphErrorPolicy_! = deny): ProjectStakeByUser
+  projectStakeByUsers(skip: Int = 0, first: Int = 100, orderBy: ProjectStakeByUser_orderBy, orderDirection: OrderDirection, where: ProjectStakeByUser_filter, block: Block_height, subgraphError: _SubgraphErrorPolicy_! = deny): [ProjectStakeByUser!]!
+  projectStakingDayBucket(id: ID!, block: Block_height, subgraphError: _SubgraphErrorPolicy_! = deny): ProjectStakingDayBucket
+  projectStakingDayBuckets(skip: Int = 0, first: Int = 100, orderBy: ProjectStakingDayBucket_orderBy, orderDirection: OrderDirection, where: ProjectStakingDayBucket_filter, block: Block_height, subgraphError: _SubgraphErrorPolicy_! = deny): [ProjectStakingDayBucket!]!
+  network(id: ID!, block: Block_height, subgraphError: _SubgraphErrorPolicy_! = deny): Network
+  networks(skip: Int = 0, first: Int = 100, orderBy: Network_orderBy, orderDirection: OrderDirection, where: Network_filter, block: Block_height, subgraphError: _SubgraphErrorPolicy_! = deny): [Network!]!
+  operator(id: ID!, block: Block_height, subgraphError: _SubgraphErrorPolicy_! = deny): Operator
+  operators(skip: Int = 0, first: Int = 100, orderBy: Operator_orderBy, orderDirection: OrderDirection, where: Operator_filter, block: Block_height, subgraphError: _SubgraphErrorPolicy_! = deny): [Operator!]!
+  operatorDailyBucket(id: ID!, block: Block_height, subgraphError: _SubgraphErrorPolicy_! = deny): OperatorDailyBucket
+  operatorDailyBuckets(skip: Int = 0, first: Int = 100, orderBy: OperatorDailyBucket_orderBy, orderDirection: OrderDirection, where: OperatorDailyBucket_filter, block: Block_height, subgraphError: _SubgraphErrorPolicy_! = deny): [OperatorDailyBucket!]!
+  delegation(id: ID!, block: Block_height, subgraphError: _SubgraphErrorPolicy_! = deny): Delegation
+  delegations(skip: Int = 0, first: Int = 100, orderBy: Delegation_orderBy, orderDirection: OrderDirection, where: Delegation_filter, block: Block_height, subgraphError: _SubgraphErrorPolicy_! = deny): [Delegation!]!
+  pastDelegationCount(id: ID!, block: Block_height, subgraphError: _SubgraphErrorPolicy_! = deny): PastDelegationCount
+  pastDelegationCounts(skip: Int = 0, first: Int = 100, orderBy: PastDelegationCount_orderBy, orderDirection: OrderDirection, where: PastDelegationCount_filter, block: Block_height, subgraphError: _SubgraphErrorPolicy_! = deny): [PastDelegationCount!]!
+  delegator(id: ID!, block: Block_height, subgraphError: _SubgraphErrorPolicy_! = deny): Delegator
+  delegators(skip: Int = 0, first: Int = 100, orderBy: Delegator_orderBy, orderDirection: OrderDirection, where: Delegator_filter, block: Block_height, subgraphError: _SubgraphErrorPolicy_! = deny): [Delegator!]!
+  delegatorDailyBucket(id: ID!, block: Block_height, subgraphError: _SubgraphErrorPolicy_! = deny): DelegatorDailyBucket
+  delegatorDailyBuckets(skip: Int = 0, first: Int = 100, orderBy: DelegatorDailyBucket_orderBy, orderDirection: OrderDirection, where: DelegatorDailyBucket_filter, block: Block_height, subgraphError: _SubgraphErrorPolicy_! = deny): [DelegatorDailyBucket!]!
+  sponsorship(id: ID!, block: Block_height, subgraphError: _SubgraphErrorPolicy_! = deny): Sponsorship
+  sponsorships(skip: Int = 0, first: Int = 100, orderBy: Sponsorship_orderBy, orderDirection: OrderDirection, where: Sponsorship_filter, block: Block_height, subgraphError: _SubgraphErrorPolicy_! = deny): [Sponsorship!]!
+  sponsorshipDailyBucket(id: ID!, block: Block_height, subgraphError: _SubgraphErrorPolicy_! = deny): SponsorshipDailyBucket
+  sponsorshipDailyBuckets(skip: Int = 0, first: Int = 100, orderBy: SponsorshipDailyBucket_orderBy, orderDirection: OrderDirection, where: SponsorshipDailyBucket_filter, block: Block_height, subgraphError: _SubgraphErrorPolicy_! = deny): [SponsorshipDailyBucket!]!
+  stake(id: ID!, block: Block_height, subgraphError: _SubgraphErrorPolicy_! = deny): Stake
+  stakes(skip: Int = 0, first: Int = 100, orderBy: Stake_orderBy, orderDirection: OrderDirection, where: Stake_filter, block: Block_height, subgraphError: _SubgraphErrorPolicy_! = deny): [Stake!]!
+  flag(id: ID!, block: Block_height, subgraphError: _SubgraphErrorPolicy_! = deny): Flag
+  flags(skip: Int = 0, first: Int = 100, orderBy: Flag_orderBy, orderDirection: OrderDirection, where: Flag_filter, block: Block_height, subgraphError: _SubgraphErrorPolicy_! = deny): [Flag!]!
+  vote(id: ID!, block: Block_height, subgraphError: _SubgraphErrorPolicy_! = deny): Vote
+  votes(skip: Int = 0, first: Int = 100, orderBy: Vote_orderBy, orderDirection: OrderDirection, where: Vote_filter, block: Block_height, subgraphError: _SubgraphErrorPolicy_! = deny): [Vote!]!
+  queueEntry(id: ID!, block: Block_height, subgraphError: _SubgraphErrorPolicy_! = deny): QueueEntry
+  queueEntries(skip: Int = 0, first: Int = 100, orderBy: QueueEntry_orderBy, orderDirection: OrderDirection, where: QueueEntry_filter, block: Block_height, subgraphError: _SubgraphErrorPolicy_! = deny): [QueueEntry!]!
+  sponsoringEvent(id: ID!, block: Block_height, subgraphError: _SubgraphErrorPolicy_! = deny): SponsoringEvent
+  sponsoringEvents(skip: Int = 0, first: Int = 100, orderBy: SponsoringEvent_orderBy, orderDirection: OrderDirection, where: SponsoringEvent_filter, block: Block_height, subgraphError: _SubgraphErrorPolicy_! = deny): [SponsoringEvent!]!
+  slashingEvent(id: ID!, block: Block_height, subgraphError: _SubgraphErrorPolicy_! = deny): SlashingEvent
+  slashingEvents(skip: Int = 0, first: Int = 100, orderBy: SlashingEvent_orderBy, orderDirection: OrderDirection, where: SlashingEvent_filter, block: Block_height, subgraphError: _SubgraphErrorPolicy_! = deny): [SlashingEvent!]!
+  stakingEvent(id: ID!, block: Block_height, subgraphError: _SubgraphErrorPolicy_! = deny): StakingEvent
+  stakingEvents(skip: Int = 0, first: Int = 100, orderBy: StakingEvent_orderBy, orderDirection: OrderDirection, where: StakingEvent_filter, block: Block_height, subgraphError: _SubgraphErrorPolicy_! = deny): [StakingEvent!]!
+  projectSearch(text: String!, first: Int = 100, skip: Int = 0, block: Block_height, where: Project_filter, subgraphError: _SubgraphErrorPolicy_! = deny): [Project!]!
+}

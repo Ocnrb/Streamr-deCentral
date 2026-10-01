@@ -1,0 +1,15 @@
+# Source files use CRLF; generated and vendored files keep their own endings
+root = true
+
+[*]
+charset = utf-8
+end_of_line = crlf
+indent_style = space
+indent_size = 4
+insert_final_newline = true
+
+[*.{json,yml,yaml,webmanifest}]
+indent_size = 2
+
+[{package.json,package-lock.json,styles.css,libs/**,sitemap.xml,robots.txt}]
+end_of_line = lf

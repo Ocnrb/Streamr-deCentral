@@ -201,7 +201,7 @@ function isValidIpfsCid(cid) {
 // Operator avatar stored in a Streamr stream (see streamAvatar.js)
 export const OPERATOR_AVATAR_PLACEHOLDER = 'https://placehold.co/64x64/1E1E1E/a3a3a3?text=OP';
 export const AVATAR_STREAM_MARKER = '#avatar-stream=';
-const PROFILE_STREAM_ID_REGEX = /^(0x[0-9a-fA-F]{40}|[a-z0-9.-]+\.eth)\/[A-Za-z0-9_.\-\/]+$/;
+const PROFILE_STREAM_ID_REGEX = /^(0x[0-9a-fA-F]{40}|[a-z0-9.-]+\.eth)\/[A-Za-z0-9_.\-/]+$/;
 
 // IPFS avatars that failed to load are remembered (7 days): the files of most Streamr operator avatars
 // are no longer available on IPFS, so they aren't requested again on every render
