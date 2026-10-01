@@ -34,7 +34,7 @@ test('a saved key is unlocked with its password', async ({ page }) => {
             loadingText: document.getElementById('loading-main-text')?.innerText,
             saved: !!localStorage.getItem('encrypted_wallet')
         }));
-        throw new Error(`${error.message}\n${JSON.stringify(state)}\n${logs.filter(l => !/ERR_FAILED|Service Worker/.test(l)).join('\n')}`);
+        throw new Error(`${error.message}\n${JSON.stringify(state)}\n${logs.filter(l => !/ERR_FAILED|Service Worker/.test(l)).join('\n')}`, { cause: error });
     }
 
     await page.reload({ waitUntil: 'domcontentloaded' });
