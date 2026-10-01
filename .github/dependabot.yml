@@ -1,0 +1,18 @@
+# Security alerts and weekly updates for the npm packages and the CI actions
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      dev-tools:
+        dependency-type: development
+    ignore:
+      # ethers v6 changes the API the whole app uses
+      - dependency-name: ethers
+        update-types: [version-update:semver-major]
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly

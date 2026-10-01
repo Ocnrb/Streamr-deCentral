@@ -1,5 +1,6 @@
 ﻿import { formatBigNumber, parseOperatorMetadata, avatarImgHtml } from '../core/utils.js';
 import { getGraphUrl } from '../core/constants.js';
+import { renderIcons } from '../core/icons.js';
 
 // START DATE: November 25, 2023
 const START_DATE_ISO = '2023-11-25T00:00:00Z';
@@ -682,7 +683,7 @@ export const RaceLogic = {
             this.els.btnPlay.classList.remove('pulse-active');
         }
 
-        if (window.lucide) window.lucide.createIcons();
+        renderIcons();
     },
 
     toggleSpeed: function() {

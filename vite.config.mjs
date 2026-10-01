@@ -9,7 +9,13 @@ export default defineConfig({
         outDir: 'dist',
         emptyOutDir: true,
         target: 'es2022',
-        sourcemap: true
+        sourcemap: true,
+        rollupOptions: {
+            output: {
+                // The libraries in a file of their own: cached across deploys, loaded alongside the app
+                manualChunks: { vendor: ['ethers', 'chart.js', 'leaflet'] }
+            }
+        }
     },
     server: { port: 5500 },
     preview: { port: 5500 }

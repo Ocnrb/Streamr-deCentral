@@ -46,7 +46,8 @@ Default API keys are included. You can use your own The Graph and Etherscan keys
 
 - Vanilla JavaScript (ES modules), with no framework, bundled by Vite
 - Tailwind CSS v4 (through Vite)
-- ethers v5, Streamr SDK, MapLibre, Leaflet, Chart.js, d3 and Lucide (in `public/libs/`)
+- ethers v5, Chart.js, Leaflet, d3 and Lucide from npm (pinned versions, bundled by Vite); the Streamr SDK and
+  MapLibre are vendored in `public/libs/`
 - Hosted on Vercel (`vercel.json` routes every page to `index.html` and sets the security headers)
 
 ## Structure
@@ -58,8 +59,8 @@ src/core/       Router, services (RPC, subgraph), constants, utils
 src/features/   One module per page or tool
 src/ui/         Navigation and shared UI
 src/input.css   Tailwind source
-public/         Served as they are: early.js (before the first paint), sw.js, libs/ (vendored, pinned,
-                no CDNs), workers/, assets/, favicon/, data/
+public/         Served as they are: early.js (before the first paint), sw.js, libs/ (Streamr SDK and
+                MapLibre, pinned, no CDNs), workers/, assets/, favicon/, data/
 scripts/        Server for a built app (used by the tests)
 tests/          End-to-end tests and their mocks
 ```
