@@ -54,7 +54,8 @@ Default API keys are included. You can use your own The Graph and Etherscan keys
 
 ```
 index.html      Markup of every page and modal
-main.js         App startup, routes and global events
+main.js         Entry point: wires the app modules and global events
+src/app/        Routes, sign-in and saved key, page loading, autostaker panel, PWA install
 src/core/       Router, services (RPC, subgraph), constants, utils
 src/features/   One module per page or tool
 src/ui/         Navigation and shared UI
