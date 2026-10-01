@@ -4977,7 +4977,7 @@
     opacity: 1;
     visibility: visible;
   }
-  @media (hover: none) {
+  @media (hover: none) and (pointer: coarse) {
     #sidebar-compact-toggle {
       opacity: 1 !important;
     }

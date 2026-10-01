@@ -481,8 +481,8 @@
     visibility: visible;
   }
 
-  /* Touch screens: the compact toggle stays visible (no hover) */
-  @media (hover: none) {
+  /* Touch-only screens: the compact toggle stays visible (no hover to show it) */
+  @media (hover: none) and (pointer: coarse) {
     #sidebar-compact-toggle {
       opacity: 1 !important;
     }
