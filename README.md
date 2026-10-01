@@ -56,7 +56,8 @@ Default API keys are included. You can use your own The Graph and Etherscan keys
 index.html      Markup of every page and modal
 main.js         Entry point: wires the app modules and global events
 src/app/        Routes, sign-in and saved key, page loading, autostaker panel, PWA install
-src/core/       Router, services (RPC, subgraph), constants, utils
+src/core/       Router, constants, utils and the services (RPC, subgraph, Polygonscan, prices, Streamr client,
+                transactions), each in its own file behind services.js
 src/features/   One module per page or tool
 src/ui/         Navigation and shared UI (toasts, tooltip, operator page, node map, autostaker panel, profile shortcut)
 src/input.css   Tailwind source
