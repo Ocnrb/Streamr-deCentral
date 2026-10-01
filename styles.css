@@ -355,6 +355,9 @@
   .top-14 {
     top: calc(var(--spacing) * 14);
   }
+  .top-\[44px\] {
+    top: 44px;
+  }
   .top-\[calc\(100\%\+8px\)\] {
     top: calc(100% + 8px);
   }
@@ -363,6 +366,9 @@
   }
   .-right-1\.5 {
     right: calc(var(--spacing) * -1.5);
+  }
+  .-right-3 {
+    right: calc(var(--spacing) * -3);
   }
   .right-0 {
     right: calc(var(--spacing) * 0);
@@ -2719,6 +2725,13 @@
       }
     }
   }
+  .group-hover\/sidebar\:opacity-100 {
+    &:is(:where(.group\/sidebar):hover *) {
+      @media (hover: hover) {
+        opacity: 100%;
+      }
+    }
+  }
   .group-hover\/title\:translate-x-0\.5 {
     &:is(:where(.group\/title):hover *) {
       @media (hover: hover) {
@@ -3400,6 +3413,11 @@
     &:focus {
       --tw-outline-style: none;
       outline-style: none;
+    }
+  }
+  .focus-visible\:opacity-100 {
+    &:focus-visible {
+      opacity: 100%;
     }
   }
   .focus-visible\:outline-none {
@@ -4297,6 +4315,11 @@
       display: none;
     }
   }
+  .lg\:inline-flex {
+    @media (width >= 64rem) {
+      display: inline-flex;
+    }
+  }
   .lg\:max-h-none {
     @media (width >= 64rem) {
       max-height: none;
@@ -4933,34 +4956,30 @@
   .nav-link.active::before {
     transform: translateY(-50%) scaleY(1);
   }
-  @media (min-width: 768px) and (max-width: 1023px) {
-    #app-sidebar .nav-link {
-      position: relative;
-    }
-    #app-sidebar .nav-link::after {
-      content: attr(data-tooltip);
-      position: absolute;
-      left: 100%;
-      top: 50%;
-      transform: translateY(-50%);
-      margin-left: 12px;
-      padding: 6px 10px;
-      background: #1E1E1E;
-      border: 1px solid #333;
-      border-radius: 6px;
-      font-size: 12px;
-      font-weight: 500;
-      color: white;
-      white-space: nowrap;
-      opacity: 0;
-      visibility: hidden;
-      pointer-events: none;
-      transition: opacity 0.15s, visibility 0.15s;
-      z-index: 100;
-    }
-    #app-sidebar .nav-link:hover::after {
-      opacity: 1;
-      visibility: visible;
+  #sidebar-tooltip {
+    position: fixed;
+    z-index: 100;
+    transform: translateY(-50%);
+    padding: 6px 10px;
+    background: #1E1E1E;
+    border: 1px solid #333;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 500;
+    color: white;
+    white-space: nowrap;
+    pointer-events: none;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.15s, visibility 0.15s;
+  }
+  #sidebar-tooltip.visible {
+    opacity: 1;
+    visibility: visible;
+  }
+  @media (hover: none) {
+    #sidebar-compact-toggle {
+      opacity: 1 !important;
     }
   }
   @media (min-width: 768px) {
@@ -4977,6 +4996,32 @@
     }
     #sidebar-logo span {
       margin-right: 1.5rem;
+    }
+  }
+  @media (min-width: 1024px) {
+    html.sidebar-compact #app-sidebar {
+      width: 72px !important;
+    }
+    html.sidebar-compact #app-sidebar .lg\:block, html.sidebar-compact #app-sidebar .lg\:flex {
+      display: none !important;
+    }
+    html.sidebar-compact #app-sidebar .lg\:justify-start {
+      justify-content: center !important;
+    }
+    html.sidebar-compact #sidebar-logo {
+      padding-left: 0;
+    }
+    html.sidebar-compact #sidebar-compact-toggle svg {
+      transform: rotate(180deg);
+    }
+    html.sidebar-compact #desktop-header {
+      left: 72px !important;
+    }
+    html.sidebar-compact #main-container {
+      padding-left: 72px !important;
+    }
+    html.sidebar-compact .lg\:left-72 {
+      left: 72px !important;
     }
   }
   .autostaker-active {

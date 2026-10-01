@@ -69,6 +69,8 @@
     <link rel="dns-prefetch" href="https://d3js.org">
 
     <link rel="stylesheet" href="/styles.css">
+    <!-- Compact sidebar chosen on this browser: set before the page is drawn -->
+    <script>try { if (localStorage.getItem('sidebar.compact') === '1') document.documentElement.classList.add('sidebar-compact'); } catch (e) { /* storage blocked */ }</script>
     
     <!-- PWA Install Prompt Capture (must be inline and early to catch the event) -->
     <script>
@@ -1170,12 +1172,17 @@
     </div>
 
     <!-- ===== SIDEBAR (Desktop) - hidden until login ===== -->
-    <aside id="app-sidebar" class="hidden flex-col fixed left-0 top-0 h-full w-[72px] lg:w-72 bg-[#1A1A1A] border-r border-[#2a2a2a] z-40 transition-all duration-300">
+    <aside id="app-sidebar" class="group/sidebar hidden flex-col fixed left-0 top-0 h-full w-[72px] lg:w-72 bg-[#1A1A1A] border-r border-[#2a2a2a] z-40 transition-all duration-300">
         <!-- Logo -->
         <div id="sidebar-logo" class="h-14 flex items-center justify-center lg:justify-start border-b border-[#2a2a2a]">
             <img src="/favicon/favicon.ico" alt="" class="w-11 h-11 min-w-[40px] min-h-[40px] flex-shrink-0 object-contain">
             <span class="hidden lg:block ml-3 text-lg font-bold text-white whitespace-nowrap" style="margin-right: 8px;">Streamr deCentral</span>
         </div>
+        <!-- Desktop: compact sidebar (icons only), shown on hover over the sidebar -->
+        <button id="sidebar-compact-toggle" type="button" aria-label="Collapse the sidebar" aria-expanded="true"
+            class="hidden lg:inline-flex absolute top-[44px] -right-3 z-50 w-6 h-6 items-center justify-center rounded-full border border-[#333] bg-[#1A1A1A] text-gray-500 hover:text-white hover:border-[#555] opacity-0 group-hover/sidebar:opacity-100 focus-visible:opacity-100 transition">
+            <svg class="w-3.5 h-3.5 transition-transform" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
+        </button>
         
         <!-- Your Profiles Section (hidden by default, shown when any profile is saved) -->
         <div id="sidebar-profiles-section" class="hidden px-2 py-3 border-b border-[#2a2a2a] space-y-2">
@@ -1340,7 +1347,7 @@
         <!-- Bottom Section -->
         <div class="border-t border-[#2a2a2a] p-2">
             <!-- Settings -->
-            <button id="sidebar-settings-btn" class="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-gray-400 hover:text-white hover:bg-white/5 transition-all">
+            <button id="sidebar-settings-btn" data-tooltip="Settings" class="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-gray-400 hover:text-white hover:bg-white/5 transition-all">
                 <svg class="w-6 h-6 p-0.5 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/>
                     <circle cx="12" cy="12" r="3"/>

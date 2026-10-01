@@ -80,6 +80,7 @@ class NavigationController {
         this.setupBackButton();
         this.setupEventListeners();
         this.setupTooltips();
+        this.setupCompactSidebar();
         this.updateActiveState(this.getPageFromPath());
     }
     
@@ -338,6 +339,62 @@ class NavigationController {
             const title = this.pageTitles[navId] || navId;
             link.setAttribute('data-tooltip', title);
         });
+        // Compact sidebar: the name next to the hovered icon, in a tooltip outside the sidebar (it clips its overflow)
+        this.sidebarTooltip = document.createElement('div');
+        this.sidebarTooltip.id = 'sidebar-tooltip';
+        this.sidebarTooltip.setAttribute('role', 'tooltip');
+        document.body.appendChild(this.sidebarTooltip);
+        const show = (e) => {
+            const target = e.target.closest?.('[data-tooltip]');
+            if (!target || !this.sidebar?.contains(target) || !this.isSidebarCompact()) return;
+            const rect = target.getBoundingClientRect();
+            this.sidebarTooltip.textContent = target.getAttribute('data-tooltip');
+            this.sidebarTooltip.style.left = `${rect.right + 12}px`;
+            this.sidebarTooltip.style.top = `${rect.top + rect.height / 2}px`;
+            this.sidebarTooltip.classList.add('visible');
+        };
+        this.sidebar?.addEventListener('mouseover', show);
+        this.sidebar?.addEventListener('focusin', show);
+        this.sidebar?.addEventListener('mouseleave', () => this.hideSidebarTooltip());
+        this.sidebar?.addEventListener('mouseout', (e) => {
+            if (!e.relatedTarget?.closest?.('[data-tooltip]')) this.hideSidebarTooltip();
+        });
+        this.sidebar?.addEventListener('focusout', () => this.hideSidebarTooltip());
+        this.sidebar?.addEventListener('scroll', () => this.hideSidebarTooltip(), true);
+        window.addEventListener('app:routechange', () => this.hideSidebarTooltip());
+    }
+
+    hideSidebarTooltip() {
+        this.sidebarTooltip?.classList.remove('visible');
+    }
+
+    /** Icons only: always on tablets, on desktop when chosen */
+    isSidebarCompact() {
+        const width = window.innerWidth;
+        return (width >= 768 && width < 1024) || (width >= 1024 && document.documentElement.classList.contains('sidebar-compact'));
+    }
+
+    /** Desktop: a small button on the sidebar's edge makes it compact (kept in this browser, set before the page is drawn) */
+    setupCompactSidebar() {
+        const toggle = document.getElementById('sidebar-compact-toggle');
+        if (!toggle) return;
+        const sync = () => {
+            const compact = document.documentElement.classList.contains('sidebar-compact');
+            toggle.setAttribute('aria-label', compact ? 'Expand the sidebar' : 'Collapse the sidebar');
+            toggle.setAttribute('aria-expanded', String(!compact));
+        };
+        toggle.addEventListener('click', () => {
+            const compact = document.documentElement.classList.toggle('sidebar-compact');
+            try {
+                if (compact) localStorage.setItem('sidebar.compact', '1');
+                else localStorage.removeItem('sidebar.compact');
+            } catch (e) { /* storage blocked: for this visit only */ }
+            sync();
+            this.hideSidebarTooltip();
+            // Charts and maps fit the new width once the sidebar has moved
+            setTimeout(() => window.dispatchEvent(new Event('resize')), 320);
+        });
+        sync();
     }
     
     /**
