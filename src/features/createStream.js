@@ -31,7 +31,7 @@ const PERMISSION_KEYS = ['publish', 'subscribe', 'edit', 'delete', 'grant'];
 const NO_PERMISSIONS = { publish: false, subscribe: false, edit: false, delete: false, grant: false };
 
 // Allowed characters in the stream path (same check as StreamRegistry contract)
-const STREAM_PATH_REGEX = /^[A-Za-z0-9_.\-\/]+$/;
+const STREAM_PATH_REGEX = /^[A-Za-z0-9_.\-/]+$/;
 
 // Gas used by transactions that can't be estimated before the stream exists (approximations)
 const APPROX_GAS = {

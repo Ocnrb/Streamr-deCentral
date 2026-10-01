@@ -1,19 +1,31 @@
 {
-  "name": "streamr-decentral-main",
+  "name": "streamr-decentral",
   "version": "1.0.0",
-  "description": "\\# Streamr Dashboard",
-  "main": "main.js",
+  "private": true,
+  "description": "Streamr deCentral: a web app to follow and take part in the Streamr Network (operators, sponsorships, delegations, streams, swaps and bridge).",
+  "homepage": "https://streamr-decentral.vercel.app",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Ocnrb/Streamr-deCentral.git"
+  },
+  "license": "MIT",
+  "type": "module",
   "scripts": {
+    "dev": "node scripts/serve.mjs 5500",
     "build:css": "tailwindcss -i src/input.css -o styles.css",
     "watch:css": "tailwindcss -i src/input.css -o styles.css --watch",
-    "dev": "npx serve -s -l 5500",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "check:css": "tailwindcss -i src/input.css -o styles.css && git diff --exit-code -- styles.css",
+    "lint": "eslint .",
+    "test": "playwright test",
+    "test:install": "playwright install chromium"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
   "devDependencies": {
+    "@eslint/js": "^9.39.5",
+    "@playwright/test": "^1.63.0",
     "@tailwindcss/cli": "^4.1.17",
+    "eslint": "^9.39.5",
+    "globals": "^17.13.0",
+    "graphql": "^16.14.2",
     "tailwindcss": "^4.1.17"
   }
 }

@@ -30,6 +30,20 @@ Then open http://localhost:5500.
 
 After changing Tailwind classes, run `npm run build:css` again, or keep `npm run watch:css` running. The generated `styles.css` is committed.
 
+## Tests and checks
+
+```bash
+npm run test:install   # once: the Chromium used by the tests
+npm test               # end-to-end tests (Playwright)
+npm run lint           # ESLint
+npm run check:css      # styles.css matches src/input.css
+```
+
+The tests run the app from a local server with the outside world mocked in `tests/support/network.mjs`: an
+in-memory subgraph that answers the app's queries (and checks them against the subgraph's schema), the Etherscan
+logs API, a Polygon RPC and a Streamr client. They cover the Overview, the security rules (CSP on every page,
+injected markup shown as text) and the sidebar. GitHub Actions runs all of these on every pull request.
+
 Default API keys are included. You can use your own The Graph and Etherscan keys in **Settings**.
 
 ## Stack
@@ -37,7 +51,7 @@ Default API keys are included. You can use your own The Graph and Etherscan keys
 - Vanilla JavaScript (ES modules), with no framework and no JS build step
 - Tailwind CSS v4
 - ethers v5, Streamr SDK, MapLibre and Chart.js (in `libs/`)
-- Hosted on Vercel (`vercel.json` routes every page to `index.html`)
+- Hosted on Vercel (`vercel.json` routes every page to `index.html` and sets the security headers)
 
 ## Structure
 
@@ -47,10 +61,17 @@ main.js         App startup, routes and global events
 src/core/       Router, services (RPC, subgraph), constants, utils
 src/features/   One module per page or tool
 src/ui/         Navigation and shared UI
+src/early.js    Runs before the first paint (saved layout choices, PWA prompt, service worker)
 src/input.css   Tailwind source (built to styles.css)
-libs/           Vendored libraries
+libs/           Vendored libraries (pinned versions, no CDNs)
 workers/        Web workers (CSV parsing, leaderboard)
+scripts/        Local server
+tests/          End-to-end tests and their mocks
 ```
+
+## Security
+
+See [SECURITY.md](SECURITY.md) for how to report a vulnerability and what the app does to stay safe.
 
 ## License
 
