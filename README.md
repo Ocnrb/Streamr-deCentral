@@ -22,21 +22,17 @@ Everything runs in the browser. Data comes from the Streamr subgraph (The Graph)
 
 ```bash
 npm install
-npm run build:css
-npm run dev
+npm run dev        # Vite dev server: http://localhost:5500 (Tailwind and modules rebuilt on save)
+npm run build      # production build in dist/ (what Vercel serves)
+npm run preview    # serves dist/
 ```
-
-Then open http://localhost:5500.
-
-After changing Tailwind classes, run `npm run build:css` again, or keep `npm run watch:css` running. The generated `styles.css` is committed.
 
 ## Tests and checks
 
 ```bash
 npm run test:install   # once: the Chromium used by the tests
-npm test               # end-to-end tests (Playwright)
+npm test               # builds, then runs the end-to-end tests (Playwright) on the build
 npm run lint           # ESLint
-npm run check:css      # styles.css matches src/input.css
 ```
 
 The tests run the app from a local server with the outside world mocked in `tests/support/network.mjs`: an
@@ -48,9 +44,9 @@ Default API keys are included. You can use your own The Graph and Etherscan keys
 
 ## Stack
 
-- Vanilla JavaScript (ES modules), with no framework and no JS build step
-- Tailwind CSS v4
-- ethers v5, Streamr SDK, MapLibre and Chart.js (in `libs/`)
+- Vanilla JavaScript (ES modules), with no framework, bundled by Vite
+- Tailwind CSS v4 (through Vite)
+- ethers v5, Streamr SDK, MapLibre, Leaflet, Chart.js, d3 and Lucide (in `public/libs/`)
 - Hosted on Vercel (`vercel.json` routes every page to `index.html` and sets the security headers)
 
 ## Structure
@@ -61,11 +57,10 @@ main.js         App startup, routes and global events
 src/core/       Router, services (RPC, subgraph), constants, utils
 src/features/   One module per page or tool
 src/ui/         Navigation and shared UI
-src/early.js    Runs before the first paint (saved layout choices, PWA prompt, service worker)
-src/input.css   Tailwind source (built to styles.css)
-libs/           Vendored libraries (pinned versions, no CDNs)
-workers/        Web workers (CSV parsing, leaderboard)
-scripts/        Local server
+src/input.css   Tailwind source
+public/         Served as they are: early.js (before the first paint), sw.js, libs/ (vendored, pinned,
+                no CDNs), workers/, assets/, favicon/, data/
+scripts/        Server for a built app (used by the tests)
 tests/          End-to-end tests and their mocks
 ```
 

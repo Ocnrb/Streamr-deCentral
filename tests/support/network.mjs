@@ -8,7 +8,7 @@ const root = fileURLToPath(new URL('../..', import.meta.url));
 // The app's own ethers build (v5), to encode the event logs
 const ethers = (() => {
     const m = { exports: {} };
-    new Function('module', 'exports', 'self', 'window', fs.readFileSync(`${root}libs/ethers.umd.min.js`, 'utf8'))(m, m.exports, {}, {});
+    new Function('module', 'exports', 'self', 'window', fs.readFileSync(`${root}public/libs/ethers.umd.min.js`, 'utf8'))(m, m.exports, {}, {});
     return m.exports.ethers || m.exports;
 })();
 const schema = buildSchema(fs.readFileSync(new URL('../fixtures/subgraph-schema.graphql', import.meta.url), 'utf8'));
