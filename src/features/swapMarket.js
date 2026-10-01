@@ -5,11 +5,13 @@
  *   bought or sold DATA comes from the move of the pool price (only swaps move it).
  * - Chart: 24H and 7D follow the pool price trade by trade; longer ranges use the daily DATA/USD
  *   history (DATA_History stream, CSV fallback). Every range ends at the pool's current price.
+ * - Volume and trades of the range: from the loaded trades (24H / 7D, to the minute), else from the pool's
+ *   daily volume and transaction counts in the Uniswap v4 subgraph (The Graph).
  */
 
 import * as Utils from '../core/utils.js';
 import * as Services from '../core/services.js';
-import { DATA_TOKEN_ADDRESS_POLYGON, POLYGONSCAN_NETWORK, getEtherscanApiKey } from '../core/constants.js';
+import { DATA_TOKEN_ADDRESS_POLYGON, POLYGONSCAN_NETWORK, getEtherscanApiKey, getUniswapV4SubgraphUrl } from '../core/constants.js';
 
 const { logger } = Utils;
 
@@ -29,6 +31,7 @@ const MAX_LOGS = 1000;               // the explorer returns at most 1000 logs (
 const TRADES_PAGE = 50;              // rows shown at first, and added by Load More
 const MAX_PAGES = 5;                 // explorer pages of 1000 logs for the 7 days (5000 trades)
 const PAGE_PAUSE_MS = 400;           // between pages (explorer rate limit)
+const DAYS_REFRESH_MS = 10 * 60 * 1000; // the subgraph's daily volume, read again after 10 min
 const REFRESH_MS = 30 * 1000;
 const HOUR = 3600 * 1000;
 const DAY = 24 * HOUR;
@@ -37,7 +40,7 @@ const TRADE_RANGES = ['24H', '7D'];
 
 const state = {
     active: false,
-    range: '7D',
+    range: '24H',
     trades: [],            // oldest first
     seen: new Set(),       // txHash:logIndex
     nextFromBlock: null,
@@ -51,6 +54,8 @@ const state = {
     firstTradeBlock: undefined,  // block of the pool's first trade (null: none)
     reachedStart: false,   // every trade since the pool's first one is loaded
     loadingOlder: false,
+    days: null,            // the pool's days from the subgraph: { date, volume, txCount }, oldest first
+    daysAt: 0,
     failures: 0,           // failed loads in a row (before the first success: asked again sooner)
     chart: null,
     timer: null,
@@ -248,6 +253,47 @@ async function loadOlder() {
 }
 
 // ============================================
+// Daily volume (Uniswap v4 subgraph)
+// ============================================
+
+async function loadDays() {
+    state.daysAt = Date.now();
+    const query = `{ poolDayDatas(first: 1000, orderBy: date, orderDirection: desc, where: { pool: "${POOL_ID}" }) { date volumeUSD txCount } }`;
+    try {
+        const json = await fetch(getUniswapV4SubgraphUrl(), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ query })
+        }).then(r => r.json());
+        const rows = json?.data?.poolDayDatas;
+        if (!Array.isArray(rows)) throw new Error(json?.errors?.[0]?.message || 'No pool days');
+        state.days = rows
+            .map(d => ({ date: Number(d.date) * 1000, volume: Number(d.volumeUSD) || 0, txCount: Number(d.txCount) || 0 }))
+            .sort((a, b) => a.date - b.date);
+        if (state.active) renderStats();
+    } catch (e) {
+        logger.warn('Swap market: pool volume (subgraph) not loaded', e);
+    }
+}
+
+/** Volume (USD) and trades of the selected range: the loaded trades when they cover it, else the subgraph's days */
+function rangeStats() {
+    const span = RANGES[state.range];
+    const now = Date.now();
+    const start = span === Infinity ? -Infinity : now - span;
+    if (state.loaded && state.windowStart !== null && start >= state.windowStart) {
+        const trades = state.trades.filter(t => t.time >= start);
+        return { volume: trades.reduce((sum, t) => sum + t.usd, 0), count: trades.length };
+    }
+    if (state.days) {
+        const firstDay = start === -Infinity ? -Infinity : Math.floor(start / DAY) * DAY;
+        const days = state.days.filter(d => d.date >= firstDay);
+        return { volume: days.reduce((sum, d) => sum + d.volume, 0), count: days.reduce((sum, d) => sum + d.txCount, 0) };
+    }
+    return null;
+}
+
+// ============================================
 // Daily history (DATA_History stream / CSV)
 // ============================================
 
@@ -293,19 +339,23 @@ function renderStats() {
     const now = currentPrice();
     $('swap-market-price').textContent = formatPrice(now);
     const change = $('swap-market-change');
-    const before = priceAt(Date.now() - DAY);
+    // Change over the chart's range: from the price at its start (All: the first price known)
+    const span = RANGES[state.range];
+    const before = span === Infinity
+        ? (state.history[0]?.p || state.trades[0]?.poolPrice || null)
+        : priceAt(Date.now() - span);
     if (now && before) {
         const pct = (now / before - 1) * 100;
         const sign = pct > 0 ? '+' : pct < 0 ? '−' : '';
-        change.textContent = `${sign}${Math.abs(pct).toFixed(2)}% 24h`;
+        change.textContent = `${sign}${Math.abs(pct).toFixed(2)}% ${state.range}`;
         change.className = `text-sm font-semibold ${pct > 0 ? 'text-green-400' : pct < 0 ? 'text-red-400' : 'text-gray-300'}`;
     } else {
         change.textContent = '';
     }
-    const day = state.trades.filter(t => t.time >= Date.now() - DAY);
-    // Volume and trades come from the trades list: empty until it loads
-    $('swap-market-stats').textContent = state.loaded
-        ? `24h volume ${formatUsd(day.reduce((sum, t) => sum + t.usd, 0))} · ${day.length} ${day.length === 1 ? 'trade' : 'trades'} in 24h`
+    // Volume and trades of the range: empty until there is data for it
+    const stats = rangeStats();
+    $('swap-market-stats').textContent = stats
+        ? `${state.range === 'All' ? 'All-time' : state.range} volume ${formatUsd(stats.volume)} · ${Utils.formatBigNumber(String(stats.count))} ${stats.count === 1 ? 'trade' : 'trades'}`
         : '';
 }
 
@@ -541,7 +591,10 @@ function schedule() {
     const delay = !state.loaded && state.failures ? Math.min(5000 * 2 ** (state.failures - 1), REFRESH_MS) : REFRESH_MS;
     state.timer = setTimeout(async () => {
         if (!state.active) return;
-        if (!document.hidden) await refresh();
+        if (!document.hidden) {
+            if (Date.now() - state.daysAt > DAYS_REFRESH_MS) loadDays();
+            await refresh();
+        }
         schedule();
     }, delay);
 }
@@ -583,6 +636,7 @@ function setupListeners() {
         if (!btn || btn.dataset.range === state.range) return;
         state.range = btn.dataset.range;
         renderRange();
+        renderStats();
         renderChart();
     });
     Services.onHistoricalDataLoaded(setHistory);
@@ -594,6 +648,7 @@ export const SwapMarket = {
         state.active = true;
         renderRange();
         renderAll();
+        if (Date.now() - state.daysAt > DAYS_REFRESH_MS) loadDays();
         refresh().finally(schedule);
     },
 
