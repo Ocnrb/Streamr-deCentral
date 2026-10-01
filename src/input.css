@@ -501,7 +501,7 @@
     
     /* Sidebar logo padding in desktop */
     #sidebar-logo {
-      padding-left: 1.75rem; /* 28px */
+      padding-right: 1.25rem; /* logo and name on the right, the compact toggle on the left */
     }
     
   }
@@ -522,7 +522,7 @@
     }
 
     html.sidebar-compact #sidebar-logo {
-      padding-left: 0;
+      padding-right: 0;
     }
 
     /* The toggle sits on the logo and shows instead of it on hover (or keyboard focus) */
