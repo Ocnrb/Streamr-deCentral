@@ -5,13 +5,16 @@
  * its chart over time. Below: top operators, best sponsorships and the latest staking, delegation
  * and governance events.
  *
- * Everything comes from The Graph, except the DATA price (the app's price streams):
- * - totals: sums over every operator and sponsorship (paged), the kicked flags, the streams' creation dates;
+ * Everything comes from The Graph, except the DATA price (the app's price streams) and the operators'
+ * own events read through the Etherscan API (Delegated / Undelegated, and OperatorSlashed, which every
+ * slashing reports to the operator contract):
+ * - totals: sums over every operator and sponsorship (paged), the slashings, the streams' creation dates;
  * - history: the daily buckets of sponsorships and operators (each keeps its last bucket until the next one),
- *   and the dated sponsoring events, kicks and stream creations, added up over time.
+ *   and the dated sponsoring events, slashings and stream creations, added up over time.
  */
 
 import * as Services from '../core/services.js';
+import { POLYGONSCAN_NETWORK, getEtherscanApiKey } from '../core/constants.js';
 import { escapeHtml, convertWeiToData, formatBigNumber, parseOperatorMetadata, shortAddress, operatorAvatarHtml, calculateWeightedApy, logger } from '../core/utils.js';
 
 // ============================================
@@ -30,6 +33,18 @@ const CONCURRENCY = 4;
 const NETWORK_START = Math.floor(Date.UTC(2023, 11, 1) / 1000);
 const STREAMS_START = Math.floor(Date.UTC(2020, 0, 1) / 1000);
 const STREAMS_CACHE_KEY = 'overview.streamsByDay.v1';
+
+// Operator contract events (the subgraph keeps no delegation history)
+const DELEGATION_TOPICS = {
+    delegate: ethers.utils.id('Delegated(address,uint256)'),
+    undelegate: ethers.utils.id('Undelegated(address,uint256)')
+};
+// Operator.onSlash: the DATA a sponsorship slashed from the operator
+const SLASHED_TOPIC = ethers.utils.id('OperatorSlashed(uint256,uint256,uint256)');
+const OPERATORS_FIRST_BLOCK = 49000000;      // Polygon, before Streamr 1.0 (November 2023)
+const POLYGON_BLOCKS_PER_DAY = 43200;
+const DELEGATION_WINDOWS_DAYS = [1, 7, 30];   // looked back further while there are fewer than LIST_SIZE events
+const EXPLORER_BUSY = /rate limit|max calls|too many|timeout|temporarily|busy/i;
 
 // Chart ranges: one point per `step` days
 const RANGES = {
@@ -55,7 +70,7 @@ const METRICS = {
     sponsored: { label: 'DATA sponsored', kind: 'data', source: 'sponsoring',
         info: 'DATA paid into sponsorships by their sponsors, all time.' },
     slashed: { label: 'DATA slashed', kind: 'data', source: 'slashing',
-        info: 'DATA slashed from operators kicked after a flag, all time: the stake at risk of every flag that ended in a kick.' },
+        info: 'DATA slashed from operators, all time: every slashing their sponsorships reported to the operator contracts (onSlash).' },
     price: { label: 'DATA price', kind: 'price', source: 'price',
         info: 'DATA/USD from the app\'s price feed: the daily history, then the latest price.' }
 };
@@ -68,7 +83,8 @@ const BADGES = {
     kicked: { label: 'Kicked', badge: 'bg-red-500/10 text-red-400 border-red-500/30' },
     failed: { label: 'Not kicked', badge: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' },
     self: { label: 'Self', badge: 'bg-purple-500/10 text-purple-300 border-purple-500/30' },
-    delegator: { label: 'Delegator', badge: 'bg-blue-500/10 text-blue-300 border-blue-500/30' }
+    delegator: { label: 'Delegator', badge: 'bg-blue-500/10 text-blue-300 border-blue-500/30' },
+    owner: { label: 'Owner', badge: 'bg-purple-500/10 text-purple-300 border-purple-500/30' }
 };
 
 // ============================================
@@ -87,7 +103,12 @@ const state = {
     ownerShare: new Map(),      // operator id -> owner's share of its value now
     allSponsorships: [],
     bestStreams: [],
-    slashing: [],
+    slashing: null,             // { total, count } of the operators' slashings
+    slashingEvents: [],         // [{ t, v }] oldest first
+    slashingSeen: new Set(),
+    slashingFrom: OPERATORS_FIRST_BLOCK,
+    slashingLoading: null,
+    slashingError: false,
     totals: null,
     totalsPromise: null,
     streams: null,              // { byDay: Map(day -> count), total }
@@ -95,6 +116,8 @@ const state = {
     topOperators: [],
     stakingEvents: [],
     delegations: [],
+    delegationsLoaded: false,
+    delegationsError: false,
     govEvents: [],
     priceHistory: [],           // daily DATA/USD (ms, USD)
     metric: 'staked',           // metric whose chart is open (null: closed)
@@ -225,9 +248,6 @@ async function fetchLists() {
         stakingEvents(first: ${LIST_SIZE}, orderBy: date, orderDirection: desc) {
             id amount date operator { ${PARTY} } sponsorship { id stream { id } }
         }
-        delegations(first: ${LIST_SIZE}, orderBy: latestDelegationTimestamp, orderDirection: desc) {
-            id isSelfDelegation _valueDataWei latestDelegationTimestamp delegator { id } operator { ${PARTY} }
-        }
         raised: flags(first: ${LIST_SIZE}, orderBy: flaggingTimestamp, orderDirection: desc) { ${FLAG} }
         resolved: flags(first: ${LIST_SIZE}, orderBy: flagResolutionTimestamp, orderDirection: desc, where: { result_in: ["kicked", "failed"] }) { ${FLAG} }
         votes(first: ${LIST_SIZE}, orderBy: timestamp, orderDirection: desc) {
@@ -237,7 +257,6 @@ async function fetchLists() {
     }`);
     state.topOperators = data.topOperators || [];
     state.stakingEvents = data.stakingEvents || [];
-    state.delegations = data.delegations || [];
 
     // Governance: flags raised, votes cast and results, newest first
     const events = [];
@@ -265,15 +284,13 @@ function bestSponsorships() {
 }
 
 async function fetchTotals() {
-    const [operators, sponsorships, kicks, selfDelegations] = await Promise.all([
-        fetchAll('operators', 'valueWithoutEarnings totalStakeInSponsorshipsWei nodes'),
+    const [operators, sponsorships, selfDelegations] = await Promise.all([
+        fetchAll('operators', 'owner valueWithoutEarnings totalStakeInSponsorshipsWei nodes'),
         fetchAll('sponsorships', 'totalStakedWei remainingWei spotAPY isRunning cumulativeSponsoring'),
-        fetchAll('flags', 'targetStakeAtRiskWei flagResolutionTimestamp', 'result: "kicked",'),
         fetchAll('delegations', '_valueDataWei operator { id }', 'isSelfDelegation: true,')
     ]);
     state.allOperators = operators;
     state.allSponsorships = sponsorships;
-    state.slashing = kicks.map(f => ({ t: Number(f.flagResolutionTimestamp), v: weiToNumber(f.targetStakeAtRiskWei) })).sort((a, b) => a.t - b.t);
     // The owners' share of each operator (their self-delegation), left out of Delegated
     const ownStake = new Map(selfDelegations.map(d => [d.operator?.id, weiToNumber(d._valueDataWei)]));
     state.ownerShare = new Map(operators.map(op => {
@@ -300,9 +317,7 @@ async function fetchTotals() {
         nodes: staking.reduce((sum, op) => sum + (op.nodes?.length || 0), 0),
         sponsorships: running.length,
         sponsorshipsAll: sponsorships.length,
-        sponsored: sponsorships.reduce((sum, s) => sum + weiToNumber(s.cumulativeSponsoring), 0),
-        slashed: state.slashing.reduce((sum, e) => sum + e.v, 0),
-        kicks: state.slashing.length
+        sponsored: sponsorships.reduce((sum, s) => sum + weiToNumber(s.cumulativeSponsoring), 0)
     };
 
     // Streams of the best sponsorships (the totals keep to numbers)
@@ -311,6 +326,136 @@ async function fetchTotals() {
         const data = await Services.runQuery(`{ sponsorships(where: { id_in: ${JSON.stringify(best.map(s => s.id))} }) { id stream { id } } }`);
         state.bestStreams = (data.sponsorships || []).map(s => [s.id, s.stream?.id || '']);
     }
+}
+
+// ============================================
+// Data: delegation events (operator contract logs)
+// ============================================
+
+/** Logs of one event from a block on, oldest first (at most 1000); a busy explorer is asked again shortly */
+async function fetchEventLogs(topic, fromBlock) {
+    const url = `${POLYGONSCAN_NETWORK.apiUrl}?chainid=${POLYGONSCAN_NETWORK.chainId}&module=logs&action=getLogs&topic0=${topic}`
+        + `&fromBlock=${fromBlock}&toBlock=latest&page=1&offset=${PAGE}&apikey=${getEtherscanApiKey()}`;
+    let lastError = null;
+    for (let attempt = 0; attempt < 3; attempt++) {
+        if (attempt) await new Promise(resolve => setTimeout(resolve, 1000 * 2 ** attempt));
+        const json = await fetch(url).then(r => r.json()).catch(e => ({ message: e.message }));
+        if (Array.isArray(json?.result)) return json.result;
+        if (/no records/i.test(json?.message || '')) return [];
+        lastError = new Error(`${json?.message || 'Explorer error'}: ${json?.result || ''}`);
+        if (!EXPLORER_BUSY.test(`${json?.message} ${json?.result}`)) break;
+    }
+    throw lastError;
+}
+
+/** Newest logs of an event since a block: when the explorer returns its 1000-log maximum, the newer half is asked */
+async function newestLogs(topic, fromBlock, latestBlock) {
+    let from = fromBlock;
+    for (let i = 0; i < 8; i++) {
+        const logs = await fetchEventLogs(topic, from);
+        if (logs.length < PAGE) return logs;
+        from = Math.floor((from + latestBlock) / 2);
+    }
+    return fetchEventLogs(topic, from);
+}
+
+/** The delegator and DATA amount of a Delegated / Undelegated log (delegator indexed or in the data) */
+function parseDelegationLog(log) {
+    if (log.topics.length > 1) {
+        return { delegator: ethers.utils.hexDataSlice(log.topics[1], 12).toLowerCase(), amount: ethers.BigNumber.from(log.data).toString() };
+    }
+    const [delegator, amount] = ethers.utils.defaultAbiCoder.decode(['address', 'uint256'], log.data);
+    return { delegator: delegator.toLowerCase(), amount: amount.toString() };
+}
+
+async function loadDelegations() {
+    state.delegationsAt = Date.now();
+    try {
+        await fetchDelegationEvents();
+    } catch (e) {
+        logger.warn('Overview: delegation events not loaded', e);
+        if (!state.delegationsLoaded) state.delegationsError = true;
+    }
+    if (state.active) renderActivity();
+}
+
+async function fetchDelegationEvents() {
+    const operators = new Map(state.allOperators.map(op => [op.id.toLowerCase(), op]));
+    if (!operators.size) return;
+    const latest = (await Services.runQuery('{ _meta { block { number } } }'))._meta.block.number;
+    let events = [];
+    for (const days of DELEGATION_WINDOWS_DAYS) {
+        const from = Math.max(0, latest - days * POLYGON_BLOCKS_PER_DAY);
+        const [delegated, undelegated] = await Promise.all([
+            newestLogs(DELEGATION_TOPICS.delegate, from, latest),
+            newestLogs(DELEGATION_TOPICS.undelegate, from, latest)
+        ]);
+        events = [...delegated.map(log => ({ log, type: 'delegate' })), ...undelegated.map(log => ({ log, type: 'undelegate' }))]
+            // Only the operators' own events (other contracts can share the signature)
+            .filter(({ log }) => operators.has(log.address.toLowerCase()))
+            .map(({ log, type }) => {
+                const operator = operators.get(log.address.toLowerCase());
+                const { delegator, amount } = parseDelegationLog(log);
+                return { type, delegator, amount, operatorId: operator.id, owner: delegator === (operator.owner || '').toLowerCase(),
+                    time: parseInt(log.timeStamp, 16), block: parseInt(log.blockNumber, 16), index: parseInt(log.logIndex, 16) };
+            });
+        if (events.length >= LIST_SIZE) break;
+    }
+    events.sort((a, b) => b.block - a.block || b.index - a.index);
+    events = events.slice(0, LIST_SIZE);
+    // Names and avatars of their operators
+    const ids = [...new Set(events.map(e => e.operatorId))];
+    if (ids.length) {
+        const data = await Services.runQuery(`{ operators(where: { id_in: ${JSON.stringify(ids)} }) { id metadataJsonString } }`);
+        const meta = new Map((data.operators || []).map(op => [op.id, op]));
+        for (const event of events) event.operator = meta.get(event.operatorId) || { id: event.operatorId };
+    }
+    state.delegations = events;
+    state.delegationsLoaded = true;
+    state.delegationsError = false;
+}
+
+/** OperatorSlashed logs of the operators since the last read (kept between visits) */
+async function loadSlashing() {
+    if (state.slashingLoading) return state.slashingLoading;
+    state.slashingLoading = (async () => {
+        try {
+            if (!state.totals) await state.totalsPromise;
+            const operators = new Set(state.allOperators.map(op => op.id.toLowerCase()));
+            if (!operators.size) throw new Error('No operators');
+            const seen = state.slashingSeen;
+            let from = state.slashingFrom;
+            for (let i = 0; i < 50; i++) {
+                const logs = await fetchEventLogs(SLASHED_TOPIC, from);
+                for (const log of logs) {
+                    const key = `${log.transactionHash}:${log.logIndex}`;
+                    if (seen.has(key) || !operators.has(log.address.toLowerCase())) continue;
+                    seen.add(key);
+                    const [amount] = ethers.utils.defaultAbiCoder.decode(['uint256', 'uint256', 'uint256'], log.data);
+                    state.slashingEvents.push({ t: parseInt(log.timeStamp, 16), v: weiToNumber(amount.toString()) });
+                }
+                if (logs.length) from = parseInt(logs[logs.length - 1].blockNumber, 16);   // that block again: seen ones are skipped
+                if (logs.length < PAGE) break;
+            }
+            state.slashingFrom = from;
+            state.slashingEvents.sort((a, b) => a.t - b.t);
+            state.slashing = {
+                total: state.slashingEvents.reduce((sum, e) => sum + e.v, 0),
+                count: state.slashingEvents.length
+            };
+            for (const range of Object.keys(RANGES)) delete state.history[`slashing:${range}`];
+        } catch (e) {
+            logger.warn('Overview: slashings not loaded', e);
+            if (!state.slashing) state.slashingError = true;
+        } finally {
+            state.slashingLoading = null;
+        }
+        if (state.active) {
+            renderStats();
+            if (state.metric === 'slashed') renderChart();
+        }
+    })();
+    return state.slashingLoading;
 }
 
 // ============================================
@@ -501,9 +646,9 @@ async function loadHistory(source, rangeKey) {
             const events = state.sponsoringEvents;
             state.history[key] = { sponsored: cumulative(events, rangeKey, events[0]?.t || NETWORK_START) };
         } else if (source === 'slashing') {
-            if (!state.totals) await state.totalsPromise;
-            if (!state.totals) throw new Error('No totals');
-            state.history[key] = { slashed: cumulative(state.slashing, rangeKey, state.slashing[0]?.t || NETWORK_START) };
+            if (!state.slashing) { delete state.history[key]; return; }   // drawn when the slashings are read
+            const events = state.slashingEvents;
+            state.history[key] = { slashed: cumulative(events, rangeKey, events[0]?.t || NETWORK_START) };
         } else if (source === 'streams') {
             if (!state.streams) { delete state.history[key]; return; }   // drawn when the count is done
             const days = [...state.streams.byDay.entries()].sort((a, b) => a[0] - b[0]).map(([t, v]) => ({ t, v }));
@@ -546,6 +691,7 @@ function price24hAgo() {
 function currentValue(metric) {
     if (metric === 'price') return currentPrice();
     if (metric === 'streams') return state.streams?.total ?? null;
+    if (metric === 'slashed') return state.slashing?.total ?? null;
     return state.totals ? state.totals[metric] ?? null : null;
 }
 
@@ -564,7 +710,7 @@ function statSub(metric) {
         case 'sponsorships': return t ? `running of ${full(t.sponsorshipsAll)}` : '';
         case 'streams': return state.streams ? '' : (state.streamsLoading ? 'Counting...' : '');
         case 'sponsored': return t ? usd(t.sponsored) : '';
-        case 'slashed': return t ? `${full(t.kicks)} kicks` : '';
+        case 'slashed': return state.slashing ? `${full(state.slashing.count)} slashings` : '';
         case 'price': {
             const value = currentPrice();
             const before = price24hAgo();
@@ -583,7 +729,8 @@ function renderStats() {
     el.innerHTML = METRIC_ORDER.map(metric => {
         const def = METRICS[metric];
         const value = currentValue(metric);
-        const failed = state.error && !state.totals && metric !== 'price' && metric !== 'streams';
+        const failed = metric === 'slashed' ? state.slashingError && !state.slashing
+            : state.error && !state.totals && metric !== 'price' && metric !== 'streams';
         const shown = value === null ? (failed ? '--' : placeholder) : formatMetric(def.kind, value);
         const unit = def.kind === 'data' && value !== null ? ' <span class="text-xs font-semibold text-gray-400">DATA</span>' : '';
         const tip = value !== null && (def.kind === 'data' || def.kind === 'count') ? ` data-tooltip-content="${formatMetric(def.kind, value, true)}"` : '';
@@ -644,6 +791,7 @@ function chartPoints(metric) {
         return points;
     }
     if (metric === 'streams' && !state.streams) return 'loading';
+    if (metric === 'slashed' && !state.slashing) return state.slashingError ? 'error' : 'loading';
     const history = state.history[`${def.source}:${state.range}`];
     if (!history || history === 'loading') {
         loadHistory(def.source, state.range);
@@ -809,8 +957,8 @@ function avatar(operator) {
 }
 
 /** Rows of a list, or its loading / error / empty state */
-function listContent(rows, render, { error, empty }) {
-    if (!state.loaded) return state.error ? emptyRow(error) : loadingRows();
+function listContent(rows, render, { error, empty, loaded, failed }) {
+    if (loaded ? !loaded() : !state.loaded) return (failed ? failed() : state.error) ? emptyRow(error) : loadingRows();
     return rows.length ? rows.map(render).join('') : emptyRow(empty);
 }
 
@@ -873,23 +1021,23 @@ function stakingRow(event) {
         </a>`;
 }
 
-function delegationRow(delegation) {
-    const value = weiToNumber(delegation._valueDataWei);
-    const self = delegation.isSelfDelegation;
-    const delegator = delegation.delegator?.id || '';
+function delegationRow(event) {
+    const amount = weiToNumber(event.amount);
+    const delegated = event.type === 'delegate';
+    const by = event.owner ? 'the owner' : shortAddress(event.delegator);
     return `
-        <a href="/delegator/${delegator}" class="${ROW}">
-            ${avatar(delegation.operator)}
+        <a href="/delegator/${event.delegator}" class="${ROW}">
+            ${avatar(event.operator)}
             <div class="min-w-0 flex-1">
-                <p class="text-sm font-semibold text-white truncate">${escapeHtml(operatorName(delegation.operator))}</p>
-                <p class="text-xs text-gray-400 truncate">${self ? 'By the owner' : `From ${escapeHtml(shortAddress(delegator))}`}</p>
+                <p class="text-sm font-semibold text-white truncate">${escapeHtml(operatorName(event.operator))}</p>
+                <p class="text-xs text-gray-400 truncate">${delegated ? 'Delegated' : 'Undelegated'} by ${escapeHtml(by)}</p>
             </div>
             <div class="text-right whitespace-nowrap">
                 <div class="flex items-center justify-end gap-2">
-                    ${badge(self ? 'self' : 'delegator')}
-                    <span class="text-sm font-semibold text-white" data-tooltip-content="${full(value)} DATA delegated now">${compact(value)} DATA</span>
+                    ${badge(event.owner ? 'owner' : 'delegator')}
+                    <span class="text-sm font-semibold ${delegated ? 'text-green-400' : 'text-red-400'}" data-tooltip-content="${full(amount)} DATA">${delegated ? '+' : '-'}${compact(amount)} DATA</span>
                 </div>
-                <p class="text-xs text-gray-400 mt-0.5">${timeAgo(delegation.latestDelegationTimestamp)}</p>
+                <p class="text-xs text-gray-400 mt-0.5">${timeAgo(event.time)}</p>
             </div>
         </a>`;
 }
@@ -913,7 +1061,8 @@ function governanceRow(event) {
 
 const ACTIVITY = {
     staking: { rows: () => state.stakingEvents, render: stakingRow, error: 'Staking events could not be loaded.', empty: 'No staking events.', href: '/subgraph/stakingEvents' },
-    delegations: { rows: () => state.delegations, render: delegationRow, error: 'Delegations could not be loaded.', empty: 'No delegations.', href: '/delegators' },
+    delegations: { rows: () => state.delegations, render: delegationRow, error: 'Delegation events could not be loaded.', empty: 'No delegations in the last 30 days.', href: '/delegators',
+        loaded: () => state.delegationsLoaded, failed: () => state.delegationsError },
     governance: { rows: () => state.govEvents, render: governanceRow, error: 'Governance events could not be loaded.', empty: 'No governance events.', href: '/governance' }
 };
 
@@ -945,6 +1094,8 @@ function renderLists() {
 async function refresh() {
     const totals = fetchTotals();
     state.totalsPromise = totals.catch(() => {});
+    // Delegation events (explorer requests): while their tab is open, or once
+    if (state.activity === 'delegations' || !state.delegationsLoaded) totals.then(loadDelegations).catch(() => {});
     try {
         await Promise.all([totals, fetchLists()]);
         state.loaded = true;
@@ -991,6 +1142,7 @@ function init() {
     document.querySelectorAll('#overview-activity-tabs button').forEach(btn => btn.addEventListener('click', () => {
         state.activity = btn.dataset.tab;
         renderActivity();
+        if (state.activity === 'delegations' && state.totals && Date.now() - (state.delegationsAt || 0) > REFRESH_MS) loadDelegations();
     }));
     // The page stops itself when another one opens
     window.addEventListener('app:routechange', (e) => {
@@ -1012,10 +1164,14 @@ function show() {
     renderLists();
     renderChart();
     loadStreams();
+    loadSlashing();
     schedule();
     clearInterval(state.streamsTimer);
     state.streamsTimer = setInterval(() => {
-        if (state.active && !document.hidden) loadStreams();
+        if (state.active && !document.hidden) {
+            loadStreams();
+            loadSlashing();
+        }
     }, STREAMS_REFRESH_MS);
 }
 
