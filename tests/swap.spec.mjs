@@ -213,7 +213,7 @@ test('the swap form switches to Ethereum: its tokens and DEXes, kept for the nex
     expect(await options()).toEqual(['POL', 'USDC', 'USDC.e']);
     await page.click('#swap-chain [data-chain="1"]');
     expect(await options()).toEqual(['ETH', 'USDC', 'USDT']);
-    await expect(page.locator('[data-chain-text="1"]')).toContainText('On Ethereum');
+    await expect(page.locator('[data-chain-text="1"]')).toHaveText(/Best price across\s+SushiSwap\s+and\s+Uniswap/);
     await expect(page.locator('[data-chain-text="137"]')).toBeHidden();
     await expect(page.locator('#swap-pools-btn')).toBeVisible();
     // ETH for POL, and back
