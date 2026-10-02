@@ -73,11 +73,12 @@ const NODE_TTL_MS = 60 * 60 * 1000;          // a node not heard from in an hour
 const NODE_LISTEN_MS = 45 * 1000;            // per operator, at most
 const NODE_SUBSCRIPTIONS = 40;               // operators listened to at once
 
-// Chart ranges: one point per `step` days
+// Chart ranges. The daily records (sponsorships, operators) give one point per `step` days: every record of the
+// range is read whatever the step, a smaller one only takes more requests. The other histories are daily.
 const RANGES = {
     '30d': { label: '30D', days: 30, step: 1 },
-    '1y': { label: '1Y', days: 365, step: 7 },
-    'all': { label: 'All', days: null, step: 14 }
+    '1y': { label: '1Y', days: 365, step: 1 },
+    'all': { label: 'All', days: null, step: 2 }
 };
 
 // The numbers in the stats row; `source` loads the history (one load serves the metrics sharing it)
@@ -275,10 +276,10 @@ async function fetchAll(entity, fields, where = '') {
     }
 }
 
-/** Points of a range: today, then back `step` days at a time down to the range start */
-function rangeTimes(rangeKey, allStart) {
+/** Points of a range: today, then back `stepDays` days at a time down to the range start */
+function rangeTimes(rangeKey, allStart, stepDays = RANGES[rangeKey].step) {
     const range = RANGES[rangeKey];
-    const step = range.step * DAY;
+    const step = stepDays * DAY;
     const today = Math.floor(now() / DAY) * DAY;
     const start = range.days ? today - range.days * DAY : Math.floor(allStart / DAY) * DAY;
     const times = [];
@@ -952,14 +953,16 @@ async function bucketHistory(source, rangeKey) {
         Services.runQuery(`{ rows: ${cfg.entity}(first: ${PAGE}, orderBy: date, orderDirection: desc, where: { date_lte: "${first}" }) { date ${cfg.key} { id } ${cfg.fields} } }`),
         fetchWindows(cfg, times.map((t, i) => ({ from: i ? times[i - 1] : first, to: t })))
     ]);
+    // The buckets before the range, oldest first (a copy: the response stays newest first)
+    const before = [...(beforeData.rows || [])].reverse();
     const latest = new Map();
     const lastDate = new Map();     // date of each one's last bucket
-    // Oldest first, so each one ends on its newest bucket
-    for (const row of [...(beforeData.rows || []).reverse(), ...windows.flat()]) {
+    for (const row of [...before, ...windows.flat()]) {
         const id = row[cfg.key].id;
         lastDate.set(id, Math.max(lastDate.get(id) || 0, Number(row.date)));
     }
-    for (const row of [...(beforeData.rows || [])].reverse()) latest.set(row[cfg.key].id, row);
+    // Oldest first, so each one starts the range on its newest bucket before it
+    for (const row of before) latest.set(row[cfg.key].id, row);
     const current = new Map(cfg.current().map(row => [row.id, row]));
     const unchanged = cfg.current().filter(row => !lastDate.has(row.id));
 
@@ -985,12 +988,12 @@ async function bucketHistory(source, rangeKey) {
     return series;
 }
 
-/** Running totals of dated amounts ({ t, v }, oldest first) at the range's points (end of each day) */
+/** Running totals of dated amounts ({ t, v }, oldest first) at the end of each day of the range */
 function cumulative(events, rangeKey, allStart) {
     const points = [];
     let i = 0;
     let total = 0;
-    for (const t of rangeTimes(rangeKey, allStart)) {
+    for (const t of rangeTimes(rangeKey, allStart, 1)) {
         while (i < events.length && events[i].t < t + DAY) total += events[i++].v;
         points.push({ x: t * 1000, y: total });
     }
@@ -1193,6 +1196,16 @@ function withNow(points, value) {
     return [...before, { x: Date.now(), y: value }];
 }
 
+/** Y axis fitted to the line, with some room, so its changes show; never below 0 (every metric is positive) */
+function valueBounds(points) {
+    const values = points.map(p => p.y);
+    const low = Math.min(...values);
+    const high = Math.max(...values);
+    const room = (high - low) * 0.05 || Math.abs(high) * 0.05 || 1;
+    // Suggested: Chart.js rounds them to its steps (from a value of 0 or more, it never goes below 0)
+    return { beginAtZero: false, suggestedMin: Math.max(0, low - room), suggestedMax: high + room };
+}
+
 function chartMessage(container, text, spinner = false) {
     state.chart?.destroy();
     state.chart = null;
@@ -1251,16 +1264,17 @@ function renderChart() {
         pointHoverBorderColor: '#121212',
         pointHoverBorderWidth: 2,
         tension: 0,
-        fill: true
+        fill: 'start'
     };
     const bounds = { min: points[0].x, max: points[points.length - 1].x };
+    const yBounds = valueBounds(points);
     const axisFormat = (value) => formatMetric(def.kind, value);
     const tipFormat = (value) => formatMetric(def.kind, value, true);
     if (state.chart) {
         state.chart.data.datasets[0] = dataset;
         Object.assign(state.chart.options.scales.x, bounds);
+        Object.assign(state.chart.options.scales.y, yBounds);
         state.chart.options.scales.y.ticks.callback = axisFormat;
-        state.chart.options.scales.y.beginAtZero = def.kind === 'count';
         state.chart.options.plugins.tooltip.callbacks.label = (item) => tipFormat(item.parsed.y);
         state.chart.update('none');
         return;
@@ -1304,7 +1318,7 @@ function renderChart() {
                 },
                 y: {
                     position: 'right',
-                    beginAtZero: def.kind === 'count',
+                    ...yBounds,
                     ticks: { color: '#9ca3af', font, maxTicksLimit: 5, callback: axisFormat },
                     grid: { color: '#2a2a2a', drawBorder: false }
                 }

@@ -43,6 +43,31 @@ test('charts end on one point for today', async ({ page }) => {
     }
 });
 
+test('the Y axis fits the line and never goes below 0', async ({ page }) => {
+    // DATA slashed starts from 0 in All, Streams grows slowly: a fitted axis, no negative values
+    await tile(page, 'slashed').click();
+    await page.click('#overview-range [data-range="all"]');
+    const axis = () => page.evaluate(() => {
+        const chart = window.Chart?.getChart(document.querySelector('#overview-chart canvas'));
+        return chart?.data.datasets[0].data.length > 10 ? { min: chart.scales.y.min, max: chart.scales.y.max } : null;
+    });
+    await expect.poll(async () => (await axis())?.min).toBe(0);
+    await tile(page, 'streams').click();
+    await page.click('#overview-range [data-range="30d"]');
+    await expect.poll(async () => (await axis())?.min ?? -1).toBeGreaterThan(0);
+});
+
+test('a 30-day chart starts from the records just before it', async ({ page }) => {
+    await page.click('#overview-range [data-range="30d"]');
+    // Total staked is 96.0M now and grows slowly: a sponsorship emptied before the range adds nothing
+    const highest = () => page.evaluate(() => {
+        const points = window.Chart?.getChart(document.querySelector('#overview-chart canvas'))?.data.datasets[0].data || [];
+        return points.length > 20 ? Math.max(...points.map(p => p.y)) : null;
+    });
+    await expect.poll(highest).toBeGreaterThan(9e7);
+    expect(await highest()).toBeLessThan(9.7e7);
+});
+
 test('operator and delegator activity', async ({ page }) => {
     const rows = page.locator('#overview-activity a');
     // Staking: the change of each action, unstakes included, collected earnings left out

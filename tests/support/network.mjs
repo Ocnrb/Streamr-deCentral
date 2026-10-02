@@ -50,11 +50,19 @@ function buildData() {
     // Daily buckets: sponsorships every 2 days growing to their stake now; operators 0-49 every 3 days; 300-329 stopped 200 days ago
     T.sponsorshipDailyBuckets = [];
     T.sponsorships.forEach((s, i) => {
+        if (i === 19) return;   // below
         const now = Number(BigInt(s.totalStakedWei) / 10n ** 18n);
         const start = Math.floor((NOW - (600 - i * 10) * DAY) / DAY) * DAY;
         for (let t = start; t <= NOW; t += 2 * DAY) {
             T.sponsorshipDailyBuckets.push({ id: `${s.id}-${t}`, date: String(t), sponsorship: { id: s.id }, totalStakedWei: W(now * (t - start) / (NOW - start)), remainingWei: s.remainingWei, spotAPY: s.spotAPY });
         }
+    });
+    // Short-lived sponsorship (as the tv.streamr.eth ones): 50M staked 45 days ago, all of it gone 40 days ago,
+    // a last record 10 days ago. A 30-day chart starts from its record of 40 days ago (0), not from the older one.
+    const brief = T.sponsorships[19];
+    [[45, 5e7], [40, 0], [10, 0]].forEach(([daysAgo, stake]) => {
+        const t = Math.floor((NOW - daysAgo * DAY) / DAY) * DAY;
+        T.sponsorshipDailyBuckets.push({ id: `${brief.id}-${t}`, date: String(t), sponsorship: { id: brief.id }, totalStakedWei: W(stake), remainingWei: '0', spotAPY: '0' });
     });
     T.operatorDailyBuckets = [];
     T.operators.slice(0, 50).forEach((o) => {
