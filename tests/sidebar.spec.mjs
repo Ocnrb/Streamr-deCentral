@@ -1,4 +1,4 @@
-// Sidebar: compact mode on desktop, kept in the browser, page names in a tooltip
+// Sidebar: compact mode on desktop, kept in the browser, page names in a tooltip. The bottom bar on phones
 import { test, expect } from '@playwright/test';
 import { mockNetwork, openApp } from './support/network.mjs';
 
@@ -36,4 +36,18 @@ test('tablets have the compact sidebar, with the tooltips and no toggle', async 
     await expect(page.locator('#sidebar-compact-toggle')).toBeHidden();
     await page.hover('#app-sidebar .nav-link[data-nav="swap"]');
     await expect(page.locator('#sidebar-tooltip')).toHaveText('Swap');
+});
+
+test('phones have the bottom bar, with the other pages under More', async ({ page }) => {
+    await page.setViewportSize({ width: 320, height: 700 });
+    await expect(page.locator('#bottom-nav .bottom-nav-item > span:last-child')).toHaveText(['Operator', 'Delegator', 'Overview', 'Streams', 'Swap', 'More']);
+    // The six fit the narrowest phones
+    expect(await page.locator('#bottom-nav > div').evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
+    await page.click('#bottom-nav-more');
+    const menu = page.locator('#bottom-nav-more-menu');
+    await expect(menu).toContainText('Autostaker');
+    await expect(menu).toContainText('Settings');
+    await expect(menu).not.toContainText('Swap');
+    await page.click('#bottom-nav-autostaker');
+    await expect(menu).toBeHidden();
 });

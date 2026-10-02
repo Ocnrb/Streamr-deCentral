@@ -215,9 +215,10 @@ class NavigationController {
             });
         }
         
-        // Autostaker button (now in main nav bar)
+        // Autostaker button (in More menu)
         if (bottomNavAutostaker) {
             bottomNavAutostaker.addEventListener('click', () => {
+                hideMoreMenu();
                 this.openAutostaker();
             });
         }

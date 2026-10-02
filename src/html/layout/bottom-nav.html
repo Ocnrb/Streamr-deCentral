@@ -1,6 +1,18 @@
 <!-- ===== BOTTOM NAVIGATION (Mobile) - hidden until login ===== -->
 <nav id="bottom-nav" class="hidden fixed bottom-0 left-0 right-0 z-40 bg-[#1A1A1A]/95 backdrop-blur-md border-t border-[#2a2a2a] safe-area-bottom">
     <div class="flex justify-around items-center h-16 px-2">
+        <!-- Operator -->
+        <a href="/operators" data-nav="operators" class="bottom-nav-item flex flex-col items-center justify-center gap-1 px-1 py-2 min-w-[48px] text-gray-400 transition-colors">
+            <span aria-hidden="true" class="icon-mask w-6 h-6" style="--icon: url(/assets/operator_icon.png)"></span>
+            <span class="text-[10px] font-medium">Operator</span>
+        </a>
+
+        <!-- Delegator -->
+        <a href="/delegators" data-nav="delegators" class="bottom-nav-item flex flex-col items-center justify-center gap-1 px-1 py-2 min-w-[48px] text-gray-400 transition-colors">
+            <span aria-hidden="true" class="icon-mask w-6 h-6" style="--icon: url(/assets/delegator_icon.png)"></span>
+            <span class="text-[10px] font-medium">Delegator</span>
+        </a>
+
         <!-- Overview -->
         <a href="/" data-nav="overview" class="bottom-nav-item flex flex-col items-center justify-center gap-1 px-1 py-2 min-w-[48px] text-gray-400 transition-colors">
             <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg>
@@ -13,25 +25,11 @@
             <span class="text-[10px] font-medium">Streams</span>
         </a>
 
-        <!-- Operators -->
-        <a href="/operators" data-nav="operators" class="bottom-nav-item flex flex-col items-center justify-center gap-1 px-1 py-2 min-w-[48px] text-gray-400 transition-colors">
-            <span aria-hidden="true" class="icon-mask w-6 h-6" style="--icon: url(/assets/operator_icon.png)"></span>
-            <span class="text-[10px] font-medium">Operators</span>
+        <!-- Swap -->
+        <a href="/swap" data-nav="swap" class="bottom-nav-item flex flex-col items-center justify-center gap-1 px-1 py-2 min-w-[48px] text-gray-400 transition-colors">
+            <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="m16 3 4 4-4 4"/><path d="M20 7H4"/><path d="m8 21-4-4 4-4"/><path d="M4 17h16"/></svg>
+            <span class="text-[10px] font-medium">Swap</span>
         </a>
-
-        <!-- Delegators --> 
-        <a href="/delegators" data-nav="delegators" class="bottom-nav-item flex flex-col items-center justify-center gap-1 px-1 py-2 min-w-[48px] text-gray-400 transition-colors">
-            <span aria-hidden="true" class="icon-mask w-6 h-6" style="--icon: url(/assets/delegator_icon.png)"></span>
-            <span class="text-[10px] font-medium">Delegators</span>
-        </a>
-
-        <!-- Autostaker -->
-        <button id="bottom-nav-autostaker" class="bottom-nav-item flex flex-col items-center justify-center gap-1 px-1 py-2 min-w-[48px] text-gray-400 transition-colors">
-            <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
-                <path d="M13 10V3L4 14h7v7l9-11h-7z"/>
-            </svg>
-            <span class="text-[10px] font-medium">Autostaker</span>
-        </button>
 
         <!-- More -->
         <div class="relative">
@@ -105,11 +103,13 @@
                     <span class="text-sm font-medium">Leaderboard</span>
                 </a>
                 <div class="px-4 pt-3 pb-1 text-[10px] font-semibold text-gray-500 uppercase tracking-widest">Tools</div>
-                <!-- Swap -->
-                <a href="/swap" data-nav="swap" class="flex items-center gap-3 px-4 py-3 text-gray-300 hover:bg-[#2a2a2a] transition-colors">
-                    <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="m16 3 4 4-4 4"/><path d="M20 7H4"/><path d="m8 21-4-4 4-4"/><path d="M4 17h16"/></svg>
-                    <span class="text-sm font-medium">Swap</span>
-                </a>
+                <!-- Autostaker -->
+                <button id="bottom-nav-autostaker" class="w-full flex items-center gap-3 px-4 py-3 text-gray-300 hover:bg-[#2a2a2a] transition-colors">
+                    <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
+                        <path d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                    </svg>
+                    <span class="text-sm font-medium">Autostaker</span>
+                </button>
                 <!-- Bridge -->
                 <a href="/bridge" data-nav="bridge" class="flex items-center gap-3 px-4 py-3 text-gray-300 hover:bg-[#2a2a2a] transition-colors">
                     <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M2 8h20"/><path d="M4 8v10"/><path d="M20 8v10"/><path d="M4 18a8 8 0 0 1 16 0"/><path d="M8 8v3"/><path d="M12 8v2"/><path d="M16 8v3"/></svg>
@@ -133,8 +133,8 @@
                 <!-- Settings -->
                 <button id="bottom-nav-settings" class="w-full flex items-center gap-3 px-4 py-3 text-gray-300 hover:bg-[#2a2a2a] transition-colors">
                     <svg class="w-6 h-6 p-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/>
                         <circle cx="12" cy="12" r="3"/>
-                        <path d="M12 1v2m0 18v2M4.22 4.22l1.42 1.42m12.72 12.72l1.42 1.42M1 12h2m18 0h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>
                     </svg>
                     <span class="text-sm font-medium">Settings</span>
                 </button>
