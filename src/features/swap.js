@@ -246,6 +246,7 @@ const state = {
     submitting: false,
     refreshTimer: null,
     history: [],             // swaps of this wallet (localStorage + explorer)
+    ownSwaps: new Map(),     // tx hash -> { txHash, pay, receive }: the wallet's DATA swaps found by the explorers, and the ones sent now ("You" in the market's trades)
     listenersSetup: false
 };
 
@@ -1385,6 +1386,7 @@ async function recoverSwapsFromExplorer(net) {
         const pay = t.out[0];
         const receive = t.in.find(leg => leg.symbol !== pay?.symbol);
         if (!pay || !receive || (pay.symbol !== 'DATA' && receive.symbol !== 'DATA')) continue;
+        if (me === state.address) state.ownSwaps.set(lower(t.hash), { txHash: t.hash, pay: pay.symbol, receive: receive.symbol });
         const existing = state.history.find(h => lower(h.txHash) === lower(t.hash));
         if (existing) {
             if (existing.receive?.estimated) {
@@ -1705,6 +1707,7 @@ function routeCell(entry) {
 }
 
 function renderHistory() {
+    SwapMarket.setOwnSwaps([...state.ownSwaps.values()]);
     const body = $('swap-history');
     if (!body) return;
     const empty = (text) => `<tr><td colspan="8" class="py-4 text-sm text-gray-300">${text}</td></tr>`;
@@ -1738,7 +1741,6 @@ function renderHistory() {
     }).join('');
     fillPolPrices();
     fillRoutes();
-    SwapMarket.setOwnSwaps(state.history.map(h => ({ txHash: h.txHash, pay: h.pay?.symbol, receive: h.receive?.symbol })));
 }
 
 /** Spins a refresh button's icon while the work runs (at least half a second, so it is noticed) */
@@ -1830,6 +1832,7 @@ async function runStep(step, flow) {
         const tx = await sendTx(flow, (signer, overrides) => signer.sendTransaction({ ...txData, ...overrides }));
         step.txHash = tx.hash;
         flow.sent = true;
+        state.ownSwaps.set(lower(tx.hash), { txHash: tx.hash, pay: pay.symbol, receive: receive.symbol });
         upsertSwap({
             txHash: tx.hash, createdAt: Date.now(), status: 'pending', route: routeLabel(flow.quote.route), ...(flow.chain === 137 ? {} : { chain: flow.chain }),
             pay: { symbol: pay.symbol, amount: flow.quote.amountIn.toString() },
@@ -2094,6 +2097,7 @@ export const SwapLogic = {
             state.address = address;
             state.balances = {};
             state.history = address ? loadStoredHistory() : [];
+            state.ownSwaps = new Map();
             historyShown = HISTORY_PAGE;
         }
         renderHistory();

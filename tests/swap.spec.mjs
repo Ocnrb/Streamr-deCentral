@@ -297,3 +297,27 @@ test('your swaps include the ones on Ethereum, from its explorer', async ({ page
     await expect(row).toContainText('Uniswap (Universal Router)');
     await expect(row.locator(`a[href="https://etherscan.io/tx/${hash}"]`)).toBeVisible();
 });
+
+test('"You" in the market trades comes from the explorer, not from the browser\'s storage', async ({ page }) => {
+    const me = '0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266';
+    const stored = '0x' + '3'.padStart(64, 'a'), found = '0x' + '2'.padStart(64, 'a');
+    await page.addInitScript(([key, hash]) => localStorage.setItem(key, JSON.stringify([{ txHash: hash, createdAt: Date.now(), status: 'done',
+        pay: { symbol: 'USDC', amount: '1000000' }, receive: { symbol: 'DATA', amount: '4000000000000000000000' } }])), [`swapHistory:${me}`, stored]);
+    // Polygon's explorer: the wallet's USDC -> DATA swap in the second trade's transaction
+    await page.route(url => url.hostname === 'api.etherscan.io' && url.search.includes('chainid=137&') && url.search.includes('module=account'), (route) => {
+        const action = new URL(route.request().url()).searchParams.get('action');
+        const time = String(Math.floor(Date.now() / 1000) - 9000);
+        const result = action === 'tokentx' ? [
+            { hash: found, timeStamp: time, from: me, to: '0x' + '6'.repeat(40), contractAddress: '0x3c499c542cef5e3811e1192ce70d8cc03d5c3359', value: '1000000' },
+            { hash: found, timeStamp: time, from: '0x' + '6'.repeat(40), to: me, contractAddress: '0x3a9a81d576d83ff21f26f325066054540720fc34', value: '2586000000000000000000' }
+        ] : [];
+        return route.fulfill({ json: { status: '1', message: 'OK', result } });
+    });
+    await page.goto('/swap', { waitUntil: 'domcontentloaded' });
+    await page.click('#privateKeyBtn');
+    await page.fill('#privateKeyInput', '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80');
+    await page.click('#pkModalConnect');
+    const mine = page.locator('#swap-trades tr', { hasText: 'You' });
+    await expect(mine).toHaveCount(1, { timeout: 30000 });
+    await expect(mine.locator(`a[href$="${found}"]`)).toHaveCount(1);
+});
