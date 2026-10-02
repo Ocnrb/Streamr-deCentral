@@ -1059,7 +1059,7 @@ function renderQuote() {
     $('swap-receive').classList.toggle('text-gray-300', !valid);
     if (valid) {
         const rate = parseFloat(ethers.utils.formatUnits(q.amountOut, receive.decimals)) / parseFloat(ethers.utils.formatUnits(q.amountIn, pay.decimals));
-        $('swap-rate').textContent = `1 ${pay.symbol} = ${rate < 0.0001 ? rate.toExponential(3) : Number(rate.toPrecision(5))} ${receive.symbol}`;
+        $('swap-rate').textContent = `1 ${pay.symbol} = ${rate < 0.0001 ? rate.toExponential(3) : Utils.formatBigNumber(String(Number(rate.toPrecision(5))))} ${receive.symbol}`;
         $('swap-rate-usd').textContent = quoteDataUsd(q, pay, receive);
         $('swap-route').textContent = routeLabel(q.route);
         $('swap-min').textContent = formatToken(minOut(q.amountOut), receive);

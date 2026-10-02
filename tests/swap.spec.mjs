@@ -271,6 +271,7 @@ test('on Ethereum the quote goes through its Uniswap v4 pool, SushiSwap V2 check
     await page.fill('#swap-amount', '1');
     await expect(page.locator('#swap-receive')).toHaveText('16 000 000', { timeout: 30000 });
     await expect(page.locator('#swap-route')).toHaveText('Uniswap v4 (0.3%) · ETH → DATA');
+    await expect(page.locator('#swap-rate')).toHaveText('1 ETH = 16 000 000 DATA');
     await expect(page.locator('#swap-routes-list')).toContainText('SushiSwap V2 · WETH → DATA');
     await expect(page.locator('#swap-routes-list')).toContainText('15 000 000 DATA');
 });
