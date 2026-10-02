@@ -101,12 +101,16 @@ test('the coordination streams are left once the nodes are counted', async ({ pa
 });
 
 test('top operators show their nodes, heard on their coordination streams', async ({ page }) => {
-    await expect(tile(page, 'operators')).toContainText('451 nodes', { timeout: 30000 });
     const rows = page.locator('#overview-operators a');
+    await expect(tile(page, 'operators')).toContainText('451 nodes', { timeout: 30000 });
+    // Their coordination streams were among the first listened to (40 at once)
+    const ids = await rows.evaluateAll(links => links.map(a => a.getAttribute('href').split('/').pop()));
+    const first = await page.evaluate(() => window.__subscribed.slice(0, 40));
+    expect(ids.filter(id => !first.includes(id))).toEqual([]);
     await expect(rows.nth(0)).toContainText('Operator 298');
-    await expect(rows.nth(0)).toContainText('18 delegators · 1 node');
+    await expect(rows.nth(0)).toContainText('17 delegators · 1 node');
     await expect(rows.nth(1)).toContainText('Operator 295');
-    await expect(rows.nth(1)).toContainText('15 delegators · 2 nodes');
+    await expect(rows.nth(1)).toContainText('14 delegators · 2 nodes');
 });
 
 test('a 30-day chart starts from the records just before it', async ({ page }) => {
@@ -136,6 +140,7 @@ test('operator and delegator activity', async ({ page }) => {
     await page.click('#overview-activity-tabs [data-tab="delegations"]');
     await expect(rows).toHaveCount(3);
     await expect(page.locator('#overview-activity')).not.toContainText('999');
+    await expect(page.locator('#overview-activity')).not.toContainText('4.3K');
     // Earnings: the total, its split in the tooltip (the owner's own stake apart from the delegators)
     await page.click('#overview-activity-tabs [data-tab="earnings"]');
     await expect(rows).toHaveCount(2);

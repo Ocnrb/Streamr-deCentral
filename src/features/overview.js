@@ -147,6 +147,7 @@ const state = {
     totalsPromise: null,
     nodes: new Map(),           // node id -> last heartbeat (ms)
     operatorNodes: new Map(),   // operator id -> Map(node id -> last heartbeat on its coordination stream)
+    operatorsListened: new Set(),   // operators whose coordination stream was listened to until the end
     nodesScan: null,            // { stopped, listeners: Set(stop) } while the operators are listened to
     streams: null,              // { byDay: Map(day -> count), total }
     streamsLoading: false,
@@ -677,10 +678,16 @@ async function fetchDelegationEvents() {
     let events = [];
     for (const days of DELEGATION_WINDOWS_DAYS) {
         const from = Math.max(0, latest - days * POLYGON_BLOCKS_PER_DAY);
-        const [delegated, undelegated] = await Promise.all([
+        const [delegated, undelegated, profits] = await Promise.all([
             newestLogs(DELEGATION_TOPICS.delegate, from, latest),
-            newestLogs(DELEGATION_TOPICS.undelegate, from, latest)
+            newestLogs(DELEGATION_TOPICS.undelegate, from, latest),
+            newestLogs(PROFIT_TOPIC, from, latest)
         ]);
+        // Earnings withdrawn (most of these logs: the owner's cut re-delegated): known without reading their receipts
+        for (const log of profits) {
+            const tx = log.transactionHash.toLowerCase();
+            if (operators.has(log.address.toLowerCase()) && !state.delegationTxs.has(tx)) state.delegationTxs.set(tx, false);
+        }
         const candidates = [...delegated.map(log => ({ log, type: 'delegate' })), ...undelegated.map(log => ({ log, type: 'undelegate' }))]
             // Only the operators' own events (other contracts can share the signature)
             .filter(({ log }) => operators.has(log.address.toLowerCase()))
@@ -764,11 +771,11 @@ function nodesCount() {
     return state.nodes.size || null;
 }
 
-/** An operator's nodes heard in the last hour (null before any node was heard) */
+/** An operator's nodes heard in the last hour (null while its coordination stream is still to be listened to) */
 function operatorNodesCount(operatorId) {
-    if (!state.nodes.size) return null;
     const since = Date.now() - NODE_TTL_MS;
-    return [...(state.operatorNodes.get(operatorId)?.values() || [])].filter(seen => seen >= since).length;
+    const count = [...(state.operatorNodes.get(operatorId)?.values() || [])].filter(seen => seen >= since).length;
+    return count || state.operatorsListened.has(operatorId) ? count : null;
 }
 
 /** Listens to one operator's coordination stream until each of its nodes sent two heartbeats (at most 45 s) */
@@ -796,6 +803,10 @@ async function listenOperator(client, operatorId, scan) {
             if ([...heartbeats.values()].every(count => count >= 2)) finish();
         });
         if (!scan.stopped) await done;
+        if (!scan.stopped && !state.operatorsListened.has(operatorId)) {
+            state.operatorsListened.add(operatorId);
+            if (state.active && state.topOperators.some(op => op.id === operatorId)) renderOperators();
+        }
     } catch (e) {
         logger.warn(`Overview: ${operatorId} coordination stream not heard`, e);
     } finally {
@@ -815,11 +826,17 @@ async function scanNodes() {
     if (state.active) renderStats();   // the refresh arrow turns
     try {
         if (!state.totals) await state.totalsPromise;
+        // The largest first, and the ones in Top operators before any other (that list can come in later)
         const queue = state.allOperators
             .filter(op => BigInt(op.totalStakeInSponsorshipsWei || '0') > 0n)
+            .sort((a, b) => weiToNumber(b.valueWithoutEarnings) - weiToNumber(a.valueWithoutEarnings))
             .map(op => op.id);
+        const next = () => {
+            const top = queue.findIndex(id => state.topOperators.some(op => op.id === id));
+            return queue.splice(top < 0 ? 0 : top, 1)[0];
+        };
         await Promise.all(Array.from({ length: NODE_SUBSCRIPTIONS }, async () => {
-            while (queue.length && !scan.stopped && state.active) await listenOperator(client, queue.shift(), scan);
+            while (queue.length && !scan.stopped && state.active) await listenOperator(client, next(), scan);
         }));
         // A whole round: the nodes it did not hear are gone
         if (!scan.stopped && state.active && scan.heard.size) {
@@ -1429,7 +1446,7 @@ function renderOperators() {
                 ${avatar(op)}
                 <div class="min-w-0 flex-1">
                     <p class="text-sm font-semibold text-white truncate">${escapeHtml(operatorName(op))}</p>
-                    <p class="text-xs text-gray-400 truncate">${full(op.delegatorCount || 0)} delegators${nodes === null ? '' : ` · ${nodes} ${nodes === 1 ? 'node' : 'nodes'}`}</p>
+                    <p class="text-xs text-gray-400 truncate">${full(Math.max(0, (op.delegatorCount || 0) - 1))} delegators${nodes === null ? ' · ... nodes' : ` · ${nodes} ${nodes === 1 ? 'node' : 'nodes'}`}</p>
                 </div>
                 <div class="text-right whitespace-nowrap">
                     <p class="text-sm font-semibold text-white" data-tooltip-content="${usdLine(value)}${full(value)} DATA">${compact(value)} DATA</p>
