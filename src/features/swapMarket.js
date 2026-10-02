@@ -833,9 +833,10 @@ const OUTLIER_INFO = '<button type="button" class="inline-flex text-gray-300 hov
 const ETHEREUM_MARK = '<svg class="w-3.5 h-3.5 flex-shrink-0" viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="16" fill="#627EEA"/><path fill="#fff" fill-opacity=".6" d="M16.5 4v8.87l7.5 3.35z"/><path fill="#fff" d="M16.5 4 9 16.22l7.5-3.35z"/><path fill="#fff" fill-opacity=".6" d="M16.5 21.97v6.03L24 17.62z"/><path fill="#fff" d="M16.5 28v-6.03L9 17.62z"/></svg>';
 const POLYGON_MARK = '<svg class="w-3.5 h-3.5 flex-shrink-0" viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="16" fill="#8247E5"/><path fill="#fff" d="M21.1 13.1a1.3 1.3 0 0 0-1.3 0l-2.9 1.7-2 1.1-2.9 1.7a1.3 1.3 0 0 1-1.3 0l-2.3-1.3a1.3 1.3 0 0 1-.6-1.1v-2.6c0-.4.2-.9.6-1.1l2.2-1.3a1.3 1.3 0 0 1 1.3 0l2.2 1.3c.4.2.6.7.6 1.1v1.7l2-1.2v-1.7c0-.4-.2-.9-.6-1.1l-4.2-2.4a1.3 1.3 0 0 0-1.3 0l-4.3 2.5c-.4.2-.6.6-.6 1v4.9c0 .4.2.9.6 1.1l4.3 2.4c.4.2.9.2 1.3 0l2.9-1.6 2-1.2 2.9-1.6a1.3 1.3 0 0 1 1.3 0l2.2 1.3c.4.2.6.7.6 1.1v2.6c0 .4-.2.9-.6 1.1l-2.2 1.3a1.3 1.3 0 0 1-1.3 0l-2.2-1.3a1.3 1.3 0 0 1-.6-1.1v-1.7l-2 1.2v1.7c0 .4.2.9.6 1.1l4.3 2.4c.4.2.9.2 1.3 0l4.3-2.4c.4-.2.6-.7.6-1.1v-4.9c0-.4-.2-.9-.6-1.1z"/></svg>';
 /** A trade's chain: logo + name, as the token chips (the logo alone on smaller screens, the name in its tooltip) */
-function chainChip(chain) {
+export function chainChip(chain, { named = false } = {}) {
     const name = chain === 1 ? 'Ethereum' : 'Polygon';
-    return `<span class="inline-flex items-center gap-1 p-0.5 2xl:pr-1.5 rounded-full bg-[#2C2C2C] text-[11px] font-semibold text-gray-200 whitespace-nowrap" data-tooltip-content="${name}">${chain === 1 ? ETHEREUM_MARK : POLYGON_MARK}<span class="hidden 2xl:inline">${name}</span></span>`;
+    // named: the name on every screen (else the logo alone below 2xl)
+    return `<span class="inline-flex items-center gap-1 p-0.5 ${named ? 'pr-1.5' : '2xl:pr-1.5'} rounded-full bg-[#2C2C2C] text-[11px] font-semibold text-gray-200 whitespace-nowrap" data-tooltip-content="${name}">${chain === 1 ? ETHEREUM_MARK : POLYGON_MARK}<span class="${named ? '' : 'hidden 2xl:inline'}">${name}</span></span>`;
 }
 /** The swap page's token chip, a size smaller for the trades list, all of one width (their arrows line up) */
 const compactChip = (symbol) => state.tokenChip(symbol)

@@ -275,3 +275,56 @@ test('on Ethereum the quote goes through its Uniswap v4 pool, SushiSwap V2 check
     await expect(page.locator('#swap-routes-list')).toContainText('SushiSwap V2 · WETH → DATA');
     await expect(page.locator('#swap-routes-list')).toContainText('15 000 000 DATA');
 });
+
+test('your swaps include the ones on Ethereum, from its explorer', async ({ page }) => {
+    // A DATA buy with ETH on Ethereum, made in another app: the ETH sent to Uniswap's router, the DATA received
+    const me = '0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266', hash = '0x' + 'e'.repeat(64), time = String(Math.floor(Date.now() / 1000) - 600);
+    await page.route(url => url.hostname === 'api.etherscan.io' && url.search.includes('chainid=1&') && url.search.includes('module=account'), (route) => {
+        const action = new URL(route.request().url()).searchParams.get('action');
+        const result = action === 'tokentx'
+            ? [{ hash, timeStamp: time, from: '0x' + '5'.repeat(40), to: me, contractAddress: '0x8f693ca8d21b157107184d29d398a8d082b38b76', value: '1191000000000000000000' }]
+            : action === 'txlist' ? [{ hash, timeStamp: time, from: me, to: '0x66a9893cc07d91d95644aedd05d03f95e1dba8af', value: '100000000000000', isError: '0' }] : [];
+        return route.fulfill({ json: { status: '1', message: 'OK', result } });
+    });
+    await page.goto('/swap', { waitUntil: 'domcontentloaded' });
+    await page.click('#privateKeyBtn');
+    await page.fill('#privateKeyInput', '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80');
+    await page.click('#pkModalConnect');
+    const row = page.locator('#swap-history tr', { has: page.locator('[data-tooltip-content="Ethereum"]') });
+    await expect(row).toContainText('Buy DATA', { ignoreCase: true, timeout: 30000 });
+    await expect(row).toContainText('0.0001');
+    await expect(row).toContainText('1 191');
+    await expect(row).toContainText('Uniswap (Universal Router)');
+    await expect(row.locator(`a[href="https://etherscan.io/tx/${hash}"]`)).toBeVisible();
+});
+
+test('"You" in the market trades comes from the explorer, not from the browser\'s storage', async ({ page }) => {
+    const me = '0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266';
+    const stored = '0x' + '3'.padStart(64, 'a'), found = '0x' + '2'.padStart(64, 'a');
+    await page.addInitScript(([key, hash]) => localStorage.setItem(key, JSON.stringify([{ txHash: hash, createdAt: Date.now(), status: 'done',
+        pay: { symbol: 'USDC', amount: '1000000' }, receive: { symbol: 'DATA', amount: '4000000000000000000000' } }])), [`swapHistory:${me}`, stored]);
+    // Polygon's explorer: the wallet's USDC -> DATA swap in the second trade's transaction (busy at the first ask of each list)
+    const asked = new Set();
+    await page.route(url => url.hostname === 'api.etherscan.io' && url.search.includes('chainid=137&') && url.search.includes('module=account'), (route) => {
+        const action = new URL(route.request().url()).searchParams.get('action');
+        if (!asked.has(action)) {
+            asked.add(action);
+            return route.fulfill({ json: { status: '0', message: 'NOTOK', result: 'Max calls per sec rate limit reached (5/sec)' } });
+        }
+        const time = String(Math.floor(Date.now() / 1000) - 9000);
+        const result = action === 'tokentx' ? [
+            { hash: found, timeStamp: time, from: me, to: '0x' + '6'.repeat(40), contractAddress: '0x3c499c542cef5e3811e1192ce70d8cc03d5c3359', value: '1000000' },
+            { hash: found, timeStamp: time, from: '0x' + '6'.repeat(40), to: me, contractAddress: '0x3a9a81d576d83ff21f26f325066054540720fc34', value: '2586000000000000000000' }
+        ] : [];
+        return route.fulfill({ json: { status: '1', message: 'OK', result } });
+    });
+    await page.goto('/swap', { waitUntil: 'domcontentloaded' });
+    await page.click('#privateKeyBtn');
+    await page.fill('#privateKeyInput', '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80');
+    await page.click('#pkModalConnect');
+    const row = (hash) => page.locator('#swap-trades tr', { has: page.locator(`a[href$="${hash}"]`) });
+    await expect(row(found)).toContainText('You', { timeout: 30000 });
+    await expect(row(stored)).toBeVisible();
+    await expect(row(stored)).not.toContainText('You');
+    await expect(page.locator('#swap-trades tr', { hasText: 'You' })).toHaveCount(1);
+});
