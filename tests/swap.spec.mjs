@@ -26,6 +26,12 @@ const POOL_STORAGE = new Map([
 const EXTSLOAD = new ethers.utils.Interface(['function extsload(bytes32[] slots) view returns (bytes32[])']);
 
 let ranges;   // block ranges asked of the main pool's swaps
+/** The swap page, once its modules listen (the swap button is set after the market and the book): a click before is lost */
+async function openSwap(page) {
+    await openApp(page, '/swap');
+    await expect(page.locator('#swap-submit')).toHaveText('Connect wallet', { timeout: 30000 });
+}
+
 test.beforeEach(async ({ page }) => {
     await mockNetwork(page.context());
     ranges = [];
@@ -172,4 +178,59 @@ test('the order book shows the main pool\'s liquidity by price, in place of the 
     await page.click('[data-market-view="trades"]');
     await expect(page.locator('#swap-trades-view')).toBeVisible();
     await expect(page.locator('#swap-book-view')).toBeHidden();
+});
+
+test('the swap form switches to Ethereum: its tokens and DEXes, kept for the next visit', async ({ page }) => {
+    await openSwap(page);
+    const options = () => page.locator('#swap-from-token select option').allTextContents();
+    expect(await options()).toEqual(['POL', 'USDC', 'USDC.e']);
+    await page.click('#swap-chain [data-chain="1"]');
+    expect(await options()).toEqual(['ETH', 'USDC', 'USDT']);
+    await expect(page.locator('[data-chain-text="1"]')).toContainText('On Ethereum');
+    await expect(page.locator('[data-chain-text="137"]')).toBeHidden();
+    await expect(page.locator('#swap-pools-btn')).toBeHidden();
+    // ETH for POL, and back
+    await page.selectOption('#swap-from-token select', 'ETH');
+    await openSwap(page);   // a new visit
+    await expect(page.locator('#swap-chain [data-chain="1"]')).toHaveClass(/bg-blue-800/);
+    await page.click('#swap-chain [data-chain="137"]');
+    expect(await options()).toEqual(['POL', 'USDC', 'USDC.e']);
+    await expect(page.locator('#swap-pools-btn')).toBeVisible();
+});
+
+test('on Ethereum the quote goes through its Uniswap v4 pool', async ({ page }) => {
+    // Ethereum's RPC: the DATA/ETH 0.3% v4 pool in its PoolManager, and the v4 quoter giving 16M DATA per ETH
+    const MANAGER = '0x000000000004444c5dc75cb358380d2e3de08a90', QUOTER = '0x52f0e24d1c21c8a0cb1e5a5dd6198556bd9e1203';
+    const id = ethers.utils.keccak256(ethers.utils.defaultAbiCoder.encode(['address', 'address', 'uint24', 'int24', 'address'],
+        [ethers.constants.AddressZero, '0x8f693ca8d21b157107184d29d398a8d082b38b76', 3000, 60, ethers.constants.AddressZero]));
+    const state = ethers.BigNumber.from(ethers.utils.keccak256(ethers.utils.solidityPack(['bytes32', 'bytes32'], [id, ethers.utils.hexZeroPad('0x06', 32)])));
+    const storage = new Map([[word(state), word(ethers.BigNumber.from(2).pow(96).mul(4000))], [word(state.add(3)), word(LIQUIDITY)]]);
+    const multicall = new ethers.utils.Interface(['function aggregate3((address target, bool allowFailure, bytes callData)[] calls) payable returns ((bool success, bytes returnData)[] returnData)']);
+    const extsload = new ethers.utils.Interface(['function extsload(bytes32 slot) view returns (bytes32)']);
+    const quoter = new ethers.utils.Interface(['function quoteExactInputSingle(((address currency0, address currency1, uint24 fee, int24 tickSpacing, address hooks) poolKey, bool zeroForOne, uint128 exactAmount, bytes hookData) params) returns (uint256 amountOut, uint256 gasEstimate)']);
+    await page.route('https://ethereum-rpc.publicnode.com/**', (route) => {
+        const body = route.request().postDataJSON();
+        const call = body.method === 'eth_call' ? body.params[0] : null;
+        let result = null;
+        if (call?.to?.toLowerCase() === '0xca11bde05977b3631167028862be2a173976ca11') {
+            const [calls] = multicall.decodeFunctionData('aggregate3', call.data);
+            result = multicall.encodeFunctionResult('aggregate3', [calls.map(c => {
+                if (c.target.toLowerCase() === MANAGER && c.callData.startsWith(extsload.getSighash('extsload'))) {
+                    const [slot] = extsload.decodeFunctionData('extsload', c.callData);
+                    return { success: true, returnData: extsload.encodeFunctionResult('extsload', [storage.get(slot.toLowerCase()) || ethers.constants.HashZero]) };
+                }
+                return { success: true, returnData: ethers.utils.hexZeroPad('0x', 32) };   // no Uniswap v3 pool, nothing else
+            })]);
+        } else if (call?.to?.toLowerCase() === QUOTER) {
+            const [params] = quoter.decodeFunctionData('quoteExactInputSingle', call.data);
+            result = quoter.encodeFunctionResult('quoteExactInputSingle', [params.exactAmount.mul(16000000), 100000]);
+        }
+        return route.fulfill({ json: { jsonrpc: '2.0', id: body.id, result } });
+    });
+    await openSwap(page);
+    await page.click('#swap-chain [data-chain="1"]');
+    await page.selectOption('#swap-from-token select', 'ETH');
+    await page.fill('#swap-amount', '1');
+    await expect(page.locator('#swap-receive')).toHaveText('16 000 000', { timeout: 30000 });
+    await expect(page.locator('#swap-route')).toHaveText('Uniswap v4 (0.3%) · ETH → DATA');
 });

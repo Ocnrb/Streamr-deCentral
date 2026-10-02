@@ -455,7 +455,7 @@ const ETH_IFACES = {
 };
 
 let ethProvider = null;
-function getEthProvider() {
+export function getEthProvider() {
     if (!ethProvider) ethProvider = new Services.FailoverRpcProvider(ETHEREUM_RPC_URLS, 1, 'ethereum_rpc_index');
     return ethProvider;
 }
