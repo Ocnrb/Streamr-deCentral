@@ -24,6 +24,7 @@ const DATA = DATA_TOKEN_ADDRESS_POLYGON.toLowerCase();
 const USDC = '0x3c499c542cef5e3811e1192ce70d8cc03d5c3359';
 const POOL_MANAGER = '0x67366782805870060151383f4bbff9dab53e5cd6';
 const CHAINS = {
+    // blocksPerDay: an estimate until measured (block times change with the chains' upgrades)
     137: { name: 'Polygon', blocksPerDay: 43200, poolManager: POOL_MANAGER, explorer: 'https://polygonscan.com/tx/' },
     1: { name: 'Ethereum', blocksPerDay: 7200, poolManager: '0x000000000004444c5dc75cb358380d2e3de08a90', explorer: 'https://etherscan.io/tx/' }
 };
@@ -291,10 +292,30 @@ function addTrades(pool, logs) {
 
 const mainTrades = () => state.trades.filter(t => t.pool === MAIN.key);
 
+/**
+ * A chain's blocks per day over the last TRADE_DAYS, from the times of two blocks: the trades then cover exactly
+ * the 7 days (the 7D chart has no daily part). Kept as estimated when the blocks can't be read.
+ */
+async function measureBlockRate(chain, latest) {
+    const info = CHAINS[chain];
+    if (info.measured) return;
+    const read = (fn) => (chain === 137 ? Services.readWithFallback(() => fn(Services.getReadOnlyProvider())) : fn(getEthProvider()));
+    try {
+        const span = Math.round(TRADE_DAYS * info.blocksPerDay);
+        const [last, first] = await Promise.all([read(p => p.getBlock(latest)), read(p => p.getBlock(latest - span))]);
+        const days = (last.timestamp - first.timestamp) * 1000 / DAY;
+        if (days > 0) info.blocksPerDay = span / days;
+        info.measured = true;
+    } catch (e) {
+        logger.warn(`Swap market: ${info.name} block times not read`, e);
+    }
+}
+
 /** New trades of one pool: its first load reads the last 7 days, then from its last trade on */
 async function loadPool(pool, latest) {
     let added;
     if (pool.nextFromBlock === null) {
+        await measureBlockRate(pool.chain, latest);
         const { logs, fromBlock } = await fetchNewest(pool, latest, TRADE_DAYS);
         pool.oldestBlock = fromBlock;
         if (pool === MAIN) state.windowStart = Date.now() - (latest - fromBlock) * (DAY / CHAINS[pool.chain].blocksPerDay);
