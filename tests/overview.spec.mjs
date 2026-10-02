@@ -6,6 +6,8 @@ let stats;
 test.beforeEach(async ({ page }) => {
     stats = await mockNetwork(page.context());
     await openApp(page, '/');
+    // The page's module is loaded after its view shows: a click before it is lost
+    await expect(page.locator('#overview-range [data-range="1y"]')).toHaveClass(/bg-blue-800/, { timeout: 30000 });
 });
 test.afterEach(() => {
     expect(stats.invalidQueries, 'every subgraph query is valid for its schema').toEqual([]);
@@ -96,6 +98,15 @@ test('the coordination streams are left once the nodes are counted', async ({ pa
     await expect.poll(subscriptions).toBeGreaterThan(0);
     await page.evaluate(() => window.router.navigate('/operators'));
     await expect.poll(subscriptions).toBe(0);
+});
+
+test('top operators show their nodes, heard on their coordination streams', async ({ page }) => {
+    await expect(tile(page, 'operators')).toContainText('451 nodes', { timeout: 30000 });
+    const rows = page.locator('#overview-operators a');
+    await expect(rows.nth(0)).toContainText('Operator 298');
+    await expect(rows.nth(0)).toContainText('18 delegators · 1 node');
+    await expect(rows.nth(1)).toContainText('Operator 295');
+    await expect(rows.nth(1)).toContainText('15 delegators · 2 nodes');
 });
 
 test('a 30-day chart starts from the records just before it', async ({ page }) => {
