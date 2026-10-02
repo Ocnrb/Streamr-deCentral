@@ -1694,8 +1694,8 @@ function renderHistory() {
         body.innerHTML = empty(state.address ? 'No DATA swaps yet.' : 'Connect a wallet to see your swaps.');
         return;
     }
-    // The amount right-aligned before its chip, the chips in a box of one width: they line up from row to row
-    const amount = (leg) => `<span class="flex items-center justify-end gap-2 whitespace-nowrap"><span class="text-white font-medium">${leg.estimated ? '≈ ' : ''}${formatAmount(leg.amount, SYMBOL_DECIMALS[leg.symbol] ?? 18)}</span><span class="inline-flex w-[5rem]">${tokenChip(leg.symbol)}</span></span>`;
+    // Centered in the column: the amount right-aligned in a box of one width, then the chip in another, so the chips line up
+    const amount = (leg) => `<span class="flex items-center justify-center gap-2 whitespace-nowrap"><span class="w-[6rem] text-right text-white font-medium">${leg.estimated ? '≈ ' : ''}${formatAmount(leg.amount, SYMBOL_DECIMALS[leg.symbol] ?? 18)}</span><span class="inline-flex w-[5rem]">${tokenChip(leg.symbol)}</span></span>`;
     const more = $('swap-history-more');
     more?.classList.toggle('hidden', state.history.length <= historyShown);
     body.innerHTML = state.history.slice(0, historyShown).map(entry => {
@@ -1708,12 +1708,12 @@ function renderHistory() {
         return `
             <tr class="border-b border-[#2a2a2a] last:border-0 align-middle">
                 <td class="py-3 pr-3 whitespace-nowrap"><div class="text-gray-200">${formatDateTime(entry.createdAt)}</div>${Date.now() - entry.createdAt < 86400000 ? `<div class="text-xs text-gray-400">${timeAgo(entry.createdAt)}</div>` : ''}</td>
-                <td class="py-3 pr-3">${action}</td>
+                <td class="py-3 pr-3 text-center">${action}</td>
                 <td class="py-3 pr-3">${amount(entry.pay)}</td>
                 <td class="py-3 pr-3">${amount(entry.receive)}</td>
-                <td class="py-3 pr-3">${dataUsdCell(entry)}</td>
-                <td class="py-3 pr-3 text-xs text-gray-300">${routeCell(entry)}</td>
-                <td class="py-3 pr-3"><span class="px-2 py-0.5 rounded-full text-[11px] font-semibold whitespace-nowrap ${badge}">${label}</span></td>
+                <td class="py-3 pr-3 text-center">${dataUsdCell(entry)}</td>
+                <td class="py-3 pr-3 text-center text-xs text-gray-300">${routeCell(entry)}</td>
+                <td class="py-3 pr-3 text-center"><span class="px-2 py-0.5 rounded-full text-[11px] font-semibold whitespace-nowrap ${badge}">${label}</span></td>
                 <td class="py-3 text-right whitespace-nowrap"><a href="${NETWORKS[entry.chain || 137].explorer}/tx/${hash}" target="_blank" rel="noopener noreferrer" class="font-mono text-xs text-blue-400 hover:text-blue-300">${hash.slice(0, 6)}…${hash.slice(-4)}</a></td>
             </tr>`;
     }).join('');
