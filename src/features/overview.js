@@ -160,8 +160,7 @@ const state = {
     stakeBefore: new Map(),     // `e:<staking event id>` | `u:<unstake tx>` -> { amount, date } of the stake before it (null: none)
     feeds: {                    // activity read from the explorer while its tab is open
         staking: { rows: [], loaded: false, error: false, at: 0 },
-        permissions: { rows: [], loaded: false, error: false, at: 0 },
-        storage: { rows: [], loaded: false, error: false, at: 0 },
+        permissions: { rows: [], loaded: false, error: false, at: 0 },   // permission and storage changes
         sponsorships: { rows: [], loaded: false, error: false, at: 0 }
     },
     panels: { network: 'streams', activity: 'staking' },
@@ -523,24 +522,9 @@ async function readStakingActions() {
 
 const FEED_READERS = {
     staking: readStakingActions,
-    // Permission changes, without the ones given with a new stream (same transaction)
-    permissions: () => newestContractEvents(STREAM_REGISTRY_ADDRESS,
-        [NETWORK_TOPICS.streamCreated, NETWORK_TOPICS.permission, NETWORK_TOPICS.permissionForUserId], (logs) => {
-            const creations = new Set(logs.filter(log => log.topics[0] === NETWORK_TOPICS.streamCreated).map(log => log.transactionHash));
-            return logs.filter(log => log.topics[0] !== NETWORK_TOPICS.streamCreated && !creations.has(log.transactionHash)).map(log => {
-                const byUserId = log.topics[0] === NETWORK_TOPICS.permissionForUserId;
-                const [streamId, user, ...rights] = ethers.utils.defaultAbiCoder.decode(
-                    ['string', byUserId ? 'bytes' : 'address', 'bool', 'bool', 'uint256', 'uint256', 'bool'], log.data);
-                return { streamId, user: String(user).toLowerCase(), rights: permissionRights(...rights), ...logTime(log) };
-            });
-        }),
-    storage: () => newestContractEvents(STREAM_STORAGE_REGISTRY_ADDRESS,
-        [NETWORK_TOPICS.storageAdded, NETWORK_TOPICS.storageRemoved], (logs) => logs.map(log => ({
-            streamId: ethers.utils.defaultAbiCoder.decode(['string'], log.data)[0],
-            node: ethers.utils.hexDataSlice(log.topics[1], 12).toLowerCase(),
-            added: log.topics[0] === NETWORK_TOPICS.storageAdded,
-            ...logTime(log)
-        }))),
+    // Who can use a stream: permission changes (without the ones given with a new stream, same transaction)
+    // and storage nodes added / removed, newest first
+    permissions: async () => (await Promise.all([readPermissionChanges(), readStorageChanges()])).flat().sort(newestFirst).slice(0, LIST_SIZE),
     sponsorships: () => newestContractEvents(SPONSORSHIP_FACTORY_ADDRESS, [NETWORK_TOPICS.newSponsorship], (logs) => logs.map(log => ({
         kind: 'created',
         sponsorshipId: ethers.utils.hexDataSlice(log.topics[1], 12).toLowerCase(),
@@ -549,6 +533,30 @@ const FEED_READERS = {
         ...logTime(log)
     })))
 };
+
+function readPermissionChanges() {
+    return newestContractEvents(STREAM_REGISTRY_ADDRESS,
+        [NETWORK_TOPICS.streamCreated, NETWORK_TOPICS.permission, NETWORK_TOPICS.permissionForUserId], (logs) => {
+            const creations = new Set(logs.filter(log => log.topics[0] === NETWORK_TOPICS.streamCreated).map(log => log.transactionHash));
+            return logs.filter(log => log.topics[0] !== NETWORK_TOPICS.streamCreated && !creations.has(log.transactionHash)).map(log => {
+                const byUserId = log.topics[0] === NETWORK_TOPICS.permissionForUserId;
+                const [streamId, user, ...rights] = ethers.utils.defaultAbiCoder.decode(
+                    ['string', byUserId ? 'bytes' : 'address', 'bool', 'bool', 'uint256', 'uint256', 'bool'], log.data);
+                return { kind: 'permission', streamId, user: String(user).toLowerCase(), rights: permissionRights(...rights), ...logTime(log) };
+            });
+        });
+}
+
+function readStorageChanges() {
+    return newestContractEvents(STREAM_STORAGE_REGISTRY_ADDRESS,
+        [NETWORK_TOPICS.storageAdded, NETWORK_TOPICS.storageRemoved], (logs) => logs.map(log => ({
+            kind: 'storage',
+            streamId: ethers.utils.defaultAbiCoder.decode(['string'], log.data)[0],
+            node: ethers.utils.hexDataSlice(log.topics[1], 12).toLowerCase(),
+            added: log.topics[0] === NETWORK_TOPICS.storageAdded,
+            ...logTime(log)
+        })));
+}
 
 async function loadFeed(name) {
     const feed = state.feeds[name];
@@ -1569,25 +1577,30 @@ function sponsorshipEventRow(event) {
         </a>`;
 }
 
+/** Changes to who can use a stream: permissions and storage nodes */
+const accessRow = (event) => (event.kind === 'storage' ? storageRow(event) : permissionRow(event));
+
+/** Newest first; a sponsorship's creation goes below the sponsoring done with it (same block) */
+const sponsorshipOrder = (a, b) => b.time - a.time || (a.kind === 'created') - (b.kind === 'created');
+
 const feedTab = (name, render, what) => ({
     rows: () => state.feeds[name].rows, render, error: `${what} could not be loaded.`, empty: `No ${what.toLowerCase()} in the last 30 days.`,
     loaded: () => state.feeds[name].loaded, failed: () => state.feeds[name].error, load: () => loadFeed(name), at: () => state.feeds[name].at
 });
 
 const PANELS = {
-    // The network: streams, sponsorships, permissions and storage
+    // The network: streams, sponsorships, and permission and storage changes
     network: {
         list: 'overview-network',
         tabs: {
             streams: { rows: () => state.newStreams, render: newStreamRow, error: 'Streams could not be loaded.', empty: 'No new streams.' },
             // Created (factory events) and sponsored (subgraph), newest first
-            sponsorships: { rows: () => [...state.feeds.sponsorships.rows, ...state.latestSponsoring].sort((a, b) => b.time - a.time).slice(0, LIST_SIZE),
+            sponsorships: { rows: () => [...state.feeds.sponsorships.rows, ...state.latestSponsoring].sort(sponsorshipOrder).slice(0, LIST_SIZE),
                 render: sponsorshipEventRow, error: 'Sponsorship events could not be loaded.', empty: 'No sponsorship events.',
                 loaded: () => state.loaded && (state.feeds.sponsorships.loaded || state.feeds.sponsorships.error),
                 failed: () => state.error && state.feeds.sponsorships.error,
                 load: () => loadFeed('sponsorships'), at: () => state.feeds.sponsorships.at },
-            permissions: feedTab('permissions', permissionRow, 'Permission changes'),
-            storage: feedTab('storage', storageRow, 'Storage changes')
+            permissions: feedTab('permissions', accessRow, 'Permission and storage changes')
         }
     },
     // Operators and delegators: staking, delegations, earnings, flags and votes

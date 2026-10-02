@@ -43,6 +43,8 @@ function buildData() {
     ];
     T.sponsoringEvents = T.sponsorships.map((s, i) => ({ id: `sp${i}`, amount: s.cumulativeSponsoring, date: String(NOW - (650 - i * 30) * DAY), sponsor: hex(0x5000 + i), sponsorship: s }));
     T.sponsoringEvents.push({ id: 'spNew', amount: W(7500), date: String(NOW - 400), sponsor: hex(0x5555), sponsorship: T.sponsorships[4] });
+    // Sponsored in the transaction that created the sponsorship (NewSponsorship log of 2 minutes ago, below)
+    T.sponsoringEvents.push({ id: 'spWithCreation', amount: W(2000), date: String(NOW - 120), sponsor: hex(0x5c), sponsorship: T.sponsorships[7] });
     const streamStart = Math.floor(Date.UTC(2021, 5, 1) / 1000);
     T.streams = Array.from({ length: 2500 }, (_, i) => ({ id: `${hex(0xd000 + (i % 97))}/s-${String(i).padStart(5, '0')}`, createdAt: String(streamStart + Math.floor((NOW - streamStart) * (i / 2500) ** 0.7)) }));
     // The sponsorships' streams: found by id (their pages), not in the stream lists

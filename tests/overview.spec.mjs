@@ -57,6 +57,18 @@ test('the Y axis fits the line and never goes below 0', async ({ page }) => {
     await expect.poll(async () => (await axis())?.min ?? -1).toBeGreaterThan(0);
 });
 
+test('the coordination streams are left once the nodes are counted', async ({ page }) => {
+    const subscriptions = () => page.evaluate(() => window.__subscriptions || 0);
+    await expect(tile(page, 'operators')).toContainText('451 nodes', { timeout: 30000 });
+    await expect(page.locator('[data-action="nodes-refresh"]')).toBeEnabled({ timeout: 30000 });
+    expect(await subscriptions()).toBe(0);
+    // Counted again on request, and left when another page opens in the middle of it
+    await page.click('[data-action="nodes-refresh"]');
+    await expect.poll(subscriptions).toBeGreaterThan(0);
+    await page.evaluate(() => window.router.navigate('/operators'));
+    await expect.poll(subscriptions).toBe(0);
+});
+
 test('a 30-day chart starts from the records just before it', async ({ page }) => {
     await page.click('#overview-range [data-range="30d"]');
     // Total staked is 96.0M now and grows slowly: a sponsorship emptied before the range adds nothing
@@ -100,17 +112,20 @@ test('operator and delegator activity', async ({ page }) => {
 test('network activity', async ({ page }) => {
     const rows = page.locator('#overview-network a');
     await expect(rows.first()).toContainText('New stream');
+    // A sponsorship's creation below the sponsoring done in the same transaction
     await page.click('#overview-network-tabs [data-tab="sponsorships"]');
-    await expect(rows.first()).toContainText('Sponsorship created');
-    await expect(rows.nth(1)).toContainText('+7.5K DATA');
-    // Permission changes, without the ones given with a new stream
+    await expect(rows.nth(0)).toContainText('+2.0K DATA');
+    await expect(rows.nth(1)).toContainText('Sponsorship created');
+    await expect(rows.nth(2)).toContainText('+7.5K DATA');
+    // Permission changes (without the ones given with a new stream) and storage changes, newest first
     await page.click('#overview-network-tabs [data-tab="permissions"]');
-    await expect(rows).toHaveCount(2);
-    await expect(rows.nth(0)).toContainText('Everyone · publish, subscribe');
-    await expect(rows.nth(1)).toContainText('Revoked');
-    await page.click('#overview-network-tabs [data-tab="storage"]');
-    await expect(rows).toHaveCount(2);
+    await expect(rows).toHaveCount(4);
+    await expect(rows.nth(0)).toContainText('Storage node');
     await expect(rows.nth(0)).toContainText('Added');
+    await expect(rows.nth(1)).toContainText('Everyone · publish, subscribe');
+    await expect(rows.nth(2)).toContainText('Revoked');
+    await expect(rows.nth(3)).toContainText('Removed');
+    await expect(page.locator('#overview-network-tabs [data-tab="storage"]')).toHaveCount(0);
 });
 
 test('top operators skip the ones earning nothing', async ({ page }) => {
