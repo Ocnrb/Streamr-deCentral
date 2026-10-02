@@ -1,5 +1,5 @@
 /**
- * Swap: DATA against POL / USDC / USDC.e on Polygon, or ETH / USDC / USDT on Ethereum (Uniswap only there),
+ * Swap: DATA against POL / USDC / USDC.e on Polygon, or ETH / USDC / USDT on Ethereum (SushiSwap and Uniswap there),
  * straight through the DEX contracts (no aggregator API)
  * - Pools are discovered on-chain (factories of QuickSwap V2, SushiSwap V2, QuickSwap V3 (Algebra) and
  *   Uniswap v3, every fee tier): DATA against WPOL / USDC / USDC.e / USDT / WETH / DAI, and the pools
@@ -16,7 +16,7 @@ import * as UI from '../ui/ui.js';
 import * as Services from '../core/services.js';
 import { DATA_TOKEN_ADDRESS_POLYGON, DATA_TOKEN_ADDRESS_ETHEREUM, POLYGONSCAN_NETWORK, getEtherscanApiKey } from '../core/constants.js';
 import { getEthereumSigner, restorePolygon } from '../core/ethWallet.js';
-import { SwapMarket, getEthProvider } from './swapMarket.js';
+import { SwapMarket, getEthProvider, chainChip } from './swapMarket.js';
 import { SwapBook } from './swapBook.js';
 import { ethers } from 'ethers';
 
@@ -1691,26 +1691,23 @@ function formatDateTime(ms) {
 
 /** Route column: the route of swaps made here, else the router / aggregator the transaction went to */
 function routeCell(entry) {
-    const net = NETWORKS[entry.chain || 137];
-    // Ethereum's swaps say so under their route
-    const chain = net.id === 137 ? '' : `<div class="text-gray-400">on ${net.name}</div>`;
     if (entry.route) {
         // Swaps made through an aggregator or wallet: which one, under the route
         const app = entry.via && !DEX_ROUTERS.has(lower(entry.via)) ? KNOWN_ROUTERS[lower(entry.via)] : null;
-        return Utils.escapeHtml(entry.route) + (app ? `<div class="text-gray-400">via ${Utils.escapeHtml(app)}</div>` : '') + chain;
+        return Utils.escapeHtml(entry.route) + (app ? `<div class="text-gray-400">via ${Utils.escapeHtml(app)}</div>` : '');
     }
-    if (!entry.via) return `<span class="text-gray-400">Unknown</span>${chain}`;
+    if (!entry.via) return '<span class="text-gray-400">Unknown</span>';
     const known = KNOWN_ROUTERS[lower(entry.via)];
-    if (known) return Utils.escapeHtml(known) + chain;
+    if (known) return Utils.escapeHtml(known);
     const via = Utils.escapeHtml(entry.via);
-    return `via <a href="${net.explorer}/address/${via}" target="_blank" rel="noopener noreferrer" class="font-mono text-blue-400 hover:text-blue-300">${via.slice(0, 6)}…${via.slice(-4)}</a>${chain}`;
+    return `via <a href="${NETWORKS[entry.chain || 137].explorer}/address/${via}" target="_blank" rel="noopener noreferrer" class="font-mono text-blue-400 hover:text-blue-300">${via.slice(0, 6)}…${via.slice(-4)}</a>`;
 }
 
 function renderHistory() {
     SwapMarket.setOwnSwaps([...state.ownSwaps.values()]);
     const body = $('swap-history');
     if (!body) return;
-    const empty = (text) => `<tr><td colspan="8" class="py-4 text-sm text-gray-300">${text}</td></tr>`;
+    const empty = (text) => `<tr><td colspan="9" class="py-4 text-sm text-gray-300">${text}</td></tr>`;
     if (!state.address || !state.history.length) {
         $('swap-history-more')?.classList.add('hidden');
         body.innerHTML = empty(state.address ? 'No DATA swaps yet.' : 'Connect a wallet to see your swaps.');
@@ -1730,6 +1727,7 @@ function renderHistory() {
         return `
             <tr class="border-b border-[#2a2a2a] last:border-0 align-middle">
                 <td class="py-3 pr-3 whitespace-nowrap"><div class="text-gray-200">${formatDateTime(entry.createdAt)}</div>${Date.now() - entry.createdAt < 86400000 ? `<div class="text-xs text-gray-400">${timeAgo(entry.createdAt)}</div>` : ''}</td>
+                <td class="py-3 pr-3 text-center">${chainChip(entry.chain || 137, { named: true })}</td>
                 <td class="py-3 pr-3 text-center">${action}</td>
                 <td class="py-3 pr-3">${amount(entry.pay)}</td>
                 <td class="py-3 pr-3">${amount(entry.receive)}</td>

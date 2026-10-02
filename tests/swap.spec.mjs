@@ -290,7 +290,7 @@ test('your swaps include the ones on Ethereum, from its explorer', async ({ page
     await page.click('#privateKeyBtn');
     await page.fill('#privateKeyInput', '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80');
     await page.click('#pkModalConnect');
-    const row = page.locator('#swap-history tr', { hasText: 'on Ethereum' });
+    const row = page.locator('#swap-history tr', { has: page.locator('[data-tooltip-content="Ethereum"]') });
     await expect(row).toContainText('Buy DATA', { ignoreCase: true, timeout: 30000 });
     await expect(row).toContainText('0.0001');
     await expect(row).toContainText('1 191');
@@ -317,7 +317,9 @@ test('"You" in the market trades comes from the explorer, not from the browser\'
     await page.click('#privateKeyBtn');
     await page.fill('#privateKeyInput', '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80');
     await page.click('#pkModalConnect');
-    const mine = page.locator('#swap-trades tr', { hasText: 'You' });
-    await expect(mine).toHaveCount(1, { timeout: 30000 });
-    await expect(mine.locator(`a[href$="${found}"]`)).toHaveCount(1);
+    const row = (hash) => page.locator('#swap-trades tr', { has: page.locator(`a[href$="${hash}"]`) });
+    await expect(row(found)).toContainText('You', { timeout: 30000 });
+    await expect(row(stored)).toBeVisible();
+    await expect(row(stored)).not.toContainText('You');
+    await expect(page.locator('#swap-trades tr', { hasText: 'You' })).toHaveCount(1);
 });
