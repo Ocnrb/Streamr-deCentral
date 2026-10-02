@@ -11,6 +11,8 @@ test.beforeEach(async ({ page }) => {
     await mockNetwork(page.context());
     await page.goto('/operators', { waitUntil: 'domcontentloaded' });
     await page.click('#privateKeyBtn');
+    // The modal focuses the key 100 ms after it opens: typing before that can land in the wrong field
+    await expect(page.locator('#privateKeyInput')).toBeFocused();
     await page.fill('#privateKeyInput', KEY);
     await page.check('#rememberPrivateKey');
 });

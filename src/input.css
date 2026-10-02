@@ -515,6 +515,18 @@
     
   }
   
+  /* Tablets and phones in landscape: the whole sidebar scrolls when it is taller than the screen, without a scrollbar */
+  @media (max-width: 1023px) {
+    #app-sidebar {
+      overflow-x: hidden;
+      overflow-y: auto;
+      scrollbar-width: none;
+    }
+    #app-sidebar::-webkit-scrollbar {
+      display: none;
+    }
+  }
+
   /* Desktop with the compact sidebar: as on tablets (icons only, 72px) */
   @media (min-width: 1024px) {
     html.sidebar-compact #app-sidebar {
