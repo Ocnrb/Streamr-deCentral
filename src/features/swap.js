@@ -1349,6 +1349,8 @@ const DEX_ROUTERS = new Set([UNIVERSAL_ROUTER, '0x4c60051384bd2d3c01bfc845cf5f4b
     QUICKSWAP_V2_ROUTER, QUICKSWAP_V3_ROUTER, SUSHI_V2_ROUTER, ETH_UNIVERSAL_ROUTER, '0x3fc91a3afd70395cd496c647d5a6cc9d4b2b7fad', ETH_SUSHI_V2_ROUTER,
     '0x7a250d5630b4cf539739df2c5dacb4c659f2488d'].map(lower));
 
+const EXPLORER_BUSY = /rate limit|max calls|too many|timeout|temporarily|busy/i;
+
 /** DATA swaps of this wallet on Polygon, then on Ethereum (one chain at a time: the explorer's calls are rate limited) */
 async function recoverSwaps() {
     await recoverSwapsFromExplorer(POLYGON);
@@ -1358,8 +1360,21 @@ async function recoverSwaps() {
 /** DATA swaps of this wallet on a chain from the explorer (also those made in other apps): token legs in and out of one transaction */
 async function recoverSwapsFromExplorer(net) {
     const base = `${POLYGONSCAN_NETWORK.apiUrl}?chainid=${net.id}&module=account&address=${state.address}&page=1&offset=${EXPLORER_RECORDS}&sort=desc&apikey=${getEtherscanApiKey()}`;
-    const get = (action) => fetch(`${base}&action=${action}`).then(r => r.json()).then(j => (Array.isArray(j?.result) ? j.result : [])).catch(() => []);
-    const [tokenTx, internalTx, normalTx] = await Promise.all([get('tokentx'), get('txlistinternal'), get('txlist')]);
+    // One list at a time, asked again while the explorer is busy (the app's default key is shared and rate limited)
+    const get = async (action) => {
+        for (let attempt = 0; attempt < 4; attempt++) {
+            if (attempt) await new Promise(resolve => setTimeout(resolve, 1000 * 2 ** (attempt - 1)));
+            try {
+                const json = await fetch(`${base}&action=${action}`).then(r => r.json());
+                if (Array.isArray(json?.result)) return json.result;
+                if (!EXPLORER_BUSY.test(`${json?.message} ${json?.result}`)) return [];
+            } catch (e) { /* network failure: asked again */ }
+        }
+        return [];
+    };
+    const tokenTx = await get('tokentx');
+    const internalTx = await get('txlistinternal');
+    const normalTx = await get('txlist');
     const me = state.address;
     const txs = new Map();
     const tx = (hash, time) => {

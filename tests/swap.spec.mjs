@@ -303,9 +303,14 @@ test('"You" in the market trades comes from the explorer, not from the browser\'
     const stored = '0x' + '3'.padStart(64, 'a'), found = '0x' + '2'.padStart(64, 'a');
     await page.addInitScript(([key, hash]) => localStorage.setItem(key, JSON.stringify([{ txHash: hash, createdAt: Date.now(), status: 'done',
         pay: { symbol: 'USDC', amount: '1000000' }, receive: { symbol: 'DATA', amount: '4000000000000000000000' } }])), [`swapHistory:${me}`, stored]);
-    // Polygon's explorer: the wallet's USDC -> DATA swap in the second trade's transaction
+    // Polygon's explorer: the wallet's USDC -> DATA swap in the second trade's transaction (busy at the first ask of each list)
+    const asked = new Set();
     await page.route(url => url.hostname === 'api.etherscan.io' && url.search.includes('chainid=137&') && url.search.includes('module=account'), (route) => {
         const action = new URL(route.request().url()).searchParams.get('action');
+        if (!asked.has(action)) {
+            asked.add(action);
+            return route.fulfill({ json: { status: '0', message: 'NOTOK', result: 'Max calls per sec rate limit reached (5/sec)' } });
+        }
         const time = String(Math.floor(Date.now() / 1000) - 9000);
         const result = action === 'tokentx' ? [
             { hash: found, timeStamp: time, from: me, to: '0x' + '6'.repeat(40), contractAddress: '0x3c499c542cef5e3811e1192ce70d8cc03d5c3359', value: '1000000' },
