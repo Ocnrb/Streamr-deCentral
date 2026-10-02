@@ -73,7 +73,7 @@ const state = {
     trades: [],            // every pool's, oldest first
     seen: new Set(),       // txHash:logIndex
     pools: [MAIN],         // the DATA pools read (the main one first)
-    filter: 'all',         // trades list: 'all', 'polygon', 'ethereum' or 'main'
+    filter: 'all',         // trades list: 'all', 'polygon' or 'ethereum'
     polUsdAt: null,        // (times in s) -> POL/USD prices, from the swap page (Chainlink)
     tokenChip: (symbol) => Utils.escapeHtml(symbol),   // token chip with its logo, from the swap page
     polUsd: new Map(),     // hour (ms) -> POL/USD
@@ -675,9 +675,8 @@ function renderStats() {
 
 const counterName = (pool) => ({ WPOL: 'POL', WETH: 'ETH' }[pool.counterSymbol] || pool.counterSymbol);
 
-/** Trades and pools of the list's filter: all, one network, or the main pool */
+/** Trades and pools of the list's filter: all, or one network */
 function filteredPools() {
-    if (state.filter === 'main') return [MAIN];
     if (state.filter === 'polygon') return state.pools.filter(p => p.chain === 137);
     if (state.filter === 'ethereum') return state.pools.filter(p => p.chain === 1);
     return state.pools;
