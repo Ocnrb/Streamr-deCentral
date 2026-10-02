@@ -1408,11 +1408,12 @@ async function settlePendingSwaps() {
 
 const USD_STABLES = ['USDC', 'USDC.e', 'USDT', 'DAI'];
 
-/** POL/USD at each time (seconds): the last Chainlink round before it, by a binary search over the feed's rounds */
-async function polUsdAt(times) {
+/** POL/USD (or another Chainlink USD feed's price) at each time (seconds): the last round before it, by a binary search over the feed's rounds */
+async function polUsdAt(times, feedAddress = POL_USD_FEED, net = POLYGON) {
     const feed = IFACES.feed;
     const price = (round) => (round && round.answer.gt(0) && round.updatedAt.gt(0) ? Number(round.answer.toString()) / 1e8 : null);
-    const [latest] = await multicall([{ target: POL_USD_FEED, iface: feed, fn: 'latestRoundData', args: [] }]);
+    const call = (calls) => multicall(calls, 60, net);
+    const [latest] = await call([{ target: feedAddress, iface: feed, fn: 'latestRoundData', args: [] }]);
     if (!latest) return times.map(() => null);
     const results = times.map(t => (t >= latest.updatedAt.toNumber() ? price(latest) : undefined));
     let phase = latest.roundId.shr(64).toNumber();
@@ -1420,14 +1421,14 @@ async function polUsdAt(times) {
     // Current phase first, then the earlier ones for older swaps
     for (let hops = 0; hops < 3 && phase > 0 && lastRound > 0 && results.includes(undefined); hops++) {
         const roundId = (n) => ethers.BigNumber.from(phase).shl(64).or(n);
-        const getRound = (n) => ({ target: POL_USD_FEED, iface: feed, fn: 'getRoundData', args: [roundId(n)] });
-        const [first] = await multicall([getRound(1)]);
+        const getRound = (n) => ({ target: feedAddress, iface: feed, fn: 'getRoundData', args: [roundId(n)] });
+        const [first] = await call([getRound(1)]);
         if (!price(first)) break;
         // The answer stays in [lo, hi]: the last round with updatedAt <= t
         const searches = results.flatMap((r, i) => (r === undefined && times[i] >= first.updatedAt.toNumber() ? [{ i, lo: 1, hi: lastRound, round: first }] : []));
         for (let open = searches; open.length; open = searches.filter(s => s.lo < s.hi)) {
             const mids = open.map(s => Math.ceil((s.lo + s.hi) / 2));
-            const rounds = await multicall(mids.map(getRound));
+            const rounds = await call(mids.map(getRound));
             open.forEach((s, j) => {
                 if (!price(rounds[j])) s.lo = s.hi = 0;   // round unreadable: no price for this swap
                 else if (rounds[j].updatedAt.toNumber() <= times[s.i]) [s.lo, s.round] = [mids[j], rounds[j]];
@@ -1437,30 +1438,39 @@ async function polUsdAt(times) {
         searches.forEach(s => { results[s.i] = s.lo ? price(s.round) : null; });
         phase -= 1;
         if (phase < 1) break;
-        const [aggregator] = await multicall([{ target: POL_USD_FEED, iface: feed, fn: 'phaseAggregators', args: [phase] }]);
+        const [aggregator] = await call([{ target: feedAddress, iface: feed, fn: 'phaseAggregators', args: [phase] }]);
         const address = poolAddress(aggregator);
-        const [round] = address ? await multicall([{ target: address, iface: feed, fn: 'latestRound', args: [] }]) : [null];
+        const [round] = address ? await call([{ target: address, iface: feed, fn: 'latestRound', args: [] }]) : [null];
         lastRound = round ? round[0].toNumber() : 0;
     }
     return results.map(r => r ?? null);
 }
 
 const needsPolPrice = (entry) => [entry.pay?.symbol, entry.receive?.symbol].some(s => s === 'POL' || s === 'WPOL');
+const needsEthPrice = (entry) => [entry.pay?.symbol, entry.receive?.symbol].some(s => s === 'ETH' || s === 'WETH');
 const polPriceTried = new Set();
 let pricingSwaps = false;
 
-/** POL/USD at the time of each POL swap, kept with the swap */
+/** POL/USD or ETH/USD (Chainlink, on Polygon / Ethereum) at the time of each POL or ETH swap, kept with the swap */
 async function fillPolPrices() {
-    const missing = state.history.filter(h => h.status === 'done' && h.polUsd === undefined && needsPolPrice(h) && !polPriceTried.has(lower(h.txHash)));
+    const missing = state.history.filter(h => h.status === 'done' && !polPriceTried.has(lower(h.txHash))
+        && ((h.polUsd === undefined && needsPolPrice(h)) || (h.ethUsd === undefined && needsEthPrice(h))));
     if (pricingSwaps || !missing.length) return;
     pricingSwaps = true;
     missing.forEach(h => polPriceTried.add(lower(h.txHash)));
     try {
-        const prices = await polUsdAt(missing.map(h => Math.floor(h.createdAt / 1000)));
-        missing.forEach((h, i) => { if (prices[i]) h.polUsd = prices[i]; });
+        const time = (h) => Math.floor(h.createdAt / 1000);
+        const pol = missing.filter(needsPolPrice);
+        const eth = missing.filter(needsEthPrice);
+        const [polPrices, ethPrices] = await Promise.all([
+            pol.length ? polUsdAt(pol.map(time)) : [],
+            eth.length ? polUsdAt(eth.map(time), ETH_USD_FEED, NETWORKS[1]) : []
+        ]);
+        pol.forEach((h, i) => { if (polPrices[i]) h.polUsd = polPrices[i]; });
+        eth.forEach((h, i) => { if (ethPrices[i]) h.ethUsd = ethPrices[i]; });
         saveHistory();
     } catch (e) {
-        logger.warn('Swap: POL/USD price not found', e);
+        logger.warn('Swap: POL/USD or ETH/USD price not found', e);
     } finally {
         pricingSwaps = false;
         renderHistory();
@@ -1487,6 +1497,12 @@ function dataUsdCell(entry) {
         }
         usd = other * entry.polUsd;
         tip = `Price per DATA in this swap, with POL at ${entry.polUsd.toFixed(4)} USD`;
+    } else if (otherLeg.symbol === 'ETH' || otherLeg.symbol === 'WETH') {
+        if (entry.ethUsd === undefined) {
+            return pricingSwaps || entry.status === 'pending' ? '<span class="text-gray-400">…</span>' : none('ETH/USD price not available');
+        }
+        usd = other * entry.ethUsd;
+        tip = `Price per DATA in this swap, with ETH at ${entry.ethUsd.toFixed(2)} USD`;
     } else {
         return none();
     }
@@ -1678,7 +1694,8 @@ function renderHistory() {
         body.innerHTML = empty(state.address ? 'No DATA swaps yet.' : 'Connect a wallet to see your swaps.');
         return;
     }
-    const amount = (leg) => `<span class="inline-flex items-center gap-2 whitespace-nowrap"><span class="text-white font-medium">${leg.estimated ? '≈ ' : ''}${formatAmount(leg.amount, SYMBOL_DECIMALS[leg.symbol] ?? 18)}</span>${tokenChip(leg.symbol)}</span>`;
+    // The amount right-aligned before its chip, the chips in a box of one width: they line up from row to row
+    const amount = (leg) => `<span class="flex items-center justify-end gap-2 whitespace-nowrap"><span class="text-white font-medium">${leg.estimated ? '≈ ' : ''}${formatAmount(leg.amount, SYMBOL_DECIMALS[leg.symbol] ?? 18)}</span><span class="inline-flex w-[5rem]">${tokenChip(leg.symbol)}</span></span>`;
     const more = $('swap-history-more');
     more?.classList.toggle('hidden', state.history.length <= historyShown);
     body.innerHTML = state.history.slice(0, historyShown).map(entry => {
@@ -1770,14 +1787,20 @@ async function runStep(step, flow) {
         const signature = await (await flowSigner(flow))._signTypedData(domain, types, permitSingle);
         flow.permit = { permitSingle, signature, amount: flow.quote.amountIn };
     } else if (step.key === 'swap') {
-        // Fresh quote right before sending (the minimum output follows the current price)
-        const fresh = await findBestQuote(pay, receiveToken(), flow.quote.amountIn, net);
-        if (fresh.route.venue !== flow.quote.route.venue && !pay.native) {
-            // The best venue changed after the approval: stay on the approved router
-            const same = await quoteRoute(flow.quote.route, flow.quote.amountIn).catch(() => null);
-            if (same) flow.quote = { ...flow.quote, amountOut: same };
+        // The route shown in the form, quoted again right before sending (the minimum output follows the current
+        // price); only a route that can no longer fill the amount gives way to the best one now, and not after
+        // approvals for another router
+        const same = await quoteRoute(flow.quote.route, flow.quote.amountIn).catch(() => null);
+        if (same) {
+            flow.quote = { ...flow.quote, amountOut: same };
         } else {
+            const fresh = await findBestQuote(pay, receiveToken(), flow.quote.amountIn, net);
+            if (fresh.route.venue !== flow.quote.route.venue && flow.steps.some(s => s.key !== 'swap')) {
+                throw new Error('The quoted route can no longer fill this amount. Start a new swap for a new quote.');
+            }
             flow.quote = fresh;
+            step.label = swapLabel(flow.quote, pay);
+            renderProgress();
         }
         if (flow.quote.impact !== null && flow.quote.impact >= IMPACT_BLOCK) throw new Error('The price impact is now too high. Try a smaller amount.');
         const permit = flow.quote.route.venue === 'v4' && flow.permit && flow.permit.permitSingle.sigDeadline > Math.floor(Date.now() / 1000) + 60 ? flow.permit : null;
@@ -1805,6 +1828,8 @@ async function runStep(step, flow) {
     }
 }
 
+const swapLabel = (quote, pay) => `Swap ${formatToken(quote.amountIn, pay)} for ${receiveToken().symbol} on ${VENUES[quote.route.venue].name}`;
+
 async function handleSubmit() {
     if (state.submitting || !state.address) return;
     if (state.flow?.finished) {
@@ -1818,16 +1843,14 @@ async function handleSubmit() {
     if (!state.flow) {
         const quote = state.quote;
         const pay = payToken();
-        const receive = receiveToken();
         const approvals = await approvalSteps(quote);
-        const amount = formatToken(quote.amountIn, pay);
         state.flow = {
             quote,
             chain: quote.route.chain,
             sent: false,
             steps: [
                 ...approvals,
-                { key: 'swap', label: `Swap ${amount} for ${receive.symbol}` }
+                { key: 'swap', label: swapLabel(quote, pay) }
             ].map(step => ({ ...step, status: 'pending', txHash: null }))
         };
     }
