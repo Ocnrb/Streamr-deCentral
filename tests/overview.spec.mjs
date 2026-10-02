@@ -46,17 +46,21 @@ test('charts end on one point for today', async ({ page }) => {
 });
 
 test('the Y axis fits the line and never goes below 0', async ({ page }) => {
-    // DATA slashed starts from 0 in All, Streams grows slowly: a fitted axis, no negative values
+    // DATA slashed in All, Streams growing slowly in 30D: a fitted axis, no negative values
     await tile(page, 'slashed').click();
     await page.click('#overview-range [data-range="all"]');
     const axis = () => page.evaluate(() => {
         const chart = window.Chart?.getChart(document.querySelector('#overview-chart canvas'));
-        return chart?.data.datasets[0].data.length > 10 ? { min: chart.scales.y.min, max: chart.scales.y.max } : null;
+        const values = chart?.data.datasets[0].data.map(p => p.y) || [];
+        return values.length > 10 ? { min: chart.scales.y.min, max: chart.scales.y.max, low: Math.min(...values), high: Math.max(...values) } : null;
     });
-    await expect.poll(async () => (await axis())?.min).toBe(0);
+    await expect.poll(async () => (await axis())?.min ?? -1).toBeGreaterThanOrEqual(0);
     await tile(page, 'streams').click();
     await page.click('#overview-range [data-range="30d"]');
     await expect.poll(async () => (await axis())?.min ?? -1).toBeGreaterThan(0);
+    // The line takes the whole height: 1% of room above and below
+    const { min, max, low, high } = await axis();
+    expect((max - min) / (high - low)).toBeLessThan(1.03);
 });
 
 test('a list shows 12 rows with its +, as tall as the two lists next to it', async ({ page }) => {

@@ -1247,9 +1247,9 @@ function valueBounds(points) {
     const values = points.map(p => p.y);
     const low = Math.min(...values);
     const high = Math.max(...values);
-    const room = (high - low) * 0.05 || Math.abs(high) * 0.05 || 1;
-    // Suggested: Chart.js rounds them to its steps (from a value of 0 or more, it never goes below 0)
-    return { beginAtZero: false, suggestedMin: Math.max(0, low - room), suggestedMax: high + room };
+    const room = (high - low) * 0.01 || Math.abs(high) * 0.01 || 1;
+    // Fixed, not suggested: Chart.js would round them out to its steps, leaving a lot of space (never below 0)
+    return { beginAtZero: false, min: Math.max(0, low - room), max: high + room };
 }
 
 function chartMessage(container, text, spinner = false) {
@@ -1365,7 +1365,7 @@ function renderChart() {
                 y: {
                     position: 'right',
                     ...yBounds,
-                    ticks: { color: '#9ca3af', font, maxTicksLimit: 5, callback: axisFormat },
+                    ticks: { color: '#9ca3af', font, maxTicksLimit: 5, includeBounds: false, callback: axisFormat },   // round values only
                     grid: { color: '#2a2a2a', drawBorder: false }
                 }
             }
