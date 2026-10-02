@@ -738,7 +738,7 @@ function renderSubmit() {
     }
     if (state.flow) return;
     const { wei, error } = readAmount();
-    setSubmitState(!state.address ? 'Connect a wallet to bridge' : state.direction === 'deposit' ? 'Bridge to Polygon' : 'Withdraw to Ethereum', false);
+    setSubmitState(!state.address ? 'Connect wallet' : state.direction === 'deposit' ? 'Bridge to Polygon' : 'Withdraw to Ethereum', false);
     btn.disabled = !state.address || !wei || Boolean(error);
     $('bridge-receive').textContent = wei && !error ? formatData(wei, 4) : '0';
 }

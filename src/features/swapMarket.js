@@ -24,6 +24,7 @@ const DATA = DATA_TOKEN_ADDRESS_POLYGON.toLowerCase();
 const USDC = '0x3c499c542cef5e3811e1192ce70d8cc03d5c3359';
 const POOL_MANAGER = '0x67366782805870060151383f4bbff9dab53e5cd6';
 const CHAINS = {
+    // blocksPerDay: an estimate until measured (block times change with the chains' upgrades)
     137: { name: 'Polygon', blocksPerDay: 43200, poolManager: POOL_MANAGER, explorer: 'https://polygonscan.com/tx/' },
     1: { name: 'Ethereum', blocksPerDay: 7200, poolManager: '0x000000000004444c5dc75cb358380d2e3de08a90', explorer: 'https://etherscan.io/tx/' }
 };
@@ -73,7 +74,7 @@ const state = {
     trades: [],            // every pool's, oldest first
     seen: new Set(),       // txHash:logIndex
     pools: [MAIN],         // the DATA pools read (the main one first)
-    filter: 'all',         // trades list: 'all', 'polygon', 'ethereum' or 'main'
+    filter: 'all',         // trades list: 'all', 'polygon' or 'ethereum'
     polUsdAt: null,        // (times in s) -> POL/USD prices, from the swap page (Chainlink)
     tokenChip: (symbol) => Utils.escapeHtml(symbol),   // token chip with its logo, from the swap page
     polUsd: new Map(),     // hour (ms) -> POL/USD
@@ -86,7 +87,7 @@ const state = {
     ownSwaps: new Map(),   // this wallet's swaps: txHash -> { pay, receive } symbols of the whole swap
     shown: TRADES_PAGE,    // rows of the trades list
     loadingOlder: false,
-    days: null,            // the pools' days from their DEX subgraphs, added up: { date, volume, txCount }, oldest first
+    days: null,            // the pools' days from their DEX subgraphs, added up: { date, volume, unpricedData, txCount }, oldest first
     daysAt: 0,
     failures: 0,           // failed loads in a row (before the first success: asked again sooner)
     chart: null,
@@ -291,10 +292,30 @@ function addTrades(pool, logs) {
 
 const mainTrades = () => state.trades.filter(t => t.pool === MAIN.key);
 
+/**
+ * A chain's blocks per day over the last TRADE_DAYS, from the times of two blocks: the trades then cover exactly
+ * the 7 days (the 7D chart has no daily part). Kept as estimated when the blocks can't be read.
+ */
+async function measureBlockRate(chain, latest) {
+    const info = CHAINS[chain];
+    if (info.measured) return;
+    const read = (fn) => (chain === 137 ? Services.readWithFallback(() => fn(Services.getReadOnlyProvider())) : fn(getEthProvider()));
+    try {
+        const span = Math.round(TRADE_DAYS * info.blocksPerDay);
+        const [last, first] = await Promise.all([read(p => p.getBlock(latest)), read(p => p.getBlock(latest - span))]);
+        const days = (last.timestamp - first.timestamp) * 1000 / DAY;
+        if (days > 0) info.blocksPerDay = span / days;
+        info.measured = true;
+    } catch (e) {
+        logger.warn(`Swap market: ${info.name} block times not read`, e);
+    }
+}
+
 /** New trades of one pool: its first load reads the last 7 days, then from its last trade on */
 async function loadPool(pool, latest) {
     let added;
     if (pool.nextFromBlock === null) {
+        await measureBlockRate(pool.chain, latest);
         const { logs, fromBlock } = await fetchNewest(pool, latest, TRADE_DAYS);
         pool.oldestBlock = fromBlock;
         if (pool === MAIN) state.windowStart = Date.now() - (latest - fromBlock) * (DAY / CHAINS[pool.chain].blocksPerDay);
@@ -542,21 +563,44 @@ function loadEthereumPools() {
 // Daily volume (Uniswap v4 subgraph)
 // ============================================
 
-/** One DEX subgraph's days for its pools (one query, an alias per pool) */
-async function fetchDays(subgraph, pools) {
+const DAYS_PAGE = 1000;   // days per pool and request (The Graph's maximum)
+
+/**
+ * One DEX subgraph's days for its pools (an alias per pool), 1000 days at a time back to each pool's first. With
+ * the pools' token volumes (for the days without USD); a subgraph that refuses them is asked again without them.
+ */
+async function fetchDays(subgraph, pools, withTokens = true) {
     // Uniswap v2 schema: pairDayDatas by pair address, daily* fields; the others: poolDayDatas by pool
     const v2 = subgraph === 'ethUniV2';
-    const query = `{ ${pools.map((p, i) => (v2
-        ? `p${i}: pairDayDatas(first: 1000, orderBy: date, orderDirection: desc, where: { pairAddress: "${p.address.toLowerCase()}" }) { date volumeUSD: dailyVolumeUSD txCount: dailyTxns }`
-        : `p${i}: poolDayDatas(first: 1000, orderBy: date, orderDirection: desc, where: { pool: "${(p.kind === 'v4' ? p.id : p.address).toLowerCase()}" }) { date volumeUSD txCount }`)).join(' ')} }`;
-    const json = await fetch(getDexSubgraphUrl(subgraph), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query })
-    }).then(r => r.json());
-    const lists = pools.map((p, i) => json?.data?.[`p${i}`]);
-    if (!lists.some(Array.isArray)) throw new Error(json?.errors?.[0]?.message || 'No pool days');
-    return lists.filter(Array.isArray).flat();
+    const tokens = !withTokens ? '' : v2 ? ' volumeToken0: dailyVolumeToken0 volumeToken1: dailyVolumeToken1' : ' volumeToken0 volumeToken1';
+    const fields = `${v2 ? 'date volumeUSD: dailyVolumeUSD txCount: dailyTxns' : 'date volumeUSD txCount'}${tokens}`;
+    const rows = [];
+    let pending = pools.map(pool => ({ pool, before: null }));
+    for (let round = 0; pending.length && round < 5; round++) {
+        const query = `{ ${pending.map(({ pool, before }, i) => {
+            const where = `${v2 ? 'pairAddress' : 'pool'}: "${(pool.kind === 'v4' ? pool.id : pool.address).toLowerCase()}"${before ? `, date_lt: ${before}` : ''}`;
+            return `p${i}: ${v2 ? 'pairDayDatas' : 'poolDayDatas'}(first: ${DAYS_PAGE}, orderBy: date, orderDirection: desc, where: { ${where} }) { ${fields} }`;
+        }).join(' ')} }`;
+        const json = await fetch(getDexSubgraphUrl(subgraph), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ query })
+        }).then(r => r.json());
+        const lists = pending.map((p, i) => json?.data?.[`p${i}`]);
+        if (!round && !lists.some(Array.isArray)) {
+            if (withTokens) return fetchDays(subgraph, pools, false);
+            throw new Error(json?.errors?.[0]?.message || 'No pool days');
+        }
+        const next = [];
+        pending.forEach(({ pool }, i) => {
+            const list = lists[i];
+            if (!Array.isArray(list)) return;
+            rows.push(...list.map(d => ({ ...d, dataIs0: pool.dataIs0 })));
+            if (list.length === DAYS_PAGE) next.push({ pool, before: list[list.length - 1].date });
+        });
+        pending = next;
+    }
+    return rows;
 }
 
 /** Daily volume and transactions of every pool whose DEX has a subgraph here, added up by day */
@@ -576,8 +620,11 @@ async function loadDays() {
     const byDate = new Map();
     for (const d of rows) {
         const date = Number(d.date) * 1000;
-        const day = byDate.get(date) || { date, volume: 0, txCount: 0 };
-        day.volume += Number(d.volumeUSD) || 0;
+        const day = byDate.get(date) || { date, volume: 0, unpricedData: 0, txCount: 0 };
+        // A day the subgraph has no USD value for (it couldn't price DATA then): its DATA, valued at the day's price
+        const usd = Number(d.volumeUSD) || 0;
+        if (usd > 0) day.volume += usd;
+        else day.unpricedData += Number(d.dataIs0 ? d.volumeToken0 : d.volumeToken1) || 0;
         day.txCount += Number(d.txCount) || 0;
         byDate.set(date, day);
     }
@@ -597,7 +644,14 @@ function rangeStats() {
     if (state.days) {
         const firstDay = start === -Infinity ? -Infinity : Math.floor(start / DAY) * DAY;
         const days = state.days.filter(d => d.date >= firstDay);
-        return { volume: days.reduce((sum, d) => sum + d.volume, 0), count: days.reduce((sum, d) => sum + d.txCount, 0) };
+        // The DATA/USD history's price of each day (its last one before the day ends); both lists are oldest first
+        let i = 0;
+        const volume = days.reduce((sum, d) => {
+            while (i + 1 < state.history.length && state.history[i + 1].t < d.date + DAY) i++;
+            const price = state.history[i]?.t < d.date + DAY ? state.history[i].p : 0;   // none before the history starts
+            return sum + d.volume + d.unpricedData * price;
+        }, 0);
+        return { volume, count: days.reduce((sum, d) => sum + d.txCount, 0) };
     }
     return null;
 }
@@ -675,9 +729,8 @@ function renderStats() {
 
 const counterName = (pool) => ({ WPOL: 'POL', WETH: 'ETH' }[pool.counterSymbol] || pool.counterSymbol);
 
-/** Trades and pools of the list's filter: all, one network, or the main pool */
+/** Trades and pools of the list's filter: all, or one network */
 function filteredPools() {
-    if (state.filter === 'main') return [MAIN];
     if (state.filter === 'polygon') return state.pools.filter(p => p.chain === 137);
     if (state.filter === 'ethereum') return state.pools.filter(p => p.chain === 1);
     return state.pools;
@@ -690,11 +743,17 @@ function listedTrades() {
 // Beside the price of an off-market trade (kept out of the volume and the chart)
 const OUTLIER_INFO = '<button type="button" class="inline-flex text-gray-300 hover:text-white cursor-help" aria-label="Off-market price" data-tooltip-content="Price far from the market, a bot passing its own funds through a nearly empty pool.<br>Left out of the volume and the chart."><svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg></button>';
 
-// Small Ethereum logo beside the trades of Ethereum pools
-const ETHEREUM_MARK = '<svg class="w-3.5 h-3.5 flex-shrink-0" viewBox="0 0 32 32" aria-label="Ethereum" role="img"><circle cx="16" cy="16" r="16" fill="#627EEA"/><path fill="#fff" fill-opacity=".6" d="M16.5 4v8.87l7.5 3.35z"/><path fill="#fff" d="M16.5 4 9 16.22l7.5-3.35z"/><path fill="#fff" fill-opacity=".6" d="M16.5 21.97v6.03L24 17.62z"/><path fill="#fff" d="M16.5 28v-6.03L9 17.62z"/></svg>';
-/** The swap page's token chip, a size smaller for the trades list */
+// Chain logos, in the trades' Chain column
+const ETHEREUM_MARK = '<svg class="w-3.5 h-3.5 flex-shrink-0" viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="16" fill="#627EEA"/><path fill="#fff" fill-opacity=".6" d="M16.5 4v8.87l7.5 3.35z"/><path fill="#fff" d="M16.5 4 9 16.22l7.5-3.35z"/><path fill="#fff" fill-opacity=".6" d="M16.5 21.97v6.03L24 17.62z"/><path fill="#fff" d="M16.5 28v-6.03L9 17.62z"/></svg>';
+const POLYGON_MARK = '<svg class="w-3.5 h-3.5 flex-shrink-0" viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="16" fill="#8247E5"/><path fill="#fff" d="M21.1 13.1a1.3 1.3 0 0 0-1.3 0l-2.9 1.7-2 1.1-2.9 1.7a1.3 1.3 0 0 1-1.3 0l-2.3-1.3a1.3 1.3 0 0 1-.6-1.1v-2.6c0-.4.2-.9.6-1.1l2.2-1.3a1.3 1.3 0 0 1 1.3 0l2.2 1.3c.4.2.6.7.6 1.1v1.7l2-1.2v-1.7c0-.4-.2-.9-.6-1.1l-4.2-2.4a1.3 1.3 0 0 0-1.3 0l-4.3 2.5c-.4.2-.6.6-.6 1v4.9c0 .4.2.9.6 1.1l4.3 2.4c.4.2.9.2 1.3 0l2.9-1.6 2-1.2 2.9-1.6a1.3 1.3 0 0 1 1.3 0l2.2 1.3c.4.2.6.7.6 1.1v2.6c0 .4-.2.9-.6 1.1l-2.2 1.3a1.3 1.3 0 0 1-1.3 0l-2.2-1.3a1.3 1.3 0 0 1-.6-1.1v-1.7l-2 1.2v1.7c0 .4.2.9.6 1.1l4.3 2.4c.4.2.9.2 1.3 0l4.3-2.4c.4-.2.6-.7.6-1.1v-4.9c0-.4-.2-.9-.6-1.1z"/></svg>';
+/** A trade's chain: logo + name, as the token chips (the logo alone on smaller screens, the name in its tooltip) */
+function chainChip(chain) {
+    const name = chain === 1 ? 'Ethereum' : 'Polygon';
+    return `<span class="inline-flex items-center gap-1 p-0.5 2xl:pr-1.5 rounded-full bg-[#2C2C2C] text-[11px] font-semibold text-gray-200 whitespace-nowrap" data-tooltip-content="${name}">${chain === 1 ? ETHEREUM_MARK : POLYGON_MARK}<span class="hidden 2xl:inline">${name}</span></span>`;
+}
+/** The swap page's token chip, a size smaller for the trades list, all of one width (their arrows line up) */
 const compactChip = (symbol) => state.tokenChip(symbol)
-    .replace('gap-1.5 pl-1 pr-2', 'gap-1 pl-0.5 pr-1.5')
+    .replace('gap-1.5 pl-1 pr-2', 'gap-1 pl-0.5 pr-1.5 min-w-[3.75rem]')
     .replace('text-xs', 'text-[11px]')
     .replaceAll('w-4 h-4', 'w-3.5 h-3.5');
 const poolFullName = (pool) => (pool ? `${pool.label} · DATA/${counterName(pool)} · ${CHAINS[pool.chain].name}` : '');
@@ -711,7 +770,7 @@ function renderFilter() {
 function renderTrades() {
     const body = $('swap-trades');
     if (!body) return;
-    const row = (text) => `<tr><td colspan="5" class="py-4 text-sm text-gray-300">${text}</td></tr>`;
+    const row = (text) => `<tr><td colspan="6" class="py-4 text-sm text-gray-300">${text}</td></tr>`;
     if (!state.loaded) {
         $('swap-trades-more')?.classList.add('hidden');
         const spinner = '<span class="w-4 h-4 flex-shrink-0 border-2 border-gray-500 border-t-transparent rounded-full animate-spin" aria-hidden="true"></span>';
@@ -732,26 +791,28 @@ function renderTrades() {
         const hash = Utils.escapeHtml(trade.txHash);
         const pool = pools.get(trade.pool);
         const ownSwap = state.ownSwaps.get(trade.txHash.toLowerCase());
+        // Of fixed widths (as the chips): the badges, chips and arrows line up from row to row
         const side = trade.buy
-            ? '<span class="tx-badge tx-badge-in whitespace-nowrap">Buy</span>'
-            : '<span class="tx-badge tx-badge-out whitespace-nowrap">Sell</span>';
+            ? '<span class="tx-badge tx-badge-in inline-block w-12 text-center">Buy</span>'
+            : '<span class="tx-badge tx-badge-out inline-block w-12 text-center">Sell</span>';
         // What was paid -> what was received in the pool (the pool's full name in the tooltip)
         // The wallet's own swaps show what it paid and received in the whole swap (e.g. DATA -> POL through USDC)
         const counter = pool ? counterName(pool) : '';
         const [paid, received] = ownSwap?.pay && ownSwap?.receive
             ? [ownSwap.pay, ownSwap.receive]
             : trade.buy ? [counter, 'DATA'] : ['DATA', counter];
-        const tradeCell = `<span class="inline-flex items-center gap-2.5 whitespace-nowrap" data-tooltip-content="${Utils.escapeHtml(poolFullName(pool))}">${side}<span class="inline-flex items-center gap-1">${pool?.chain === 1 ? ETHEREUM_MARK : ''}${compactChip(paid)}<span class="text-gray-400 text-xs">→</span>${compactChip(received)}</span></span>`;
+        const tradeCell = `<span class="inline-flex items-center gap-2.5 whitespace-nowrap" data-tooltip-content="${Utils.escapeHtml(poolFullName(pool))}">${side}<span class="inline-flex items-center gap-1.5">${compactChip(paid)}<span class="text-gray-400 text-xs">→</span>${compactChip(received)}</span></span>`;
         const own = ownSwap
             ? '<span class="ml-2 px-1.5 py-0.5 rounded bg-[#2C2C2C] text-[10px] font-semibold text-gray-300">You</span>'
             : '';
         return `
             <tr class="border-b border-[#2a2a2a] last:border-0${trade.outlier ? ' opacity-50' : ''}">
                 <td class="py-2 pr-2 whitespace-nowrap"><a href="${CHAINS[pool?.chain || 137].explorer}${hash}" target="_blank" rel="noopener noreferrer" class="text-gray-300 hover:text-blue-300" data-tooltip-content="${Utils.escapeHtml(new Date(trade.time).toLocaleString())}">${formatTime(trade.time)}</a>${own}</td>
+                <td class="py-2 pr-2 whitespace-nowrap">${chainChip(pool?.chain || 137)}</td>
                 <td class="py-2 pr-2">${tradeCell}</td>
                 <td class="py-2 pr-2 text-right whitespace-nowrap text-white font-medium">${trade.outlier ? `<span class="inline-flex items-center gap-1">${OUTLIER_INFO}${formatPrice(trade.price)}</span>` : formatPrice(trade.price)}</td>
                 <td class="py-2 pr-2 text-right whitespace-nowrap text-gray-200">${formatData(trade.data)}</td>
-                <td class="py-2 text-right whitespace-nowrap text-gray-200">${trade.usd === null ? '--' : formatUsd(trade.usd)}</td>
+                <td class="py-2 pr-3 text-right whitespace-nowrap text-gray-200">${trade.usd === null ? '--' : formatUsd(trade.usd)}</td>
             </tr>`;
     }).join('');
 }
