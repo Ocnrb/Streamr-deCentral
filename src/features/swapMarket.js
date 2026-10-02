@@ -894,9 +894,9 @@ function renderTrades() {
         return `
             <tr class="border-b border-[#2a2a2a] last:border-0${trade.outlier ? ' opacity-50' : ''}">
                 <td class="py-2 pr-2 whitespace-nowrap"><a href="${CHAINS[pool?.chain || 137].explorer}${hash}" target="_blank" rel="noopener noreferrer" class="text-gray-300 hover:text-blue-300" data-tooltip-content="${Utils.escapeHtml(new Date(trade.time).toLocaleString())}">${formatTime(trade.time)}</a>${own}</td>
-                <td class="py-2 pr-2 whitespace-nowrap">${chainChip(pool?.chain || 137)}</td>
-                <td class="py-2 pr-2">${tradeCell}</td>
-                <td class="py-2 pr-2 text-right whitespace-nowrap text-white font-medium">${trade.outlier ? `<span class="inline-flex items-center gap-1">${OUTLIER_INFO}${formatPrice(trade.price)}</span>` : formatPrice(trade.price)}</td>
+                <td class="py-2 pr-2 text-center whitespace-nowrap">${chainChip(pool?.chain || 137)}</td>
+                <td class="py-2 pr-2 text-center">${tradeCell}</td>
+                <td class="py-2 pr-2 text-center whitespace-nowrap text-white font-medium">${trade.outlier ? `<span class="inline-flex items-center gap-1">${OUTLIER_INFO}${formatPrice(trade.price)}</span>` : formatPrice(trade.price)}</td>
                 <td class="py-2 pr-2 text-right whitespace-nowrap text-gray-200">${formatData(trade.data)}</td>
                 <td class="py-2 pr-3 text-right whitespace-nowrap text-gray-200">${trade.usd === null ? '--' : formatUsd(trade.usd)}</td>
             </tr>`;
