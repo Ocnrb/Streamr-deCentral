@@ -57,6 +57,32 @@ test('the Y axis fits the line and never goes below 0', async ({ page }) => {
     await expect.poll(async () => (await axis())?.min ?? -1).toBeGreaterThan(0);
 });
 
+test('a list shows 10 rows with its +, as tall as the two lists next to it', async ({ page }) => {
+    const box = (name) => page.locator(`[data-list-panel="${name}"]`).boundingBox();
+    const operators = page.locator('#overview-operators a');
+    await expect(operators).toHaveCount(5);
+    // Network activity: its 10 streams, down to the bottom of Top operators; Best sponsorships moves below it
+    const network = page.locator('#overview-network a');
+    await expect(network).toHaveCount(5);
+    await page.click('[data-expand="network"]');
+    await expect(network).toHaveCount(10);
+    await expect(page.locator('[data-expand="network"]')).toHaveAttribute('aria-expanded', 'true');
+    const [expanded, activity, top, best] = await Promise.all(['network', 'activity', 'operators', 'best'].map(box));
+    expect(Math.abs(expanded.y - activity.y)).toBeLessThan(2);
+    expect(Math.abs(expanded.y + expanded.height - (top.y + top.height))).toBeLessThan(2);
+    expect(best.y).toBeGreaterThan(top.y + top.height);
+    // Top operators: its top 10 in its own column
+    await page.click('[data-expand="operators"]');
+    await expect(operators).toHaveCount(10);
+    await expect(operators.nth(9)).toContainText('10');
+    // Back to 5
+    await page.click('[data-expand="network"]');
+    await expect(network).toHaveCount(5);
+    // A list with 5 rows or fewer has no +
+    await page.click('#overview-activity-tabs [data-tab="delegations"]');
+    await expect(page.locator('[data-expand="activity"]')).toHaveCount(0);
+});
+
 test('the coordination streams are left once the nodes are counted', async ({ page }) => {
     const subscriptions = () => page.evaluate(() => window.__subscriptions || 0);
     await expect(tile(page, 'operators')).toContainText('451 nodes', { timeout: 30000 });
