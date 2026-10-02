@@ -1,7 +1,7 @@
 <!-- Login Modal (visible by default until user logs in) -->
-<div id="loginModal" class="fixed inset-0 bg-[#121212] flex items-center justify-center p-4 z-50">
-    <!-- Main Login Panel (centered) -->
-    <div class="bg-[#1E1E1E] rounded-lg p-8 max-w-sm w-full text-gray-300 text-center shadow-2xl border border-[#333333]">
+<div id="loginModal" class="fixed inset-0 bg-[#121212] flex flex-col items-center overflow-y-auto p-4 z-50">
+    <!-- Main Login Panel (centered; the page scrolls when it is taller than the screen, as on phones in landscape) -->
+    <div class="my-auto bg-[#1E1E1E] rounded-lg p-8 max-w-sm w-full text-gray-300 text-center shadow-2xl border border-[#333333]">
 
         <div id="walletLoginView">
             <h2 class="text-2xl font-bold mb-4 text-white">Streamr deCentral</h2>
@@ -28,7 +28,7 @@
     </div>
 
     <!-- Install App Panel (bottom) - hidden by default, shown by JS if not installed -->
-    <div id="installAppSection" class="hidden absolute bottom-4 left-1/2 -translate-x-1/2 bg-[#1E1E1E] rounded-lg p-4 max-w-sm w-[calc(100%-2rem)] text-gray-300 text-center shadow-2xl border border-[#333333]">
+    <div id="installAppSection" class="hidden mt-4 bg-[#1E1E1E] rounded-lg p-4 max-w-sm w-full text-gray-300 text-center shadow-2xl border border-[#333333]">
         <p class="text-xs text-gray-500 mb-3">Install App</p>
         <div class="flex justify-center gap-4">
             <!-- Android Button -->
