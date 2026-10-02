@@ -188,19 +188,22 @@ test('the swap form switches to Ethereum: its tokens and DEXes, kept for the nex
     expect(await options()).toEqual(['ETH', 'USDC', 'USDT']);
     await expect(page.locator('[data-chain-text="1"]')).toContainText('On Ethereum');
     await expect(page.locator('[data-chain-text="137"]')).toBeHidden();
-    await expect(page.locator('#swap-pools-btn')).toBeHidden();
+    await expect(page.locator('#swap-pools-btn')).toBeVisible();
     // ETH for POL, and back
     await page.selectOption('#swap-from-token select', 'ETH');
     await openSwap(page);   // a new visit
     await expect(page.locator('#swap-chain [data-chain="1"]')).toHaveClass(/bg-blue-800/);
     await page.click('#swap-chain [data-chain="137"]');
     expect(await options()).toEqual(['POL', 'USDC', 'USDC.e']);
-    await expect(page.locator('#swap-pools-btn')).toBeVisible();
 });
 
-test('on Ethereum the quote goes through its Uniswap v4 pool', async ({ page }) => {
-    // Ethereum's RPC: the DATA/ETH 0.3% v4 pool in its PoolManager, and the v4 quoter giving 16M DATA per ETH
+test('on Ethereum the quote goes through its Uniswap v4 pool, SushiSwap V2 checked too', async ({ page }) => {
+    // Ethereum's RPC: the DATA/ETH 0.3% v4 pool in its PoolManager and the v4 quoter giving 16M DATA per ETH;
+    // a SushiSwap V2 DATA/WETH pair giving 15M
     const MANAGER = '0x000000000004444c5dc75cb358380d2e3de08a90', QUOTER = '0x52f0e24d1c21c8a0cb1e5a5dd6198556bd9e1203';
+    const SUSHI_FACTORY = '0xc0aee478e3658e2610c5f7a4a2e1777ce9e4f2ac', SUSHI_ROUTER = '0xd9e1ce17f2641f24ae83637ab66a2cca9c378b9f';
+    const DATA_ETH = '0x8f693ca8d21b157107184d29d398a8d082b38b76', WETH = '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2', PAIR = '0x' + '5'.repeat(40);
+    const v2 = new ethers.utils.Interface(['function getPair(address, address) view returns (address)', 'function getAmountsOut(uint256 amountIn, address[] path) view returns (uint256[] amounts)', 'function balanceOf(address) view returns (uint256)']);
     const id = ethers.utils.keccak256(ethers.utils.defaultAbiCoder.encode(['address', 'address', 'uint24', 'int24', 'address'],
         [ethers.constants.AddressZero, '0x8f693ca8d21b157107184d29d398a8d082b38b76', 3000, 60, ethers.constants.AddressZero]));
     const state = ethers.BigNumber.from(ethers.utils.keccak256(ethers.utils.solidityPack(['bytes32', 'bytes32'], [id, ethers.utils.hexZeroPad('0x06', 32)])));
@@ -219,8 +222,16 @@ test('on Ethereum the quote goes through its Uniswap v4 pool', async ({ page }) 
                     const [slot] = extsload.decodeFunctionData('extsload', c.callData);
                     return { success: true, returnData: extsload.encodeFunctionResult('extsload', [storage.get(slot.toLowerCase()) || ethers.constants.HashZero]) };
                 }
+                if (c.target.toLowerCase() === SUSHI_FACTORY && c.callData.startsWith(v2.getSighash('getPair'))) {
+                    const tokens = v2.decodeFunctionData('getPair', c.callData).map(a => a.toLowerCase()).sort().join();
+                    return { success: true, returnData: v2.encodeFunctionResult('getPair', [tokens === [DATA_ETH, WETH].sort().join() ? PAIR : ethers.constants.AddressZero]) };
+                }
+                if (c.callData.startsWith(v2.getSighash('balanceOf'))) return { success: true, returnData: v2.encodeFunctionResult('balanceOf', [ethers.utils.parseEther('1000000')]) };
                 return { success: true, returnData: ethers.utils.hexZeroPad('0x', 32) };   // no Uniswap v3 pool, nothing else
             })]);
+        } else if (call?.to?.toLowerCase() === SUSHI_ROUTER) {
+            const [amountIn, path] = v2.decodeFunctionData('getAmountsOut', call.data);
+            result = v2.encodeFunctionResult('getAmountsOut', [[amountIn, ...path.slice(1).map(() => amountIn.mul(15000000))]]);
         } else if (call?.to?.toLowerCase() === QUOTER) {
             const [params] = quoter.decodeFunctionData('quoteExactInputSingle', call.data);
             result = quoter.encodeFunctionResult('quoteExactInputSingle', [params.exactAmount.mul(16000000), 100000]);
@@ -233,4 +244,6 @@ test('on Ethereum the quote goes through its Uniswap v4 pool', async ({ page }) 
     await page.fill('#swap-amount', '1');
     await expect(page.locator('#swap-receive')).toHaveText('16 000 000', { timeout: 30000 });
     await expect(page.locator('#swap-route')).toHaveText('Uniswap v4 (0.3%) · ETH → DATA');
+    await expect(page.locator('#swap-routes-list')).toContainText('SushiSwap V2 · WETH → DATA');
+    await expect(page.locator('#swap-routes-list')).toContainText('15 000 000 DATA');
 });
