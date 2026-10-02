@@ -565,13 +565,15 @@ function loadEthereumPools() {
 
 const DAYS_PAGE = 1000;   // days per pool and request (The Graph's maximum)
 
-/** One DEX subgraph's days for its pools (an alias per pool), 1000 days at a time back to each pool's first */
-async function fetchDays(subgraph, pools) {
+/**
+ * One DEX subgraph's days for its pools (an alias per pool), 1000 days at a time back to each pool's first. With
+ * the pools' token volumes (for the days without USD); a subgraph that refuses them is asked again without them.
+ */
+async function fetchDays(subgraph, pools, withTokens = true) {
     // Uniswap v2 schema: pairDayDatas by pair address, daily* fields; the others: poolDayDatas by pool
     const v2 = subgraph === 'ethUniV2';
-    const fields = v2
-        ? 'date volumeUSD: dailyVolumeUSD txCount: dailyTxns volumeToken0: dailyVolumeToken0 volumeToken1: dailyVolumeToken1'
-        : 'date volumeUSD txCount volumeToken0 volumeToken1';
+    const tokens = !withTokens ? '' : v2 ? ' volumeToken0: dailyVolumeToken0 volumeToken1: dailyVolumeToken1' : ' volumeToken0 volumeToken1';
+    const fields = `${v2 ? 'date volumeUSD: dailyVolumeUSD txCount: dailyTxns' : 'date volumeUSD txCount'}${tokens}`;
     const rows = [];
     let pending = pools.map(pool => ({ pool, before: null }));
     for (let round = 0; pending.length && round < 5; round++) {
@@ -585,7 +587,10 @@ async function fetchDays(subgraph, pools) {
             body: JSON.stringify({ query })
         }).then(r => r.json());
         const lists = pending.map((p, i) => json?.data?.[`p${i}`]);
-        if (!round && !lists.some(Array.isArray)) throw new Error(json?.errors?.[0]?.message || 'No pool days');
+        if (!round && !lists.some(Array.isArray)) {
+            if (withTokens) return fetchDays(subgraph, pools, false);
+            throw new Error(json?.errors?.[0]?.message || 'No pool days');
+        }
         const next = [];
         pending.forEach(({ pool }, i) => {
             const list = lists[i];

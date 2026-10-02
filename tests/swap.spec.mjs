@@ -82,3 +82,17 @@ test('the all-time volume values the days the DEX subgraph has no USD for at the
     const volume = Number((await stats.textContent()).match(/volume \$([\d ]+)/)[1].replace(/ /g, ''));
     expect(Math.abs(volume - (1000 + 1e6 * price))).toBeLessThan(2);
 });
+
+test('a DEX subgraph without token volumes still gives its USD volume', async ({ page }) => {
+    const today = Math.floor(Date.now() / 86400000) * 86400;
+    await page.route('https://gateway.thegraph.com/**', (route) => {
+        const query = route.request().postDataJSON()?.query || '';
+        if (!query.includes('poolDayDatas')) return route.fallback();
+        if (query.includes('volumeToken0')) return route.fulfill({ json: { errors: [{ message: 'Type `PoolDayData` has no field `volumeToken0`' }] } });
+        const days = [0, 1, 2].map(i => ({ date: today - i * 86400 * 20, volumeUSD: '10', txCount: '2' }));
+        return route.fulfill({ json: { data: Object.fromEntries([...query.matchAll(/(p\d+):/g)].map(([, alias], i) => [alias, i ? [] : days])) } });
+    });
+    await openApp(page, '/swap');
+    await page.click('#swap-chart-range [data-range="3M"]');
+    await expect(page.locator('#swap-market-stats')).toHaveText('3M volume $30.00 · 6 trades', { timeout: 30000 });
+});
