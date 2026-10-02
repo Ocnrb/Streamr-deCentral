@@ -35,6 +35,12 @@ const MULTICALL = new ethers.utils.Interface(['function aggregate3((address targ
 const EXTSLOAD = new ethers.utils.Interface(['function extsload(bytes32 slot) view returns (bytes32)']);
 
 let ranges;   // block ranges asked of the main pool's swaps
+/** The swap page, once its modules listen (the swap button is set after the market and the book): a click before is lost */
+async function openSwap(page) {
+    await openApp(page, '/swap');
+    await expect(page.locator('#swap-submit')).toHaveText('Connect wallet', { timeout: 30000 });
+}
+
 test.beforeEach(async ({ page }) => {
     await mockNetwork(page.context());
     ranges = [];
@@ -83,7 +89,7 @@ test.beforeEach(async ({ page }) => {
 });
 
 test('market trades show their chain, with the trades lined up', async ({ page }) => {
-    await openApp(page, '/swap');
+    await openSwap(page);
     const rows = page.locator('#swap-trades tr');
     await expect(rows).toHaveCount(4, { timeout: 30000 });
     await expect(page.locator('#swap-trades').locator('xpath=ancestor::table//th').nth(1)).toHaveText('Chain');
@@ -95,7 +101,7 @@ test('market trades show their chain, with the trades lined up', async ({ page }
 });
 
 test('the trades cover the whole 7 days, at the measured block time of the chain', async ({ page }) => {
-    await openApp(page, '/swap');
+    await openSwap(page);
     await expect(page.locator('#swap-trades tr')).toHaveCount(4, { timeout: 30000 });
     const [from, to] = ranges[0];
     expect(to - from).toBe(7 * 86400 / 1.5);
@@ -114,7 +120,7 @@ test('the all-time volume values the days the DEX subgraph has no USD for at the
         return route.fulfill({ json: { data: Object.fromEntries([...query.matchAll(/(p\d+):/g)].map(([, alias], i) => [alias, i ? [] : days])) } });
     });
     const price = Number(fs.readFileSync(new URL('../public/data/DATAHistoricalPrice.csv', import.meta.url), 'utf8').split('\n').find(line => line.startsWith('01/06/2024,')).split(',')[1]);
-    await openApp(page, '/swap');
+    await openSwap(page);
     await page.click('#swap-chart-range [data-range="All"]');
     const stats = page.locator('#swap-market-stats');
     await expect(stats).toContainText('1 007 trades', { timeout: 30000 });
@@ -131,7 +137,7 @@ test('a DEX subgraph without token volumes still gives its USD volume', async ({
         const days = [0, 1, 2].map(i => ({ date: today - i * 86400 * 20, volumeUSD: '10', txCount: '2' }));
         return route.fulfill({ json: { data: Object.fromEntries([...query.matchAll(/(p\d+):/g)].map(([, alias], i) => [alias, i ? [] : days])) } });
     });
-    await openApp(page, '/swap');
+    await openSwap(page);
     await page.click('#swap-chart-range [data-range="3M"]');
     await expect(page.locator('#swap-market-stats')).toHaveText('3M volume $30.00 · 6 trades', { timeout: 30000 });
 });
@@ -159,14 +165,14 @@ test('the all-time volume counts the emptied pools, and prices their old days fr
             pool === EMPTIED ? [{ date: day2021, volumeUSD: '0', txCount: '3', volumeToken0: '1000', volumeToken1: '0' }] : []]));
         return route.fulfill({ json: { data } });
     });
-    await openApp(page, '/swap');
+    await openSwap(page);
     await page.click('#swap-chart-range [data-range="All"]');
     await expect(page.locator('#swap-market-stats')).toHaveText('All-time volume $100.00 · 3 trades', { timeout: 30000 });
     expect(asked.some(query => query.includes(FAKE) && query.includes('poolDayDatas'))).toBe(false);
 });
 
 test('the liquidity book shows the v4 pools\' liquidity by price, in place of the trades', async ({ page }) => {
-    await openApp(page, '/swap');
+    await openSwap(page);
     await page.click('[data-market-view="book"]');
     await expect(page.locator('#swap-trades-view')).toBeHidden();
     await expect(page.locator('#swap-trades-filter')).toBeVisible();
