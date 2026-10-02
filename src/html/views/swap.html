@@ -125,10 +125,14 @@
             <button id="swap-submit" type="button" class="w-full sm:w-auto sm:min-w-[280px] sm:mx-auto sm:px-8 bg-blue-800 hover:bg-blue-900 text-white font-bold py-3 px-4 rounded-lg transition-colors flex justify-center items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-blue-800">Swap</button>
         </section>
 
-        <!-- Latest trades of the main DATA pool -->
+        <!-- The DATA pools' latest trades, or the main pool's order book -->
         <section class="detail-section p-4 sm:p-5 flex flex-col lg:col-start-2 lg:row-start-1">
             <div class="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 mb-3">
-                <h3 class="text-lg font-semibold text-white">Market trades</h3>
+                <div id="swap-market-views" class="flex items-baseline gap-4" role="tablist" aria-label="Market">
+                    <button type="button" role="tab" data-market-view="trades" aria-selected="true" class="text-lg font-semibold text-white transition-colors">Market trades</button>
+                    <button type="button" role="tab" data-market-view="book" aria-selected="false" class="text-lg font-semibold text-gray-500 hover:text-gray-300 transition-colors">Order book</button>
+                </div>
+                <span id="swap-book-pool" class="hidden text-[11px] font-semibold text-gray-400" data-tooltip-content="Its liquidity by price, read from the pool">Uniswap v4 · DATA/USDC 0.3%</span>
                 <div id="swap-trades-filter" class="flex bg-[#2C2C2C] p-0.5 rounded-md" role="group" aria-label="Pools">
                     <button type="button" data-filter="all" class="px-2 py-0.5 rounded text-[11px] font-semibold text-gray-300 hover:text-white transition-colors">All</button>
                     <button type="button" data-filter="polygon" class="px-2 py-0.5 rounded text-[11px] font-semibold text-gray-300 hover:text-white transition-colors">Polygon</button>
@@ -136,7 +140,7 @@
                 </div>
             </div>
             <!-- As tall as the swap form beside it (lg): the table scrolls inside -->
-            <div class="relative flex-1 lg:min-h-[16rem]">
+            <div id="swap-trades-view" class="relative flex-1 lg:min-h-[16rem]">
             <div class="overflow-auto max-h-[26rem] lg:max-h-none lg:absolute lg:inset-0">
                 <table class="w-full min-w-[480px] text-sm">
                     <thead class="sticky top-0 bg-[#1E1E1E] text-xs text-gray-300 border-b border-[#333]">
@@ -154,6 +158,17 @@
                 <div class="py-3 text-center">
                     <button id="swap-trades-more" type="button" class="hidden bg-[#2C2C2C] hover:bg-[#3A3A3A] text-white font-medium py-2 px-6 rounded-lg transition-colors text-sm">Load More</button>
                 </div>
+            </div>
+            </div>
+            <!-- Order book: asks above the price, bids below it, each side scrolling inside -->
+            <div id="swap-book-view" class="hidden relative flex-1 lg:min-h-[16rem]">
+            <div class="flex flex-col lg:absolute lg:inset-0">
+                <div class="grid grid-cols-3 gap-2 px-1 pb-2 text-xs text-gray-300 border-b border-[#333]">
+                    <span>Price</span><span class="text-right">DATA</span><span class="text-right">Total</span>
+                </div>
+                <div id="swap-book-asks" class="flex-1 min-h-0 max-h-48 lg:max-h-none overflow-y-auto"></div>
+                <div id="swap-book-mid" class="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 px-1 py-2 border-y border-[#333]"></div>
+                <div id="swap-book-bids" class="flex-1 min-h-0 max-h-48 lg:max-h-none overflow-y-auto"></div>
             </div>
             </div>
         </section>
