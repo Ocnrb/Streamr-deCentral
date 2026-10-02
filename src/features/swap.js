@@ -726,7 +726,7 @@ function marketPools() {
         const counter = KNOWN_TOKENS[lower(pool.counter)];
         if (!counter || !MARKET_COUNTERS.includes(counter.symbol) || !pool.liquidity || pool.liquidity.isZero()) continue;
         list.push({
-            kind: 'v4', venue: 'v4', id: v4PoolId(pool.key), dataIs0: lower(pool.key.currency0) === lower(DATA),
+            kind: 'v4', venue: 'v4', id: v4PoolId(pool.key), fee: pool.fee, tickSpacing: pool.tickSpacing, dataIs0: lower(pool.key.currency0) === lower(DATA),
             counterSymbol: counter.symbol, counterDecimals: counter.decimals, label: `Uniswap v4 ${pool.fee / 10000}%`
         });
     }

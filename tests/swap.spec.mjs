@@ -15,15 +15,24 @@ const TICK = Math.floor(Math.log((Number(SQRT_PRICE.toString()) / 2 ** 96) ** 2)
 const BASE = Math.floor(TICK / 60) * 60;
 const LIQUIDITY = ethers.BigNumber.from(10).pow(18);
 const word = (value) => ethers.utils.hexZeroPad(ethers.BigNumber.from(value).toTwos(256).toHexString(), 32);
+const POSITION = [[BASE - 600, LIQUIDITY], [BASE + 600, LIQUIDITY.mul(-1)]];
+const bitmapSlot = (tick) => ethers.utils.keccak256(ethers.utils.defaultAbiCoder.encode(['int16', 'bytes32'], [Math.floor(tick / 60) >> 8, word(STATE_SLOT.add(5))]));
 const POOL_STORAGE = new Map([
     [word(STATE_SLOT), word(ethers.BigNumber.from(TICK).toTwos(24).shl(160).or(SQRT_PRICE))],
     [word(STATE_SLOT.add(3)), word(LIQUIDITY)],
-    ...[[BASE - 600, LIQUIDITY], [BASE + 600, LIQUIDITY.mul(-1)]].map(([tick, net]) => [
+    ...POSITION.map(([tick, net]) => [
         ethers.utils.keccak256(ethers.utils.defaultAbiCoder.encode(['int24', 'bytes32'], [tick, word(STATE_SLOT.add(4))])),
         word(net.toTwos(128).shl(128).or(LIQUIDITY))
     ])
 ]);
-const EXTSLOAD = new ethers.utils.Interface(['function extsload(bytes32[] slots) view returns (bytes32[])']);
+// The tick bitmap: a bit per initialized tick (tick / spacing), 256 to a word
+for (const [tick] of POSITION) {
+    const slot = bitmapSlot(tick);
+    const bit = ((Math.floor(tick / 60) % 256) + 256) % 256;
+    POOL_STORAGE.set(slot, word(ethers.BigNumber.from(POOL_STORAGE.get(slot) || 0).or(ethers.BigNumber.from(1).shl(bit))));
+}
+const MULTICALL = new ethers.utils.Interface(['function aggregate3((address target, bool allowFailure, bytes callData)[] calls) payable returns ((bool success, bytes returnData)[] returnData)']);
+const EXTSLOAD = new ethers.utils.Interface(['function extsload(bytes32 slot) view returns (bytes32)']);
 
 let ranges;   // block ranges asked of the main pool's swaps
 /** The swap page, once its modules listen (the swap button is set after the market and the book): a click before is lost */
@@ -39,9 +48,14 @@ test.beforeEach(async ({ page }) => {
     await page.route('**/*', (route) => {
         const body = route.request().postDataJSON?.();
         const call = body?.method === 'eth_call' ? body.params[0] : null;
-        if (call?.to?.toLowerCase() === '0x67366782805870060151383f4bbff9dab53e5cd6' && call.data.startsWith(EXTSLOAD.getSighash('extsload'))) {
-            const [slots] = EXTSLOAD.decodeFunctionData('extsload', call.data);
-            const result = EXTSLOAD.encodeFunctionResult('extsload', [slots.map(slot => POOL_STORAGE.get(slot.toLowerCase()) || ethers.constants.HashZero)]);
+        // Multicall3: the PoolManager's storage reads answered, any other call failed
+        if (call?.to?.toLowerCase() === '0xca11bde05977b3631167028862be2a173976ca11' && call.data.startsWith(MULTICALL.getSighash('aggregate3'))) {
+            const [calls] = MULTICALL.decodeFunctionData('aggregate3', call.data);
+            const result = MULTICALL.encodeFunctionResult('aggregate3', [calls.map(c => {
+                if (c.target.toLowerCase() !== '0x67366782805870060151383f4bbff9dab53e5cd6' || !c.callData.startsWith(EXTSLOAD.getSighash('extsload'))) return { success: false, returnData: '0x' };
+                const [slot] = EXTSLOAD.decodeFunctionData('extsload', c.callData);
+                return { success: true, returnData: EXTSLOAD.encodeFunctionResult('extsload', [POOL_STORAGE.get(slot.toLowerCase()) || ethers.constants.HashZero]) };
+            })]);
             return route.fulfill({ json: { jsonrpc: '2.0', id: body.id, result } });
         }
         if (body?.method !== 'eth_getBlockByNumber') return route.fallback();
@@ -75,7 +89,7 @@ test.beforeEach(async ({ page }) => {
 });
 
 test('market trades show their chain, with the trades lined up', async ({ page }) => {
-    await openApp(page, '/swap');
+    await openSwap(page);
     const rows = page.locator('#swap-trades tr');
     await expect(rows).toHaveCount(4, { timeout: 30000 });
     await expect(page.locator('#swap-trades').locator('xpath=ancestor::table//th').nth(1)).toHaveText('Chain');
@@ -87,7 +101,7 @@ test('market trades show their chain, with the trades lined up', async ({ page }
 });
 
 test('the trades cover the whole 7 days, at the measured block time of the chain', async ({ page }) => {
-    await openApp(page, '/swap');
+    await openSwap(page);
     await expect(page.locator('#swap-trades tr')).toHaveCount(4, { timeout: 30000 });
     const [from, to] = ranges[0];
     expect(to - from).toBe(7 * 86400 / 1.5);
@@ -106,7 +120,7 @@ test('the all-time volume values the days the DEX subgraph has no USD for at the
         return route.fulfill({ json: { data: Object.fromEntries([...query.matchAll(/(p\d+):/g)].map(([, alias], i) => [alias, i ? [] : days])) } });
     });
     const price = Number(fs.readFileSync(new URL('../public/data/DATAHistoricalPrice.csv', import.meta.url), 'utf8').split('\n').find(line => line.startsWith('01/06/2024,')).split(',')[1]);
-    await openApp(page, '/swap');
+    await openSwap(page);
     await page.click('#swap-chart-range [data-range="All"]');
     const stats = page.locator('#swap-market-stats');
     await expect(stats).toContainText('1 007 trades', { timeout: 30000 });
@@ -123,7 +137,7 @@ test('a DEX subgraph without token volumes still gives its USD volume', async ({
         const days = [0, 1, 2].map(i => ({ date: today - i * 86400 * 20, volumeUSD: '10', txCount: '2' }));
         return route.fulfill({ json: { data: Object.fromEntries([...query.matchAll(/(p\d+):/g)].map(([, alias], i) => [alias, i ? [] : days])) } });
     });
-    await openApp(page, '/swap');
+    await openSwap(page);
     await page.click('#swap-chart-range [data-range="3M"]');
     await expect(page.locator('#swap-market-stats')).toHaveText('3M volume $30.00 · 6 trades', { timeout: 30000 });
 });
@@ -151,29 +165,42 @@ test('the all-time volume counts the emptied pools, and prices their old days fr
             pool === EMPTIED ? [{ date: day2021, volumeUSD: '0', txCount: '3', volumeToken0: '1000', volumeToken1: '0' }] : []]));
         return route.fulfill({ json: { data } });
     });
-    await openApp(page, '/swap');
+    await openSwap(page);
     await page.click('#swap-chart-range [data-range="All"]');
     await expect(page.locator('#swap-market-stats')).toHaveText('All-time volume $100.00 · 3 trades', { timeout: 30000 });
     expect(asked.some(query => query.includes(FAKE) && query.includes('poolDayDatas'))).toBe(false);
 });
 
-test('the order book shows the main pool\'s liquidity by price, in place of the trades', async ({ page }) => {
-    await openApp(page, '/swap');
+test('the liquidity book shows the v4 pools\' liquidity by price, in place of the trades', async ({ page }) => {
+    await openSwap(page);
     await page.click('[data-market-view="book"]');
     await expect(page.locator('#swap-trades-view')).toBeHidden();
-    await expect(page.locator('#swap-trades-filter')).toBeHidden();
-    await expect(page.locator('#swap-book-pool')).toHaveText('Uniswap v4 · DATA/USDC 0.3%');
-    // The position's 10 levels above the price (DATA for sale) and the 11 below it (the one the price is in, then 10)
+    await expect(page.locator('#swap-trades-filter')).toBeVisible();
+    // The position's 600 ticks each side of the price: up to 6.2%, 12 or 13 levels of 0.5% each way (where the price sits in its tick)
     const asks = page.locator('#swap-book-asks > div');
     const bids = page.locator('#swap-book-bids > div');
-    await expect(asks).toHaveCount(10, { timeout: 30000 });
-    await expect(bids).toHaveCount(11);
-    await expect(page.locator('#swap-book-mid')).toContainText('$0.0002500');
-    await expect(page.locator('#swap-book-mid')).toContainText('2% depth');
+    await expect(asks.first()).toBeVisible({ timeout: 30000 });
+    for (const side of [asks, bids]) {
+        const count = await side.count();
+        expect(count).toBeGreaterThanOrEqual(11);
+        expect(count).toBeLessThanOrEqual(13);
+    }
+    const narrow = await asks.count();
+    const mid = page.locator('#swap-book-mid');
+    await expect(mid).toContainText('$0.0002500');
+    await expect(mid).toContainText('1 pool');
+    await expect(mid).toContainText('Levels');
     // The nearest ask just above the price, the farthest at the top
     const prices = await asks.evaluateAll(rows => rows.map(row => Number(row.querySelector('span').textContent.replace('$', ''))));
     expect(prices[prices.length - 1]).toBeGreaterThan(0.00025);
     expect(prices[0]).toBeGreaterThan(prices[prices.length - 1]);
+    // Wider levels: the position fits in fewer of them
+    await page.click('[data-book-step="1"]');
+    await expect(mid).toContainText('1%');
+    await expect.poll(() => asks.count()).toBeLessThan(narrow);
+    // On Ethereum (no v4 pool read here): nothing
+    await page.click('#swap-trades-filter [data-filter="ethereum"]');
+    await expect(mid).toContainText('No pool liquidity read on this chain.');
     // Back to the trades
     await page.click('[data-market-view="trades"]');
     await expect(page.locator('#swap-trades-view')).toBeVisible();
