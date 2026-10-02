@@ -43,6 +43,20 @@ test('charts end on one point for today', async ({ page }) => {
     }
 });
 
+test('the Y axis fits the line and never goes below 0', async ({ page }) => {
+    // DATA slashed starts from 0 in All, Streams grows slowly: a fitted axis, no negative values
+    await tile(page, 'slashed').click();
+    await page.click('#overview-range [data-range="all"]');
+    const axis = () => page.evaluate(() => {
+        const chart = window.Chart?.getChart(document.querySelector('#overview-chart canvas'));
+        return chart?.data.datasets[0].data.length > 10 ? { min: chart.scales.y.min, max: chart.scales.y.max } : null;
+    });
+    await expect.poll(async () => (await axis())?.min).toBe(0);
+    await tile(page, 'streams').click();
+    await page.click('#overview-range [data-range="30d"]');
+    await expect.poll(async () => (await axis())?.min ?? -1).toBeGreaterThan(0);
+});
+
 test('a 30-day chart starts from the records just before it', async ({ page }) => {
     await page.click('#overview-range [data-range="30d"]');
     // Total staked is 96.0M now and grows slowly: a sponsorship emptied before the range adds nothing

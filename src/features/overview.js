@@ -1196,6 +1196,16 @@ function withNow(points, value) {
     return [...before, { x: Date.now(), y: value }];
 }
 
+/** Y axis fitted to the line, with some room, so its changes show; never below 0 (every metric is positive) */
+function valueBounds(points) {
+    const values = points.map(p => p.y);
+    const low = Math.min(...values);
+    const high = Math.max(...values);
+    const room = (high - low) * 0.05 || Math.abs(high) * 0.05 || 1;
+    // Suggested: Chart.js rounds them to its steps (from a value of 0 or more, it never goes below 0)
+    return { beginAtZero: false, suggestedMin: Math.max(0, low - room), suggestedMax: high + room };
+}
+
 function chartMessage(container, text, spinner = false) {
     state.chart?.destroy();
     state.chart = null;
@@ -1257,11 +1267,13 @@ function renderChart() {
         fill: 'start'
     };
     const bounds = { min: points[0].x, max: points[points.length - 1].x };
+    const yBounds = valueBounds(points);
     const axisFormat = (value) => formatMetric(def.kind, value);
     const tipFormat = (value) => formatMetric(def.kind, value, true);
     if (state.chart) {
         state.chart.data.datasets[0] = dataset;
         Object.assign(state.chart.options.scales.x, bounds);
+        Object.assign(state.chart.options.scales.y, yBounds);
         state.chart.options.scales.y.ticks.callback = axisFormat;
         state.chart.options.plugins.tooltip.callbacks.label = (item) => tipFormat(item.parsed.y);
         state.chart.update('none');
@@ -1306,9 +1318,7 @@ function renderChart() {
                 },
                 y: {
                     position: 'right',
-                    // Fitted to the line, with some room, so its changes show (not from 0)
-                    beginAtZero: false,
-                    grace: '5%',
+                    ...yBounds,
                     ticks: { color: '#9ca3af', font, maxTicksLimit: 5, callback: axisFormat },
                     grid: { color: '#2a2a2a', drawBorder: false }
                 }
