@@ -57,24 +57,27 @@ test('the Y axis fits the line and never goes below 0', async ({ page }) => {
     await expect.poll(async () => (await axis())?.min ?? -1).toBeGreaterThan(0);
 });
 
-test('a list shows 10 rows with its +, as tall as the two lists next to it', async ({ page }) => {
+test('a list shows 12 rows with its +, as tall as the two lists next to it', async ({ page }) => {
     const box = (name) => page.locator(`[data-list-panel="${name}"]`).boundingBox();
     const operators = page.locator('#overview-operators a');
     await expect(operators).toHaveCount(5);
-    // Network activity: its 10 streams, down to the bottom of Top operators; Best sponsorships moves below it
+    // Network activity: its 12 streams, down to the bottom of Top operators, with no empty space; Best sponsorships moves below it
     const network = page.locator('#overview-network a');
     await expect(network).toHaveCount(5);
     await page.click('[data-expand="network"]');
-    await expect(network).toHaveCount(10);
+    await expect(network).toHaveCount(12);
     await expect(page.locator('[data-expand="network"]')).toHaveAttribute('aria-expanded', 'true');
+    await expect(page.locator('#custom-tooltip')).not.toContainText('Show');   // the moved button's tooltip is gone
     const [expanded, activity, top, best] = await Promise.all(['network', 'activity', 'operators', 'best'].map(box));
     expect(Math.abs(expanded.y - activity.y)).toBeLessThan(2);
     expect(Math.abs(expanded.y + expanded.height - (top.y + top.height))).toBeLessThan(2);
     expect(best.y).toBeGreaterThan(top.y + top.height);
-    // Top operators: its top 10 in its own column
+    const slot = await page.locator('[data-expand-slot="network"]').boundingBox();
+    expect(expanded.y + expanded.height - (slot.y + slot.height)).toBeLessThan(60);   // less than a row left
+    // Top operators: its top 12 in its own column
     await page.click('[data-expand="operators"]');
-    await expect(operators).toHaveCount(10);
-    await expect(operators.nth(9)).toContainText('10');
+    await expect(operators).toHaveCount(12);
+    await expect(operators.nth(11)).toContainText('12');
     // Back to 5
     await page.click('[data-expand="network"]');
     await expect(network).toHaveCount(5);
@@ -100,7 +103,8 @@ test('a 30-day chart starts from the records just before it', async ({ page }) =
     // Total staked is 96.0M now and grows slowly: a sponsorship emptied before the range adds nothing
     const highest = () => page.evaluate(() => {
         const points = window.Chart?.getChart(document.querySelector('#overview-chart canvas'))?.data.datasets[0].data || [];
-        return points.length > 20 ? Math.max(...points.map(p => p.y)) : null;
+        const days = points.length ? (points.at(-1).x - points[0].x) / 864e5 : 0;
+        return points.length > 20 && days <= 31 ? Math.max(...points.map(p => p.y)) : null;   // the 30-day chart, not the 1-year one before it
     });
     await expect.poll(highest).toBeGreaterThan(9e7);
     expect(await highest()).toBeLessThan(9.7e7);

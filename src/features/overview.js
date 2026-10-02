@@ -21,6 +21,7 @@ import { POLYGONSCAN_NETWORK, getEtherscanApiKey, STREAM_REGISTRY_ADDRESS, STREA
 import { escapeHtml, convertWeiToData, formatBigNumber, parseOperatorMetadata, shortAddress, operatorAvatarHtml, calculateWeightedApy, logger } from '../core/utils.js';
 import { ethers } from 'ethers';
 import Chart from 'chart.js/auto';
+import { customTooltip } from '../ui/tooltip.js';
 
 // ============================================
 // Constants
@@ -30,7 +31,7 @@ const DAY = 86400;
 const REFRESH_MS = 60 * 1000;            // totals and lists while the page is open
 const STREAMS_REFRESH_MS = 10 * 60 * 1000;
 const LIST_SIZE = 5;                     // rows shown in a list
-const LIST_MAX = 10;                     // rows read, shown when the list is expanded (its + button)
+const LIST_MAX = 12;                     // rows read, shown when the list is expanded (its + button): as tall as the two lists next to it
 const TOP_CANDIDATES = 50;               // largest operators read for the top list (the ones earning nothing are skipped)
 const PAGE = 1000;                       // rows per subgraph request (The Graph's maximum)
 const MAX_SKIP_PAGES = 5;                // skip is capped at 5000 by graph-node
@@ -1927,6 +1928,7 @@ function init() {
         if (!button) return;
         state.expanded[button.dataset.expand] = !state.expanded[button.dataset.expand];
         renderLists();
+        customTooltip?.classList.add('hidden');   // the button moved: its tooltip would stay over another row
     });
     // The page stops itself when another one opens
     window.addEventListener('app:routechange', (e) => {
