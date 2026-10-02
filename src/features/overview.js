@@ -21,6 +21,7 @@ import { POLYGONSCAN_NETWORK, getEtherscanApiKey, STREAM_REGISTRY_ADDRESS, STREA
 import { escapeHtml, convertWeiToData, formatBigNumber, parseOperatorMetadata, shortAddress, operatorAvatarHtml, calculateWeightedApy, logger } from '../core/utils.js';
 import { ethers } from 'ethers';
 import Chart from 'chart.js/auto';
+import { customTooltip } from '../ui/tooltip.js';
 
 // ============================================
 // Constants
@@ -29,7 +30,8 @@ import Chart from 'chart.js/auto';
 const DAY = 86400;
 const REFRESH_MS = 60 * 1000;            // totals and lists while the page is open
 const STREAMS_REFRESH_MS = 10 * 60 * 1000;
-const LIST_SIZE = 5;
+const LIST_SIZE = 5;                     // rows shown in a list
+const LIST_MAX = 12;                     // rows read, shown when the list is expanded (its + button): as tall as the two lists next to it
 const TOP_CANDIDATES = 50;               // largest operators read for the top list (the ones earning nothing are skipped)
 const PAGE = 1000;                       // rows per subgraph request (The Graph's maximum)
 const MAX_SKIP_PAGES = 5;                // skip is capped at 5000 by graph-node
@@ -63,7 +65,7 @@ const PROFIT_TOPIC = ethers.utils.id('Profit(uint256,uint256,uint256)');
 // slashings in this sponsorship. A recovery of funds, not a penalty: left out of DATA slashed
 const RECOVERY_SPONSORSHIP = '0x9109abd75eae7e526fc85e33bab24ac45f71717a';
 const POLYGON_BLOCKS_PER_DAY = 43200;
-const DELEGATION_WINDOWS_DAYS = [1, 7, 30];   // looked back further while there are fewer than LIST_SIZE events
+const DELEGATION_WINDOWS_DAYS = [1, 7, 30];   // looked back further while there are fewer than LIST_MAX events
 const DELEGATION_MAX_TXS = 60;                // transactions checked per read
 const EXPLORER_BUSY = /rate limit|max calls|too many|timeout|temporarily|busy/i;
 
@@ -164,6 +166,7 @@ const state = {
         sponsorships: { rows: [], loaded: false, error: false, at: 0 }
     },
     panels: { network: 'streams', activity: 'staking' },
+    expanded: {},               // list name (network, activity, best, operators) -> showing LIST_MAX rows
     govEvents: [],
     priceHistory: [],           // daily DATA/USD (ms, USD)
     metric: 'staked',           // metric whose chart is open (null: closed)
@@ -298,13 +301,13 @@ async function fetchLists() {
             id valueWithoutEarnings delegatorCount metadataJsonString
             stakes(first: 50) { amountWei sponsorship { spotAPY } }
         }
-        newStreams: streams(first: ${LIST_SIZE}, orderBy: createdAt, orderDirection: desc, where: { createdAt_gt: "0" }) { id createdAt }
-        sponsoring: sponsoringEvents(first: ${LIST_SIZE}, orderBy: date, orderDirection: desc) {
+        newStreams: streams(first: ${LIST_MAX}, orderBy: createdAt, orderDirection: desc, where: { createdAt_gt: "0" }) { id createdAt }
+        sponsoring: sponsoringEvents(first: ${LIST_MAX}, orderBy: date, orderDirection: desc) {
             id sponsor amount date sponsorship { id stream { id } }
         }
-        raised: flags(first: ${LIST_SIZE}, orderBy: flaggingTimestamp, orderDirection: desc) { ${FLAG} }
-        resolved: flags(first: ${LIST_SIZE}, orderBy: flagResolutionTimestamp, orderDirection: desc, where: { result_in: ["kicked", "failed"] }) { ${FLAG} }
-        votes(first: ${LIST_SIZE}, orderBy: timestamp, orderDirection: desc) {
+        raised: flags(first: ${LIST_MAX}, orderBy: flaggingTimestamp, orderDirection: desc) { ${FLAG} }
+        resolved: flags(first: ${LIST_MAX}, orderBy: flagResolutionTimestamp, orderDirection: desc, where: { result_in: ["kicked", "failed"] }) { ${FLAG} }
+        votes(first: ${LIST_MAX}, orderBy: timestamp, orderDirection: desc) {
             id timestamp votedKick voter { ${PARTY} }
             flag { id target { ${PARTY} } sponsorship { id stream { id } } }
         }
@@ -312,7 +315,7 @@ async function fetchLists() {
     // The largest operators that earn: an APY shown as 0.0% leaves its place to the next one
     state.topOperators = (data.topOperators || [])
         .filter(op => calculateWeightedApy(op.stakes) >= 0.0005)
-        .slice(0, LIST_SIZE);
+        .slice(0, LIST_MAX);
     state.newStreams = data.newStreams || [];
     state.latestSponsoring = (data.sponsoring || []).map(e => ({ kind: 'sponsored', sponsorshipId: e.sponsorship?.id, streamId: e.sponsorship?.stream?.id || '',
         sponsor: e.sponsor, amount: weiToNumber(e.amount), time: Number(e.date), block: 0, index: 0 }));
@@ -322,7 +325,7 @@ async function fetchLists() {
     for (const flag of data.raised || []) events.push({ kind: 'flagged', time: Number(flag.flaggingTimestamp), flag, who: flag.target, by: flag.flagger });
     for (const flag of data.resolved || []) events.push({ kind: flag.result, time: Number(flag.flagResolutionTimestamp), flag, who: flag.target });
     for (const vote of data.votes || []) events.push({ kind: vote.votedKick ? 'kick' : 'keep', time: Number(vote.timestamp), flag: vote.flag, who: vote.voter, on: vote.flag?.target });
-    state.govEvents = events.sort((a, b) => b.time - a.time).slice(0, LIST_SIZE);
+    state.govEvents = events.sort((a, b) => b.time - a.time).slice(0, LIST_MAX);
 }
 
 /** An operator's value without its owner's share */
@@ -339,7 +342,7 @@ function bestSponsorships() {
     return state.allSponsorships
         .filter(s => s.isRunning && isRunning(s) && Number(s.spotAPY) > 0)
         .sort((a, b) => Number(b.spotAPY) - Number(a.spotAPY))
-        .slice(0, LIST_SIZE);
+        .slice(0, LIST_MAX);
 }
 
 async function fetchTotals() {
@@ -420,7 +423,7 @@ async function newestLogs(topic, fromBlock, latestBlock, address = null) {
 const logTime = (log) => ({ time: parseInt(log.timeStamp, 16), block: parseInt(log.blockNumber, 16), index: parseInt(log.logIndex, 16) });
 const newestFirst = (a, b) => b.block - a.block || b.index - a.index;
 
-/** The newest LIST_SIZE events of a contract's topics (any contract's without an address), looked back 1, 7, then 30 days; `parse` turns the logs into events */
+/** The newest LIST_MAX events of a contract's topics (any contract's without an address), looked back 1, 7, then 30 days; `parse` turns the logs into events */
 async function newestContractEvents(address, topics, parse) {
     const latest = (await Services.runQuery('{ _meta { block { number } } }'))._meta.block.number;
     let events = [];
@@ -429,9 +432,9 @@ async function newestContractEvents(address, topics, parse) {
         const logs = (await Promise.all(topics.map(topic => newestLogs(topic, from, latest, address)))).flat()
             .filter(log => !address || log.address.toLowerCase() === address.toLowerCase());
         events = parse(logs).sort(newestFirst);
-        if (events.length >= LIST_SIZE) break;
+        if (events.length >= LIST_MAX) break;
     }
-    return events.slice(0, LIST_SIZE);
+    return events.slice(0, LIST_MAX);
 }
 
 /** What a permission update leaves to the user */
@@ -502,7 +505,7 @@ async function readStakingActions() {
         actions.push({ kind: 'unstaked', amount: state.stakeBefore.get(`u:${u.tx}`)?.amount ?? null,
             operatorId: u.operatorId, sponsorshipId: u.sponsorshipId, streamId: '', time: u.time });
     }
-    const top = actions.sort((a, b) => b.time - a.time).slice(0, LIST_SIZE);
+    const top = actions.sort((a, b) => b.time - a.time).slice(0, LIST_MAX);
     // Names and streams of the unstakes
     const left = top.filter(a => a.kind === 'unstaked');
     if (left.length) {
@@ -524,7 +527,7 @@ const FEED_READERS = {
     staking: readStakingActions,
     // Who can use a stream: permission changes (without the ones given with a new stream, same transaction)
     // and storage nodes added / removed, newest first
-    permissions: async () => (await Promise.all([readPermissionChanges(), readStorageChanges()])).flat().sort(newestFirst).slice(0, LIST_SIZE),
+    permissions: async () => (await Promise.all([readPermissionChanges(), readStorageChanges()])).flat().sort(newestFirst).slice(0, LIST_MAX),
     sponsorships: () => newestContractEvents(SPONSORSHIP_FACTORY_ADDRESS, [NETWORK_TOPICS.newSponsorship], (logs) => logs.map(log => ({
         kind: 'created',
         sponsorshipId: ethers.utils.hexDataSlice(log.topics[1], 12).toLowerCase(),
@@ -607,9 +610,9 @@ async function fetchEarningsEvents() {
             })
             .filter(e => e.delegators + e.cut + e.fee > 0)
             .sort((a, b) => b.block - a.block || b.index - a.index);
-        if (events.length >= LIST_SIZE) break;
+        if (events.length >= LIST_MAX) break;
     }
-    events = events.slice(0, LIST_SIZE);
+    events = events.slice(0, LIST_MAX);
     const ids = [...new Set(events.map(e => e.operatorId))];
     if (ids.length) {
         const data = await Services.runQuery(`{ operators(where: { id_in: ${JSON.stringify(ids)} }) { id metadataJsonString } }`);
@@ -622,7 +625,7 @@ async function fetchEarningsEvents() {
 }
 
 /**
- * The newest events that are delegations of their own (up to LIST_SIZE). The operator contract also emits
+ * The newest events that are delegations of their own (up to LIST_MAX). The operator contract also emits
  * Delegated / Undelegated inside staking actions: the owner's cut re-delegated when earnings are withdrawn,
  * flagging and review rewards, the undelegation queue paid out on unstaking. A sponsorship takes part in
  * all of those, never in a delegation or undelegation: a transaction with a log of a sponsorship is left out.
@@ -630,8 +633,8 @@ async function fetchEarningsEvents() {
 async function ownDelegations(candidates, sponsorships) {
     const own = [];
     let checked = 0;
-    for (let i = 0; i < candidates.length && own.length < LIST_SIZE; i += LIST_SIZE) {
-        const batch = candidates.slice(i, i + LIST_SIZE);
+    for (let i = 0; i < candidates.length && own.length < LIST_MAX; i += LIST_MAX) {
+        const batch = candidates.slice(i, i + LIST_MAX);
         const unknown = [...new Set(batch.map(e => e.tx))].filter(tx => !state.delegationTxs.has(tx));
         if (checked + unknown.length > DELEGATION_MAX_TXS) break;
         checked += unknown.length;
@@ -688,9 +691,9 @@ async function fetchDelegationEvents() {
             })
             .sort((a, b) => b.block - a.block || b.index - a.index);
         events = await ownDelegations(candidates, sponsorships);
-        if (events.length >= LIST_SIZE) break;
+        if (events.length >= LIST_MAX) break;
     }
-    events = events.slice(0, LIST_SIZE);
+    events = events.slice(0, LIST_MAX);
     // Names and avatars of their operators
     const ids = [...new Set(events.map(e => e.operatorId))];
     if (ids.length) {
@@ -1368,16 +1371,38 @@ function avatar(operator) {
     return operatorAvatarHtml(operator?.metadataJsonString, { className: 'w-8 h-8 border border-[#333]' });
 }
 
-/** Rows of a list, or its loading / error / empty state */
-function listContent(rows, render, { error, empty, loaded, failed }) {
-    if (loaded ? !loaded() : !state.loaded) return (failed ? failed() : state.error) ? emptyRow(error) : loadingRows();
-    return rows.length ? rows.map(render).join('') : emptyRow(empty);
+/** Rows of a list (LIST_SIZE, or LIST_MAX expanded), or its loading / error / empty state; then its + button */
+function listContent(name, rows, render, { error, empty, loaded, failed }) {
+    const ready = loaded ? loaded() : state.loaded;
+    renderExpand(name, ready ? rows.length : 0);
+    if (!ready) return (failed ? failed() : state.error) ? emptyRow(error) : loadingRows();
+    return rows.length ? rows.slice(0, state.expanded[name] ? LIST_MAX : LIST_SIZE).map(render).join('') : emptyRow(empty);
+}
+
+/**
+ * The discreet + at the end of a list: LIST_MAX rows instead of LIST_SIZE (- for back). On two columns the
+ * expanded list spans two grid rows, as tall as the two lists next to it, and the one below it moves down.
+ */
+function renderExpand(name, count) {
+    const expanded = !!state.expanded[name];
+    document.querySelector(`[data-list-panel="${name}"]`)?.classList.toggle('lg:row-span-2', expanded);
+    const slot = document.querySelector(`[data-expand-slot="${name}"]`);
+    if (!slot) return;
+    if (!expanded && count <= LIST_SIZE) {
+        slot.innerHTML = '';
+        return;
+    }
+    const label = expanded ? `Show ${LIST_SIZE}` : `Show ${LIST_MAX}`;
+    const icon = expanded ? '<path d="M5 12h14"/>' : '<path d="M5 12h14"/><path d="M12 5v14"/>';
+    slot.innerHTML = `<button type="button" data-expand="${name}" aria-expanded="${expanded}" aria-label="${label}" data-tooltip-content="${label}"
+        class="inline-flex items-center justify-center w-6 h-6 rounded-full text-gray-500 hover:text-gray-200 hover:bg-white/5 transition-colors">
+        <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true">${icon}</svg></button>`;
 }
 
 function renderOperators() {
     const el = $('overview-operators');
     if (!el) return;
-    el.innerHTML = listContent(state.topOperators, (op, i) => {
+    el.innerHTML = listContent('operators', state.topOperators, (op, i) => {
         const value = weiToNumber(op.valueWithoutEarnings);
         return `
             <a href="/operator/${op.id}" class="${ROW}">
@@ -1399,7 +1424,7 @@ function renderSponsorships() {
     const el = $('overview-best');
     if (!el) return;
     const streams = new Map(state.bestStreams);
-    el.innerHTML = listContent(bestSponsorships(), s => {
+    el.innerHTML = listContent('best', bestSponsorships(), s => {
         const streamId = streams.get(s.id) || '';
         return `
             <a href="${sponsorshipHref(s.id, streamId)}" class="${ROW}">
@@ -1595,7 +1620,7 @@ const PANELS = {
         tabs: {
             streams: { rows: () => state.newStreams, render: newStreamRow, error: 'Streams could not be loaded.', empty: 'No new streams.' },
             // Created (factory events) and sponsored (subgraph), newest first
-            sponsorships: { rows: () => [...state.feeds.sponsorships.rows, ...state.latestSponsoring].sort(sponsorshipOrder).slice(0, LIST_SIZE),
+            sponsorships: { rows: () => [...state.feeds.sponsorships.rows, ...state.latestSponsoring].sort(sponsorshipOrder).slice(0, LIST_MAX),
                 render: sponsorshipEventRow, error: 'Sponsorship events could not be loaded.', empty: 'No sponsorship events.',
                 loaded: () => state.loaded && (state.feeds.sponsorships.loaded || state.feeds.sponsorships.error),
                 failed: () => state.error && state.feeds.sponsorships.error,
@@ -1622,7 +1647,7 @@ function renderPanel(name) {
     const el = $(panel.list);
     if (!el) return;
     const tab = panel.tabs[state.panels[name]];
-    el.innerHTML = listContent(tab.rows(), tab.render, tab);
+    el.innerHTML = listContent(name, tab.rows(), tab.render, tab);
     document.querySelectorAll(`#${panel.list}-tabs button`).forEach(btn => {
         const active = btn.dataset.tab === state.panels[name];
         btn.classList.toggle('bg-[#3A3A3A]', active);
@@ -1898,6 +1923,13 @@ function init() {
     for (const name of Object.keys(PANELS)) {
         document.querySelectorAll(`#${PANELS[name].list}-tabs button`).forEach(btn => btn.addEventListener('click', () => openTab(name, btn.dataset.tab)));
     }
+    $('overview-lists')?.addEventListener('click', (e) => {
+        const button = e.target.closest('[data-expand]');
+        if (!button) return;
+        state.expanded[button.dataset.expand] = !state.expanded[button.dataset.expand];
+        renderLists();
+        customTooltip?.classList.add('hidden');   // the button moved: its tooltip would stay over another row
+    });
     // The page stops itself when another one opens
     window.addEventListener('app:routechange', (e) => {
         if (e.detail.path !== '/') stop();
