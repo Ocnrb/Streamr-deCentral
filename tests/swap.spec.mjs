@@ -275,3 +275,25 @@ test('on Ethereum the quote goes through its Uniswap v4 pool, SushiSwap V2 check
     await expect(page.locator('#swap-routes-list')).toContainText('SushiSwap V2 · WETH → DATA');
     await expect(page.locator('#swap-routes-list')).toContainText('15 000 000 DATA');
 });
+
+test('your swaps include the ones on Ethereum, from its explorer', async ({ page }) => {
+    // A DATA buy with ETH on Ethereum, made in another app: the ETH sent to Uniswap's router, the DATA received
+    const me = '0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266', hash = '0x' + 'e'.repeat(64), time = String(Math.floor(Date.now() / 1000) - 600);
+    await page.route(url => url.hostname === 'api.etherscan.io' && url.search.includes('chainid=1&') && url.search.includes('module=account'), (route) => {
+        const action = new URL(route.request().url()).searchParams.get('action');
+        const result = action === 'tokentx'
+            ? [{ hash, timeStamp: time, from: '0x' + '5'.repeat(40), to: me, contractAddress: '0x8f693ca8d21b157107184d29d398a8d082b38b76', value: '1191000000000000000000' }]
+            : action === 'txlist' ? [{ hash, timeStamp: time, from: me, to: '0x66a9893cc07d91d95644aedd05d03f95e1dba8af', value: '100000000000000', isError: '0' }] : [];
+        return route.fulfill({ json: { status: '1', message: 'OK', result } });
+    });
+    await page.goto('/swap', { waitUntil: 'domcontentloaded' });
+    await page.click('#privateKeyBtn');
+    await page.fill('#privateKeyInput', '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80');
+    await page.click('#pkModalConnect');
+    const row = page.locator('#swap-history tr', { hasText: 'on Ethereum' });
+    await expect(row).toContainText('Buy DATA', { ignoreCase: true, timeout: 30000 });
+    await expect(row).toContainText('0.0001');
+    await expect(row).toContainText('1 191');
+    await expect(row).toContainText('Uniswap (Universal Router)');
+    await expect(row.locator(`a[href="https://etherscan.io/tx/${hash}"]`)).toBeVisible();
+});

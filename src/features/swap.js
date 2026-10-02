@@ -138,7 +138,8 @@ const VENUES = {
     sushi: { name: 'SushiSwap V2', router: SUSHI_V2_ROUTER, factory: SUSHI_V2_FACTORY },
     qv3: { name: 'QuickSwap V3', router: QUICKSWAP_V3_ROUTER },
     uni: { name: 'Uniswap v3', router: UNISWAP_V3_ROUTER },
-    v4: { name: 'Uniswap v4', router: UNIVERSAL_ROUTER }   // tokens pulled through Permit2
+    v4: { name: 'Uniswap v4', router: UNIVERSAL_ROUTER },   // tokens pulled through Permit2
+    uni2: { name: 'Uniswap v2' }                              // Ethereum: only in the routes of swaps made elsewhere
 };
 
 // ============================================
@@ -258,7 +259,6 @@ const lower = (a) => a.toLowerCase();
 const pairKey = (a, b) => [lower(a), lower(b)].sort().join('-');
 /** Reads on a chain: Polygon through the app's RPCs (with fallback), Ethereum through the market's providers */
 const readOn = (net) => (fn) => (net.id === 137 ? Services.readWithFallback(() => fn(Services.getReadOnlyProvider())) : fn(getEthProvider()));
-const read = readOn(POLYGON);
 
 // ============================================
 // Formatting
@@ -1330,6 +1330,10 @@ const KNOWN_ROUTERS = {
     [QUICKSWAP_V2_ROUTER.toLowerCase()]: 'QuickSwap V2',
     [QUICKSWAP_V3_ROUTER.toLowerCase()]: 'QuickSwap V3',
     [SUSHI_V2_ROUTER.toLowerCase()]: 'SushiSwap V2',
+    [ETH_UNIVERSAL_ROUTER]: 'Uniswap (Universal Router)',
+    '0x3fc91a3afd70395cd496c647d5a6cc9d4b2b7fad': 'Uniswap (Universal Router)',
+    [ETH_SUSHI_V2_ROUTER]: 'SushiSwap V2',
+    '0x7a250d5630b4cf539739df2c5dacb4c659f2488d': 'Uniswap v2',
     '0x1111111254eeb25477b68fb85ed929f73a960582': '1inch',
     '0x111111125421ca6dc452d289314280a0f8842a65': '1inch',
     '0xdef1c0ded9bec7f1a1670819833240f027b25eff': '0x',
@@ -1341,11 +1345,18 @@ const KNOWN_ROUTERS = {
 
 // Routers of the DEXes themselves (the route says it all); the other known routers are aggregators or wallets
 const DEX_ROUTERS = new Set([UNIVERSAL_ROUTER, '0x4c60051384bd2d3c01bfc845cf5f4b44bcbe9de5', UNISWAP_V3_ROUTER, '0xe592427a0aece92de3edee1f18e0157c05861564',
-    QUICKSWAP_V2_ROUTER, QUICKSWAP_V3_ROUTER, SUSHI_V2_ROUTER].map(lower));
+    QUICKSWAP_V2_ROUTER, QUICKSWAP_V3_ROUTER, SUSHI_V2_ROUTER, ETH_UNIVERSAL_ROUTER, '0x3fc91a3afd70395cd496c647d5a6cc9d4b2b7fad', ETH_SUSHI_V2_ROUTER,
+    '0x7a250d5630b4cf539739df2c5dacb4c659f2488d'].map(lower));
 
-/** DATA swaps of this wallet from the explorer (also those made in other apps): token legs in and out of one transaction */
-async function recoverSwapsFromExplorer() {
-    const base = `${POLYGONSCAN_NETWORK.apiUrl}?chainid=137&module=account&address=${state.address}&page=1&offset=${EXPLORER_RECORDS}&sort=desc&apikey=${getEtherscanApiKey()}`;
+/** DATA swaps of this wallet on Polygon, then on Ethereum (one chain at a time: the explorer's calls are rate limited) */
+async function recoverSwaps() {
+    await recoverSwapsFromExplorer(POLYGON);
+    await recoverSwapsFromExplorer(NETWORKS[1]);
+}
+
+/** DATA swaps of this wallet on a chain from the explorer (also those made in other apps): token legs in and out of one transaction */
+async function recoverSwapsFromExplorer(net) {
+    const base = `${POLYGONSCAN_NETWORK.apiUrl}?chainid=${net.id}&module=account&address=${state.address}&page=1&offset=${EXPLORER_RECORDS}&sort=desc&apikey=${getEtherscanApiKey()}`;
     const get = (action) => fetch(`${base}&action=${action}`).then(r => r.json()).then(j => (Array.isArray(j?.result) ? j.result : [])).catch(() => []);
     const [tokenTx, internalTx, normalTx] = await Promise.all([get('tokentx'), get('txlistinternal'), get('txlist')]);
     const me = state.address;
@@ -1355,19 +1366,19 @@ async function recoverSwapsFromExplorer() {
         return txs.get(hash);
     };
     for (const t of tokenTx) {
-        const info = KNOWN_TOKENS[lower(t.contractAddress || '')];
+        const info = net.known[lower(t.contractAddress || '')];
         if (!info || lower(t.contractAddress) === NATIVE) continue;
         const leg = { symbol: info.symbol, amount: t.value };
         if (lower(t.from) === me) tx(t.hash, t.timeStamp).out.push(leg);
         if (lower(t.to) === me) tx(t.hash, t.timeStamp).in.push(leg);
     }
     for (const t of internalTx) {
-        if (lower(t.to) === me && t.value !== '0' && t.isError !== '1') tx(t.hash, t.timeStamp).in.push({ symbol: 'POL', amount: t.value });
+        if (lower(t.to) === me && t.value !== '0' && t.isError !== '1') tx(t.hash, t.timeStamp).in.push({ symbol: net.native, amount: t.value });
     }
     // The contract each transaction of this wallet was sent to (router / aggregator)
     const sentTo = new Map(normalTx.filter(t => lower(t.from) === me && t.to).map(t => [t.hash, lower(t.to)]));
     for (const t of normalTx) {
-        if (lower(t.from) === me && t.value !== '0' && t.isError === '0' && txs.has(t.hash)) tx(t.hash, t.timeStamp).out.push({ symbol: 'POL', amount: t.value });
+        if (lower(t.from) === me && t.value !== '0' && t.isError === '0' && txs.has(t.hash)) tx(t.hash, t.timeStamp).out.push({ symbol: net.native, amount: t.value });
     }
     let changed = false;
     for (const t of txs.values()) {
@@ -1387,7 +1398,8 @@ async function recoverSwapsFromExplorer() {
             }
             continue;
         }
-        state.history.push({ txHash: t.hash, createdAt: t.time, status: 'done', pay, receive: { symbol: receive.symbol, amount: receive.amount }, via: sentTo.get(t.hash) || null });
+        state.history.push({ txHash: t.hash, createdAt: t.time, status: 'done', pay, receive: { symbol: receive.symbol, amount: receive.amount }, via: sentTo.get(t.hash) || null,
+            ...(net.id === 137 ? {} : { chain: net.id }) });
         changed = true;
     }
     if (changed) {
@@ -1528,60 +1540,64 @@ const POOL_INFO_IFACE = new ethers.utils.Interface([
     'function factory() view returns (address)',
     'function fee() view returns (uint24)'
 ]);
+// The DEX of a v2 / v3 pool by its factory (Uniswap v3's has one address on both chains)
 const FACTORY_VENUES = {
     [QUICKSWAP_V2_FACTORY.toLowerCase()]: 'qv2',
     [SUSHI_V2_FACTORY.toLowerCase()]: 'sushi',
     [QUICKSWAP_V3_FACTORY.toLowerCase()]: 'qv3',
-    [UNISWAP_V3_FACTORY.toLowerCase()]: 'uni'
+    [UNISWAP_V3_FACTORY.toLowerCase()]: 'uni',
+    [ETH_SUSHI_V2_FACTORY]: 'sushi',
+    '0x5c69bee701ef814a2b6a3edd4b1652cb9cc5aa6f': 'uni2'   // Uniswap v2 (Ethereum)
 };
-const poolInfoCache = new Map();   // pool address -> { venue, token0, token1, fee } | null
-let v4KeysById = null;
+const poolInfoCache = new Map();   // chain:pool address -> { venue, token0, token1, fee } | null
+const v4KeysById = new Map();      // chain -> Map(pool id -> key)
 
-/** Hookless v4 pools between the known tokens, by pool id */
-function knownV4Keys() {
-    if (!v4KeysById) {
-        v4KeysById = new Map();
-        const tokens = Object.keys(KNOWN_TOKENS);
+/** Hookless v4 pools between a chain's known tokens, by pool id */
+function knownV4Keys(net) {
+    if (!v4KeysById.has(net.id)) {
+        const keys = new Map();
+        const tokens = Object.keys(net.known);
         for (let i = 0; i < tokens.length; i++) {
             for (let j = i + 1; j < tokens.length; j++) {
                 for (const [fee, tickSpacing] of V4_TIERS) {
                     const key = v4PoolKey(tokens[i], tokens[j], fee, tickSpacing);
-                    v4KeysById.set(v4PoolId(key), key);
+                    keys.set(v4PoolId(key), key);
                 }
             }
         }
+        v4KeysById.set(net.id, keys);
     }
-    return v4KeysById;
+    return v4KeysById.get(net.id);
 }
 
-/** DEX, tokens and fee of v2 / v3 pools (read once per pool) */
-async function loadPoolInfo(addresses) {
-    const missing = [...new Set(addresses.map(lower))].filter(a => !poolInfoCache.has(a));
+/** DEX, tokens and fee of v2 / v3 pools on a chain (read once per pool) */
+async function loadPoolInfo(addresses, net) {
+    const missing = [...new Set(addresses.map(lower))].filter(a => !poolInfoCache.has(`${net.id}:${a}`));
     if (!missing.length) return;
     const calls = missing.flatMap(target => ['token0', 'token1', 'factory', 'fee'].map(fn => ({ target, iface: POOL_INFO_IFACE, fn, args: [] })));
-    const results = await multicall(calls);
+    const results = await multicall(calls, 60, net);
     missing.forEach((address, i) => {
         const [token0, token1, factory, fee] = results.slice(i * 4, i * 4 + 4).map(r => r?.[0]);
         const venue = factory ? FACTORY_VENUES[lower(factory)] : null;
-        poolInfoCache.set(address, token0 && token1 ? { venue, token0: lower(token0), token1: lower(token1), fee: venue === 'uni' && fee ? Number(fee) : null } : null);
+        poolInfoCache.set(`${net.id}:${address}`, token0 && token1 ? { venue, token0: lower(token0), token1: lower(token1), fee: venue === 'uni' && fee ? Number(fee) : null } : null);
     });
 }
 
-// POL and WPOL are one token for the path (v4 pools hold native POL, the others WPOL)
-const sameToken = (a, b) => a === b || ([a, b].every(t => t === NATIVE || t === lower(WPOL)));
-
-/** Route label of a swap from its receipt (null when no known pool took part) */
-async function routeFromReceipt(receipt, entry) {
+/** Route label of a swap from its receipt on its chain (null when no known pool took part) */
+async function routeFromReceipt(receipt, entry, net) {
+    // The native currency and its wrapped token are one token for the path (v4 pools hold the native one, the others the wrapped one)
+    const sameToken = (a, b) => a === b || ([a, b].every(t => t === NATIVE || t === lower(net.wrapped)));
+    const wrappedSymbol = net.known[lower(net.wrapped)]?.symbol;
     const logs = receipt.logs.filter(l => Object.values(SWAP_TOPICS).includes(l.topics[0]));
-    await loadPoolInfo(logs.filter(l => l.topics[0] !== SWAP_TOPICS.v4).map(l => l.address));
+    await loadPoolInfo(logs.filter(l => l.topics[0] !== SWAP_TOPICS.v4).map(l => l.address), net);
     const hops = [];
     for (const log of logs) {
         if (log.topics[0] === SWAP_TOPICS.v4) {
-            if (lower(log.address) !== lower(UNISWAP_V4_POOL_MANAGER)) continue;
-            const key = knownV4Keys().get(log.topics[1]);
+            if (lower(log.address) !== lower(net.v4.manager)) continue;
+            const key = knownV4Keys(net).get(log.topics[1]);
             hops.push(key ? { venue: 'v4', tokens: [lower(key.currency0), lower(key.currency1)], fee: key.fee } : { venue: 'v4', tokens: null });
         } else {
-            const info = poolInfoCache.get(lower(log.address));
+            const info = poolInfoCache.get(`${net.id}:${lower(log.address)}`);
             hops.push(info?.venue ? { venue: info.venue, tokens: [info.token0, info.token1], fee: info.fee } : { venue: null, tokens: null });
         }
     }
@@ -1589,7 +1605,7 @@ async function routeFromReceipt(receipt, entry) {
     const venueName = (venue) => VENUES[venue].name;
     const venues = [...new Set(hops.map(h => h.venue))];
     // Chain the pools from the paid token: a straight route gives the whole token path
-    const payToken = entry.pay?.symbol === 'POL' ? NATIVE : Object.keys(KNOWN_TOKENS).find(a => KNOWN_TOKENS[a].symbol === entry.pay?.symbol);
+    const payToken = entry.pay?.symbol === net.native ? NATIVE : Object.keys(net.known).find(a => net.known[a].symbol === entry.pay?.symbol);
     const path = payToken ? [payToken] : null;
     for (const hop of hops) {
         if (!path || !hop.tokens) break;
@@ -1599,10 +1615,10 @@ async function routeFromReceipt(receipt, entry) {
         path.push(hop.tokens[1 - from]);
     }
     const symbol = (address, i, all) => {
-        const known = KNOWN_TOKENS[address]?.symbol || Utils.shortAddress(address);
-        // The ends show what was paid and received (POL, not WPOL)
-        if (i === 0 && entry.pay?.symbol === 'POL' && known === 'WPOL') return 'POL';
-        if (i === all.length - 1 && entry.receive?.symbol === 'POL' && known === 'WPOL') return 'POL';
+        const known = net.known[address]?.symbol || Utils.shortAddress(address);
+        // The ends show what was paid and received (POL / ETH, not WPOL / WETH)
+        if (i === 0 && entry.pay?.symbol === net.native && known === wrappedSymbol) return net.native;
+        if (i === all.length - 1 && entry.receive?.symbol === net.native && known === wrappedSymbol) return net.native;
         return known;
     };
     const straight = path && path.length === hops.length + 1;
@@ -1619,7 +1635,7 @@ let inferringRoutes = false;
 
 /** Route of each swap without one (recovered from the explorer, or its local record lost), kept with the swap */
 async function fillRoutes() {
-    const missing = state.history.filter(h => h.status === 'done' && !h.route && !h.chain && !routeTried.has(lower(h.txHash)));
+    const missing = state.history.filter(h => h.status === 'done' && !h.route && !routeTried.has(lower(h.txHash)));
     if (inferringRoutes || !missing.length) return;
     inferringRoutes = true;
     let changed = false;
@@ -1627,8 +1643,9 @@ async function fillRoutes() {
         for (const entry of missing) {
             routeTried.add(lower(entry.txHash));
             try {
-                const receipt = await read(p => p.getTransactionReceipt(entry.txHash));
-                const route = receipt ? await routeFromReceipt(receipt, entry) : null;
+                const net = NETWORKS[entry.chain || 137];
+                const receipt = await readOn(net)(p => p.getTransactionReceipt(entry.txHash));
+                const route = receipt ? await routeFromReceipt(receipt, entry, net) : null;
                 if (route) { entry.route = route; changed = true; }
             } catch (e) {
                 logger.warn(`Swap: route of ${entry.txHash} not read`, e);
@@ -1672,17 +1689,19 @@ function formatDateTime(ms) {
 
 /** Route column: the route of swaps made here, else the router / aggregator the transaction went to */
 function routeCell(entry) {
-    if (entry.chain === 1) return `${Utils.escapeHtml(entry.route || 'Uniswap')}<div class="text-gray-400">on Ethereum</div>`;
+    const net = NETWORKS[entry.chain || 137];
+    // Ethereum's swaps say so under their route
+    const chain = net.id === 137 ? '' : `<div class="text-gray-400">on ${net.name}</div>`;
     if (entry.route) {
         // Swaps made through an aggregator or wallet: which one, under the route
         const app = entry.via && !DEX_ROUTERS.has(lower(entry.via)) ? KNOWN_ROUTERS[lower(entry.via)] : null;
-        return Utils.escapeHtml(entry.route) + (app ? `<div class="text-gray-400">via ${Utils.escapeHtml(app)}</div>` : '');
+        return Utils.escapeHtml(entry.route) + (app ? `<div class="text-gray-400">via ${Utils.escapeHtml(app)}</div>` : '') + chain;
     }
-    if (!entry.via) return '<span class="text-gray-400">Unknown</span>';
+    if (!entry.via) return `<span class="text-gray-400">Unknown</span>${chain}`;
     const known = KNOWN_ROUTERS[lower(entry.via)];
-    if (known) return Utils.escapeHtml(known);
+    if (known) return Utils.escapeHtml(known) + chain;
     const via = Utils.escapeHtml(entry.via);
-    return `via <a href="https://polygonscan.com/address/${via}" target="_blank" rel="noopener noreferrer" class="font-mono text-blue-400 hover:text-blue-300">${via.slice(0, 6)}…${via.slice(-4)}</a>`;
+    return `via <a href="${net.explorer}/address/${via}" target="_blank" rel="noopener noreferrer" class="font-mono text-blue-400 hover:text-blue-300">${via.slice(0, 6)}…${via.slice(-4)}</a>${chain}`;
 }
 
 function renderHistory() {
@@ -1739,7 +1758,7 @@ async function withSpinner(buttonId, work) {
 
 async function refreshHistory() {
     if (!state.address) return;
-    await withSpinner('swap-history-refresh', Promise.all([recoverSwapsFromExplorer(), settlePendingSwaps()]));
+    await withSpinner('swap-history-refresh', Promise.all([recoverSwaps(), settlePendingSwaps()]));
     renderHistory();
 }
 
@@ -1943,7 +1962,7 @@ function scheduleRefresh() {
 /** The wallet's swaps again, without the refresh button's spinner */
 function refreshHistoryQuietly() {
     if (!state.address) return;
-    Promise.all([recoverSwapsFromExplorer(), settlePendingSwaps()])
+    Promise.all([recoverSwaps(), settlePendingSwaps()])
         .then(() => renderHistory())
         .catch(e => logger.warn('Swap: history refresh failed', e));
 }
