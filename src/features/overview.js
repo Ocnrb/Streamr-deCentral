@@ -953,14 +953,16 @@ async function bucketHistory(source, rangeKey) {
         Services.runQuery(`{ rows: ${cfg.entity}(first: ${PAGE}, orderBy: date, orderDirection: desc, where: { date_lte: "${first}" }) { date ${cfg.key} { id } ${cfg.fields} } }`),
         fetchWindows(cfg, times.map((t, i) => ({ from: i ? times[i - 1] : first, to: t })))
     ]);
+    // The buckets before the range, oldest first (a copy: the response stays newest first)
+    const before = [...(beforeData.rows || [])].reverse();
     const latest = new Map();
     const lastDate = new Map();     // date of each one's last bucket
-    // Oldest first, so each one ends on its newest bucket
-    for (const row of [...(beforeData.rows || []).reverse(), ...windows.flat()]) {
+    for (const row of [...before, ...windows.flat()]) {
         const id = row[cfg.key].id;
         lastDate.set(id, Math.max(lastDate.get(id) || 0, Number(row.date)));
     }
-    for (const row of [...(beforeData.rows || [])].reverse()) latest.set(row[cfg.key].id, row);
+    // Oldest first, so each one starts the range on its newest bucket before it
+    for (const row of before) latest.set(row[cfg.key].id, row);
     const current = new Map(cfg.current().map(row => [row.id, row]));
     const unchanged = cfg.current().filter(row => !lastDate.has(row.id));
 

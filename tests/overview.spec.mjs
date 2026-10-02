@@ -43,6 +43,17 @@ test('charts end on one point for today', async ({ page }) => {
     }
 });
 
+test('a 30-day chart starts from the records just before it', async ({ page }) => {
+    await page.click('#overview-range [data-range="30d"]');
+    // Total staked is 96.0M now and grows slowly: a sponsorship emptied before the range adds nothing
+    const highest = () => page.evaluate(() => {
+        const points = window.Chart?.getChart(document.querySelector('#overview-chart canvas'))?.data.datasets[0].data || [];
+        return points.length > 20 ? Math.max(...points.map(p => p.y)) : null;
+    });
+    await expect.poll(highest).toBeGreaterThan(9e7);
+    expect(await highest()).toBeLessThan(9.7e7);
+});
+
 test('operator and delegator activity', async ({ page }) => {
     const rows = page.locator('#overview-activity a');
     // Staking: the change of each action, unstakes included, collected earnings left out
