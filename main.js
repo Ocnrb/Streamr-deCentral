@@ -12,6 +12,18 @@ import { hasStoredPrivateKey } from './src/app/keystore.js';
 import { handleAutostakerClick, updateBotStatusUI, setupAutostakerListeners } from './src/app/autostakerPanel.js';
 import { setupInstallButtons, updateInstallButtons } from './src/app/install.js';
 
+// After a deploy, a page opened before it asks for chunks the new build no longer has: reload once to get the new
+// build. Not again within 10 s (nor without session storage), so a chunk that keeps failing still shows its error
+window.addEventListener('vite:preloadError', () => {
+    try {
+        if (Date.now() - Number(sessionStorage.getItem('chunkReload') || 0) < 10000) return;
+        sessionStorage.setItem('chunkReload', String(Date.now()));
+    } catch {
+        return;
+    }
+    location.reload();
+});
+
 // The mouse wheel over a focused number input changes its value in most browsers: blur it so the
 // wheel scrolls the page / modal instead
 document.addEventListener('wheel', (e) => {
