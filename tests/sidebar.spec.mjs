@@ -38,9 +38,11 @@ test('tablets have the compact sidebar, with the tooltips and no toggle', async 
     await expect(page.locator('#sidebar-tooltip')).toHaveText('Swap');
 });
 
+const barLabels = (page) => page.locator('#bottom-nav .bottom-nav-item:visible > span:last-child');
+
 test('phones have the bottom bar, with the other pages under More', async ({ page }) => {
     await page.setViewportSize({ width: 320, height: 700 });
-    await expect(page.locator('#bottom-nav .bottom-nav-item > span:last-child')).toHaveText(['Operator', 'Delegator', 'Overview', 'Streams', 'Swap', 'More']);
+    await expect(barLabels(page)).toHaveText(['Operator', 'Delegator', 'Overview', 'Streams', 'Swap', 'More']);
     // The six fit the narrowest phones
     expect(await page.locator('#bottom-nav > div').evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
     await page.click('#bottom-nav-more');
@@ -50,4 +52,18 @@ test('phones have the bottom bar, with the other pages under More', async ({ pag
     await expect(menu).not.toContainText('Swap');
     await page.click('#bottom-nav-autostaker');
     await expect(menu).toBeHidden();
+});
+
+test('a saved profile takes its list\'s place in the bar, and the list moves to More', async ({ page }) => {
+    const id = '0x1111111111111111111111111111111111111111';
+    await page.evaluate((id) => localStorage.setItem('userOperatorProfile', JSON.stringify({ id, name: 'My Node' })), id);
+    await page.setViewportSize({ width: 320, height: 700 });
+    await openApp(page, '/');
+    await expect(barLabels(page)).toHaveText(['My Node', 'Delegator', 'Overview', 'Streams', 'Swap', 'More']);
+    await page.click('#bottom-nav-more');
+    await expect(page.locator('#more-nav-operators')).toBeVisible();
+    await expect(page.locator('#more-nav-delegators')).toBeHidden();
+    await page.click('#bottom-nav-more');
+    await page.click('#mobile-operator-profile-link');
+    await expect(page).toHaveURL(new RegExp(`/operator/${id}$`));
 });

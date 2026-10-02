@@ -131,6 +131,17 @@ export function renderProfileShortcut() {
             mobileDelegatorLink.classList.remove('flex');
         }
     }
+
+    // Mobile bar: a saved profile takes the place of its list, which moves to the More menu
+    const show = (id, shown) => {
+        const el = document.getElementById(id);
+        el?.classList.toggle('hidden', !shown);
+        el?.classList.toggle('flex', shown);
+    };
+    show('bottom-nav-operators', !operatorProfile);
+    show('more-nav-operators', !!operatorProfile);
+    show('bottom-nav-delegators', !delegatorProfile);
+    show('more-nav-delegators', !!delegatorProfile);
 }
 
 /**

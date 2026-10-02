@@ -2,15 +2,25 @@
 <nav id="bottom-nav" class="hidden fixed bottom-0 left-0 right-0 z-40 bg-[#1A1A1A]/95 backdrop-blur-md border-t border-[#2a2a2a] safe-area-bottom">
     <div class="flex justify-around items-center h-16 px-2">
         <!-- Operator -->
-        <a href="/operators" data-nav="operators" class="bottom-nav-item flex flex-col items-center justify-center gap-1 px-1 py-2 min-w-[48px] text-gray-400 transition-colors">
+        <a id="bottom-nav-operators" href="/operators" data-nav="operators" class="bottom-nav-item flex flex-col items-center justify-center gap-1 px-1 py-2 min-w-[48px] text-gray-400 transition-colors">
             <span aria-hidden="true" class="icon-mask w-6 h-6" style="--icon: url(/assets/operator_icon.png)"></span>
             <span class="text-[10px] font-medium">Operator</span>
         </a>
+        <!-- The saved operator profile takes the Operators place, which moves to More -->
+        <a id="mobile-operator-profile-link" href="/operators" data-nav="operators" class="bottom-nav-item hidden flex-col items-center justify-center gap-1 px-1 py-2 min-w-[48px] text-gray-400 transition-colors">
+            <img id="mobile-operator-profile-avatar" src="" alt="" class="w-6 h-6 rounded-full border border-blue-500/50 object-cover">
+            <span id="mobile-operator-profile-name" class="text-[10px] font-medium max-w-[56px] truncate"></span>
+        </a>
 
         <!-- Delegator -->
-        <a href="/delegators" data-nav="delegators" class="bottom-nav-item flex flex-col items-center justify-center gap-1 px-1 py-2 min-w-[48px] text-gray-400 transition-colors">
+        <a id="bottom-nav-delegators" href="/delegators" data-nav="delegators" class="bottom-nav-item flex flex-col items-center justify-center gap-1 px-1 py-2 min-w-[48px] text-gray-400 transition-colors">
             <span aria-hidden="true" class="icon-mask w-6 h-6" style="--icon: url(/assets/delegator_icon.png)"></span>
             <span class="text-[10px] font-medium">Delegator</span>
+        </a>
+        <!-- The saved delegator profile takes the Delegators place, which moves to More -->
+        <a id="mobile-delegator-profile-link" href="/delegators" data-nav="delegators" class="bottom-nav-item hidden flex-col items-center justify-center gap-1 px-1 py-2 min-w-[48px] text-gray-400 transition-colors">
+            <img id="mobile-delegator-profile-avatar" src="" alt="" class="w-6 h-6 rounded-full border border-purple-500/50 object-cover">
+            <span id="mobile-delegator-profile-name" class="text-[10px] font-medium max-w-[56px] truncate"></span>
         </a>
 
         <!-- Overview -->
@@ -44,25 +54,17 @@
 
             <!-- More Dropdown Menu -->
             <div id="bottom-nav-more-menu" class="hidden absolute bottom-full right-0 mb-2 w-48 bg-[#1E1E1E] border border-[#333] rounded-lg shadow-xl overflow-hidden">
-                <!-- Operator Profile (hidden by default) -->
-                <a id="mobile-operator-profile-link" href="#" class="hidden items-center gap-3 px-4 py-2.5 text-gray-300 hover:bg-[#2a2a2a] transition-colors">
-                    <img id="mobile-operator-profile-avatar" src="" alt="" class="w-8 h-8 rounded-full border border-blue-500/50 object-cover">
-                    <div class="flex-1 min-w-0">
-                        <span class="text-[8px] font-semibold text-blue-400 uppercase tracking-wider">Operator</span>
-                        <p id="mobile-operator-profile-name" class="text-xs font-medium text-white truncate"></p>
-                    </div>
-                </a>
-
-                <!-- Delegator Profile (hidden by default) -->
-                <a id="mobile-delegator-profile-link" href="#" class="hidden items-center gap-3 px-4 py-2.5 text-gray-300 hover:bg-[#2a2a2a] transition-colors border-b border-[#333]">
-                    <img id="mobile-delegator-profile-avatar" src="" alt="" class="w-8 h-8 rounded-full border border-purple-500/50 object-cover">
-                    <div class="flex-1 min-w-0">
-                        <span class="text-[8px] font-semibold text-purple-400 uppercase tracking-wider">Delegator</span>
-                        <p id="mobile-delegator-profile-name" class="text-xs font-medium text-white truncate"></p>
-                    </div>
-                </a>
-
                 <div class="px-4 pt-3 pb-1 text-[10px] font-semibold text-gray-500 uppercase tracking-widest">Explore</div>
+                <!-- Operators (when a saved profile has its place in the bar) -->
+                <a id="more-nav-operators" href="/operators" data-nav="operators" class="hidden items-center gap-3 px-4 py-3 text-gray-300 hover:bg-[#2a2a2a] transition-colors">
+                    <span aria-hidden="true" class="icon-mask w-6 h-6" style="--icon: url(/assets/operator_icon.png)"></span>
+                    <span class="text-sm font-medium">Operators</span>
+                </a>
+                <!-- Delegators (when a saved profile has its place in the bar) -->
+                <a id="more-nav-delegators" href="/delegators" data-nav="delegators" class="hidden items-center gap-3 px-4 py-3 text-gray-300 hover:bg-[#2a2a2a] transition-colors">
+                    <span aria-hidden="true" class="icon-mask w-6 h-6" style="--icon: url(/assets/delegator_icon.png)"></span>
+                    <span class="text-sm font-medium">Delegators</span>
+                </a>
                 <!-- Governance -->
                 <a href="/governance" data-nav="governance" class="flex items-center gap-3 px-4 py-3 text-gray-300 hover:bg-[#2a2a2a] transition-colors">
                     <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">

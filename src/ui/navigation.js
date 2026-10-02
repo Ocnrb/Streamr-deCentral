@@ -749,30 +749,6 @@ class NavigationController {
                 // Let the router handle navigation via href
             });
         }
-        
-        // Mobile profile link - close menu and navigate
-        const mobileProfileLink = document.getElementById('mobile-profile-link');
-        if (mobileProfileLink) {
-            mobileProfileLink.addEventListener('click', () => {
-                // Close the more menu
-                const moreMenu = document.getElementById('bottom-nav-more-menu');
-                const overlay = document.getElementById('bottom-nav-overlay');
-                if (moreMenu) moreMenu.classList.add('hidden');
-                if (overlay) overlay.classList.add('hidden');
-            });
-        }
-        
-        // Mobile delegator profile link - close menu and navigate
-        const mobileDelegatorProfileLink = document.getElementById('mobile-delegator-profile-link');
-        if (mobileDelegatorProfileLink) {
-            mobileDelegatorProfileLink.addEventListener('click', () => {
-                // Close the more menu
-                const moreMenu = document.getElementById('bottom-nav-more-menu');
-                const overlay = document.getElementById('bottom-nav-overlay');
-                if (moreMenu) moreMenu.classList.add('hidden');
-                if (overlay) overlay.classList.add('hidden');
-            });
-        }
     }
 }
 
