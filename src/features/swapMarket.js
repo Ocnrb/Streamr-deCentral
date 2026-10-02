@@ -55,7 +55,7 @@ function makePool(desc) {
 }
 
 // The main pool: the chart, the price and the change follow it
-const MAIN = makePool({ chain: 137, kind: 'v4', venue: 'v4', id: POOL_ID, dataIs0: DATA_IS_CURRENCY0, counterSymbol: 'USDC', counterDecimals: 6, label: 'Uniswap v4 0.3%' });
+const MAIN = makePool({ chain: 137, kind: 'v4', venue: 'v4', id: POOL_ID, fee: 3000, tickSpacing: 60, dataIs0: DATA_IS_CURRENCY0, counterSymbol: 'USDC', counterDecimals: 6, label: 'Uniswap v4 0.3%' });
 
 const TRADE_DAYS = 7;
 const MAX_LOGS = 1000;               // the explorer returns at most 1000 logs (the oldest first)
@@ -383,6 +383,7 @@ function addPools(descs) {
         added = true;
     }
     if (!added) return;
+    notifyChange();
     if (state.active) loadDays(); else state.daysAt = 0;
     if (state.active && state.loaded) refresh();
 }
@@ -456,7 +457,7 @@ const ETH_IFACES = {
 };
 
 let ethProvider = null;
-function getEthProvider() {
+export function getEthProvider() {
     if (!ethProvider) ethProvider = new Services.FailoverRpcProvider(ETHEREUM_RPC_URLS, 1, 'ethereum_rpc_index');
     return ethProvider;
 }
@@ -534,18 +535,18 @@ async function discoverEthereumPools() {
         const id = ethers.utils.keccak256(ethers.utils.defaultAbiCoder.encode(['address', 'address', 'uint24', 'int24', 'address'], [currency0, currency1, fee, tickSpacing, zero]));
         const slot = ethers.utils.keccak256(ethers.utils.defaultAbiCoder.encode(['bytes32', 'uint256'], [id, ETH.v4PoolsSlot]));
         const liquiditySlot = ethers.utils.hexZeroPad(ethers.BigNumber.from(slot).add(3).toHexString(), 32);
-        return { id, fee, c, dataIs0: currency0 === ETH.DATA, liquiditySlot };
+        return { id, fee, tickSpacing, c, dataIs0: currency0 === ETH.DATA, liquiditySlot };
     }));
     const liquidity = await ethMulticall(v4.map(p => ({ target: CHAINS[1].poolManager, iface: ETH_IFACES.v4Manager, fn: 'extsload', args: [p.liquiditySlot] })));
     v4.forEach((p, i) => {
         const word = liquidity[i]?.[0];
         if (word && !ethers.BigNumber.from(word).mask(128).isZero()) {
-            pools.push({ chain: 1, kind: 'v4', venue: 'v4', id: p.id, counter: p.c, label: `Uniswap v4 ${p.fee / 10000}%`, v4DataIs0: p.dataIs0, subgraph: 'ethUniV4' });
+            pools.push({ chain: 1, kind: 'v4', venue: 'v4', id: p.id, fee: p.fee, tickSpacing: p.tickSpacing, counter: p.c, label: `Uniswap v4 ${p.fee / 10000}%`, v4DataIs0: p.dataIs0, subgraph: 'ethUniV4' });
         }
     });
     return pools.map(p => ({
         chain: 1, kind: p.kind, venue: p.venue, subgraph: p.subgraph || null, label: p.label,
-        ...(p.kind === 'v4' ? { id: p.id, dataIs0: p.v4DataIs0 } : { address: p.address, dataIs0: ETH.DATA < p.counter.address.toLowerCase() }),
+        ...(p.kind === 'v4' ? { id: p.id, fee: p.fee, tickSpacing: p.tickSpacing, dataIs0: p.v4DataIs0 } : { address: p.address, dataIs0: ETH.DATA < p.counter.address.toLowerCase() }),
         counterSymbol: p.counter.symbol, counterDecimals: p.counter.decimals
     }));
 }
@@ -1142,6 +1143,7 @@ function setupListeners() {
         state.shown = TRADES_PAGE;
         renderFilter();
         renderTrades();
+        notifyChange();
     });
     $('swap-chart-range')?.addEventListener('click', (e) => {
         const btn = e.target.closest('button[data-range]');
@@ -1154,7 +1156,22 @@ function setupListeners() {
     Services.onHistoricalDataLoaded(setHistory);
 }
 
+// The liquidity book follows the pools and the chain filter
+const changeListeners = new Set();
+function notifyChange() {
+    for (const listener of changeListeners) listener();
+}
+
 export const SwapMarket = {
+    /** The DATA pools of the trades (Polygon and Ethereum) */
+    pools: () => state.pools,
+    /** The chain filter: 'all', 'polygon' or 'ethereum' */
+    filter: () => state.filter,
+    /** Calls `fn` when a pool is added or the chain filter changes */
+    onChange(fn) {
+        changeListeners.add(fn);
+    },
+
     show() {
         setupListeners();
         state.active = true;
