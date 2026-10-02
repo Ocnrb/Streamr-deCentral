@@ -6,6 +6,8 @@ let stats;
 test.beforeEach(async ({ page }) => {
     stats = await mockNetwork(page.context());
     await openApp(page, '/');
+    // The page's module is loaded after its view shows: a click before it is lost
+    await expect(page.locator('#overview-range [data-range="1y"]')).toHaveClass(/bg-blue-800/, { timeout: 30000 });
 });
 test.afterEach(() => {
     expect(stats.invalidQueries, 'every subgraph query is valid for its schema').toEqual([]);
@@ -44,17 +46,21 @@ test('charts end on one point for today', async ({ page }) => {
 });
 
 test('the Y axis fits the line and never goes below 0', async ({ page }) => {
-    // DATA slashed starts from 0 in All, Streams grows slowly: a fitted axis, no negative values
+    // DATA slashed in All, Streams growing slowly in 30D: a fitted axis, no negative values
     await tile(page, 'slashed').click();
     await page.click('#overview-range [data-range="all"]');
     const axis = () => page.evaluate(() => {
         const chart = window.Chart?.getChart(document.querySelector('#overview-chart canvas'));
-        return chart?.data.datasets[0].data.length > 10 ? { min: chart.scales.y.min, max: chart.scales.y.max } : null;
+        const values = chart?.data.datasets[0].data.map(p => p.y) || [];
+        return values.length > 10 ? { min: chart.scales.y.min, max: chart.scales.y.max, low: Math.min(...values), high: Math.max(...values) } : null;
     });
-    await expect.poll(async () => (await axis())?.min).toBe(0);
+    await expect.poll(async () => (await axis())?.min ?? -1).toBeGreaterThanOrEqual(0);
     await tile(page, 'streams').click();
     await page.click('#overview-range [data-range="30d"]');
     await expect.poll(async () => (await axis())?.min ?? -1).toBeGreaterThan(0);
+    // The line takes the whole height: 1% of room above and below
+    const { min, max, low, high } = await axis();
+    expect((max - min) / (high - low)).toBeLessThan(1.03);
 });
 
 test('a list shows 12 rows with its +, as tall as the two lists next to it', async ({ page }) => {
@@ -98,6 +104,19 @@ test('the coordination streams are left once the nodes are counted', async ({ pa
     await expect.poll(subscriptions).toBe(0);
 });
 
+test('top operators show their nodes, heard on their coordination streams', async ({ page }) => {
+    const rows = page.locator('#overview-operators a');
+    await expect(tile(page, 'operators')).toContainText('451 nodes', { timeout: 30000 });
+    // Their coordination streams were among the first listened to (40 at once)
+    const ids = await rows.evaluateAll(links => links.map(a => a.getAttribute('href').split('/').pop()));
+    const first = await page.evaluate(() => window.__subscribed.slice(0, 40));
+    expect(ids.filter(id => !first.includes(id))).toEqual([]);
+    await expect(rows.nth(0)).toContainText('Operator 298');
+    await expect(rows.nth(0)).toContainText('17 delegators · 1 node');
+    await expect(rows.nth(1)).toContainText('Operator 295');
+    await expect(rows.nth(1)).toContainText('14 delegators · 2 nodes');
+});
+
 test('a 30-day chart starts from the records just before it', async ({ page }) => {
     await page.click('#overview-range [data-range="30d"]');
     // Total staked is 96.0M now and grows slowly: a sponsorship emptied before the range adds nothing
@@ -125,6 +144,7 @@ test('operator and delegator activity', async ({ page }) => {
     await page.click('#overview-activity-tabs [data-tab="delegations"]');
     await expect(rows).toHaveCount(3);
     await expect(page.locator('#overview-activity')).not.toContainText('999');
+    await expect(page.locator('#overview-activity')).not.toContainText('4.3K');
     // Earnings: the total, its split in the tooltip (the owner's own stake apart from the delegators)
     await page.click('#overview-activity-tabs [data-tab="earnings"]');
     await expect(rows).toHaveCount(2);

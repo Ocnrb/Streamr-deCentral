@@ -70,7 +70,7 @@ const DELEGATION_MAX_TXS = 60;                // transactions checked per read
 const EXPLORER_BUSY = /rate limit|max calls|too many|timeout|temporarily|busy/i;
 
 // Nodes, as on the Network Map: each operator's nodes send heartbeats to its coordination stream
-const NODES_CACHE_KEY = 'overview.nodes.v1';
+const NODES_CACHE_KEY = 'overview.nodes.v2';
 const NODE_TTL_MS = 60 * 60 * 1000;          // a node not heard from in an hour is not counted
 const NODE_LISTEN_MS = 45 * 1000;            // per operator, at most
 const NODE_SUBSCRIPTIONS = 40;               // operators listened to at once
@@ -146,6 +146,8 @@ const state = {
     totals: null,
     totalsPromise: null,
     nodes: new Map(),           // node id -> last heartbeat (ms)
+    operatorNodes: new Map(),   // operator id -> Map(node id -> last heartbeat on its coordination stream)
+    operatorsListened: new Set(),   // operators whose coordination stream was listened to until the end
     nodesScan: null,            // { stopped, listeners: Set(stop) } while the operators are listened to
     streams: null,              // { byDay: Map(day -> count), total }
     streamsLoading: false,
@@ -676,10 +678,16 @@ async function fetchDelegationEvents() {
     let events = [];
     for (const days of DELEGATION_WINDOWS_DAYS) {
         const from = Math.max(0, latest - days * POLYGON_BLOCKS_PER_DAY);
-        const [delegated, undelegated] = await Promise.all([
+        const [delegated, undelegated, profits] = await Promise.all([
             newestLogs(DELEGATION_TOPICS.delegate, from, latest),
-            newestLogs(DELEGATION_TOPICS.undelegate, from, latest)
+            newestLogs(DELEGATION_TOPICS.undelegate, from, latest),
+            newestLogs(PROFIT_TOPIC, from, latest)
         ]);
+        // Earnings withdrawn (most of these logs: the owner's cut re-delegated): known without reading their receipts
+        for (const log of profits) {
+            const tx = log.transactionHash.toLowerCase();
+            if (operators.has(log.address.toLowerCase()) && !state.delegationTxs.has(tx)) state.delegationTxs.set(tx, false);
+        }
         const candidates = [...delegated.map(log => ({ log, type: 'delegate' })), ...undelegated.map(log => ({ log, type: 'undelegate' }))]
             // Only the operators' own events (other contracts can share the signature)
             .filter(({ log }) => operators.has(log.address.toLowerCase()))
@@ -742,13 +750,17 @@ async function loadSlashing() {
 function readNodesCache() {
     try {
         const cached = JSON.parse(localStorage.getItem(NODES_CACHE_KEY) || 'null');
-        if (Array.isArray(cached)) state.nodes = new Map(cached);
+        if (Array.isArray(cached?.nodes)) state.nodes = new Map(cached.nodes);
+        if (Array.isArray(cached?.operators)) state.operatorNodes = new Map(cached.operators.map(([id, nodes]) => [id, new Map(nodes)]));
     } catch (e) { /* no cache */ }
 }
 
 function writeNodesCache() {
     try {
-        localStorage.setItem(NODES_CACHE_KEY, JSON.stringify([...state.nodes.entries()]));
+        localStorage.setItem(NODES_CACHE_KEY, JSON.stringify({
+            nodes: [...state.nodes],
+            operators: [...state.operatorNodes].map(([id, nodes]) => [id, [...nodes]])
+        }));
     } catch (e) { /* storage full or blocked: heard again next time */ }
 }
 
@@ -757,6 +769,13 @@ function nodesCount() {
     const since = Date.now() - NODE_TTL_MS;
     for (const [id, seen] of state.nodes) if (seen < since) state.nodes.delete(id);
     return state.nodes.size || null;
+}
+
+/** An operator's nodes heard in the last hour (null while its coordination stream is still to be listened to) */
+function operatorNodesCount(operatorId) {
+    const since = Date.now() - NODE_TTL_MS;
+    const count = [...(state.operatorNodes.get(operatorId)?.values() || [])].filter(seen => seen >= since).length;
+    return count || state.operatorsListened.has(operatorId) ? count : null;
 }
 
 /** Listens to one operator's coordination stream until each of its nodes sent two heartbeats (at most 45 s) */
@@ -772,13 +791,22 @@ async function listenOperator(client, operatorId, scan) {
             const nodeId = message?.msgType === 'heartbeat' ? message?.peerDescriptor?.nodeId : null;
             if (!nodeId) return;
             const known = state.nodes.has(nodeId) && Date.now() - state.nodes.get(nodeId) < NODE_TTL_MS;
+            const mine = state.operatorNodes.get(operatorId) || new Map();
+            const knownHere = mine.has(nodeId) && Date.now() - mine.get(nodeId) < NODE_TTL_MS;
             state.nodes.set(nodeId, Date.now());
+            mine.set(nodeId, Date.now());
+            state.operatorNodes.set(operatorId, mine);
             scan.heard.add(nodeId);
             heartbeats.set(nodeId, (heartbeats.get(nodeId) || 0) + 1);
             if (!known && state.active) renderStats();
+            if (!knownHere && state.active && state.topOperators.some(op => op.id === operatorId)) renderOperators();
             if ([...heartbeats.values()].every(count => count >= 2)) finish();
         });
         if (!scan.stopped) await done;
+        if (!scan.stopped && !state.operatorsListened.has(operatorId)) {
+            state.operatorsListened.add(operatorId);
+            if (state.active && state.topOperators.some(op => op.id === operatorId)) renderOperators();
+        }
     } catch (e) {
         logger.warn(`Overview: ${operatorId} coordination stream not heard`, e);
     } finally {
@@ -798,21 +826,28 @@ async function scanNodes() {
     if (state.active) renderStats();   // the refresh arrow turns
     try {
         if (!state.totals) await state.totalsPromise;
+        // The largest first, and the ones in Top operators before any other (that list can come in later)
         const queue = state.allOperators
             .filter(op => BigInt(op.totalStakeInSponsorshipsWei || '0') > 0n)
+            .sort((a, b) => weiToNumber(b.valueWithoutEarnings) - weiToNumber(a.valueWithoutEarnings))
             .map(op => op.id);
+        const next = () => {
+            const top = queue.findIndex(id => state.topOperators.some(op => op.id === id));
+            return queue.splice(top < 0 ? 0 : top, 1)[0];
+        };
         await Promise.all(Array.from({ length: NODE_SUBSCRIPTIONS }, async () => {
-            while (queue.length && !scan.stopped && state.active) await listenOperator(client, queue.shift(), scan);
+            while (queue.length && !scan.stopped && state.active) await listenOperator(client, next(), scan);
         }));
         // A whole round: the nodes it did not hear are gone
         if (!scan.stopped && state.active && scan.heard.size) {
             for (const id of [...state.nodes.keys()]) if (!scan.heard.has(id)) state.nodes.delete(id);
+            for (const nodes of state.operatorNodes.values()) for (const id of [...nodes.keys()]) if (!scan.heard.has(id)) nodes.delete(id);
         }
     } finally {
         if (state.nodesScan === scan) state.nodesScan = null;
         writeNodesCache();
     }
-    if (state.active) renderStats();
+    if (state.active) { renderStats(); renderOperators(); }
 }
 
 function stopNodesScan() {
@@ -1212,9 +1247,9 @@ function valueBounds(points) {
     const values = points.map(p => p.y);
     const low = Math.min(...values);
     const high = Math.max(...values);
-    const room = (high - low) * 0.05 || Math.abs(high) * 0.05 || 1;
-    // Suggested: Chart.js rounds them to its steps (from a value of 0 or more, it never goes below 0)
-    return { beginAtZero: false, suggestedMin: Math.max(0, low - room), suggestedMax: high + room };
+    const room = (high - low) * 0.01 || Math.abs(high) * 0.01 || 1;
+    // Fixed, not suggested: Chart.js would round them out to its steps, leaving a lot of space (never below 0)
+    return { beginAtZero: false, min: Math.max(0, low - room), max: high + room };
 }
 
 function chartMessage(container, text, spinner = false) {
@@ -1330,7 +1365,7 @@ function renderChart() {
                 y: {
                     position: 'right',
                     ...yBounds,
-                    ticks: { color: '#9ca3af', font, maxTicksLimit: 5, callback: axisFormat },
+                    ticks: { color: '#9ca3af', font, maxTicksLimit: 5, includeBounds: false, callback: axisFormat },   // round values only
                     grid: { color: '#2a2a2a', drawBorder: false }
                 }
             }
@@ -1404,13 +1439,14 @@ function renderOperators() {
     if (!el) return;
     el.innerHTML = listContent('operators', state.topOperators, (op, i) => {
         const value = weiToNumber(op.valueWithoutEarnings);
+        const nodes = operatorNodesCount(op.id);
         return `
             <a href="/operator/${op.id}" class="${ROW}">
                 <span class="w-4 text-xs font-semibold text-gray-400 text-right">${i + 1}</span>
                 ${avatar(op)}
                 <div class="min-w-0 flex-1">
                     <p class="text-sm font-semibold text-white truncate">${escapeHtml(operatorName(op))}</p>
-                    <p class="text-xs text-gray-400">${full(op.delegatorCount || 0)} delegators</p>
+                    <p class="text-xs text-gray-400 truncate">${full(Math.max(0, (op.delegatorCount || 0) - 1))} delegators${nodes === null ? ' · ... nodes' : ` · ${nodes} ${nodes === 1 ? 'node' : 'nodes'}`}</p>
                 </div>
                 <div class="text-right whitespace-nowrap">
                     <p class="text-sm font-semibold text-white" data-tooltip-content="${usdLine(value)}${full(value)} DATA">${compact(value)} DATA</p>

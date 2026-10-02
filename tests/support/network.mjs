@@ -122,8 +122,9 @@ function buildLogs(T) {
         storageAdded: id('Added(string,address)'), storageRemoved: id('Removed(string,address)'), newSponsorship: id('NewSponsorship(address,string,string,address[],uint256[],address)')
     };
     const byTopic = {
-        // Delegations, one from another contract, and two inside staking transactions (txs 5 and 6, see the receipts)
-        [TOPICS.delegated]: [log(op(1), [TOPICS.delegated, pad(T.operators[1].owner)], uint(50000), 30, 1, 1), log(op(4), [TOPICS.delegated, pad(hex(0xe2))], uint(12345), 5, 2, 2),
+        // Delegations, one from another contract, two inside staking transactions (txs 5 and 6, see the receipts)
+        // and the owner's cut re-delegated when earnings are withdrawn (tx 102, with its Profit log)
+        [TOPICS.delegated]: [log(op(9), [TOPICS.delegated, pad(T.operators[9].owner)], uint(4321), 10, 3, 102), log(op(1), [TOPICS.delegated, pad(T.operators[1].owner)], uint(50000), 30, 1, 1), log(op(4), [TOPICS.delegated, pad(hex(0xe2))], uint(12345), 5, 2, 2),
             log(hex(0x999), [TOPICS.delegated, pad(hex(0xe9))], uint(7777777), 1, 3, 3), log(op(6), [TOPICS.delegated, pad(T.operators[6].owner)], uint(999), 2, 5, 5)],
         [TOPICS.undelegated]: [log(op(3), [TOPICS.undelegated, pad(hex(0xe3))], uint(2000), 90, 4, 4), log(op(7), [TOPICS.undelegated, pad(hex(0xe7))], uint(888), 3, 6, 6)],
         // Profit(valueIncrease, indexed operatorsCut, indexed protocolFee): one from another contract, one of zero
@@ -293,6 +294,7 @@ export async function mockNetwork(context) {
                 let timer = null;
                 if (m) {
                     window.__subscriptions = (window.__subscriptions || 0) + 1;
+                    (window.__subscribed = window.__subscribed || []).push(id.split('/')[0]);   // in order
                     const i = parseInt(m[1], 16) - 0xa0000;
                     const nodes = i < 300 ? [...Array.from({ length: (i % 2) + 1 }, (_, k) => `n${i}-${k}`), ...(i < 10 ? ['shared'] : [])] : [];
                     if (nodes.length) timer = setInterval(() => nodes.forEach(nodeId => onMessage({ msgType: 'heartbeat', peerDescriptor: { nodeId } }, {})), 150);
