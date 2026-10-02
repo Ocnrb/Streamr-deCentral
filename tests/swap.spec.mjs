@@ -1,5 +1,6 @@
 // Swap page: the market trades of the DATA pools
 import { test, expect } from '@playwright/test';
+import fs from 'node:fs';
 import { ethers } from 'ethers';
 import { mockNetwork, openApp } from './support/network.mjs';
 
@@ -59,4 +60,25 @@ test('the trades cover the whole 7 days, at the measured block time of the chain
     await expect(page.locator('#swap-trades tr')).toHaveCount(4, { timeout: 30000 });
     const [from, to] = ranges[0];
     expect(to - from).toBe(7 * 86400 / 1.5);
+});
+
+test('the all-time volume values the days the DEX subgraph has no USD for at the day\'s DATA price', async ({ page }) => {
+    // The main pool's days: 1000 recent ones of $1 (a full page), then an old one without USD: 1 000 000 DATA
+    const today = Math.floor(Date.now() / 86400000) * 86400;
+    const old = Date.UTC(2024, 5, 1) / 1000;
+    await page.route('https://gateway.thegraph.com/**', (route) => {
+        const query = route.request().postDataJSON()?.query || '';
+        if (!query.includes('poolDayDatas')) return route.fallback();
+        const days = query.includes('date_lt')
+            ? [{ date: old, volumeUSD: '0', txCount: '7', volumeToken0: '1000000', volumeToken1: '30000' }]
+            : Array.from({ length: 1000 }, (_, i) => ({ date: today - i * 86400, volumeUSD: '1', txCount: '1', volumeToken0: '4000', volumeToken1: '1' }));
+        return route.fulfill({ json: { data: Object.fromEntries([...query.matchAll(/(p\d+):/g)].map(([, alias], i) => [alias, i ? [] : days])) } });
+    });
+    const price = Number(fs.readFileSync(new URL('../public/data/DATAHistoricalPrice.csv', import.meta.url), 'utf8').split('\n').find(line => line.startsWith('01/06/2024,')).split(',')[1]);
+    await openApp(page, '/swap');
+    await page.click('#swap-chart-range [data-range="All"]');
+    const stats = page.locator('#swap-market-stats');
+    await expect(stats).toContainText('1 007 trades', { timeout: 30000 });
+    const volume = Number((await stats.textContent()).match(/volume \$([\d ]+)/)[1].replace(/ /g, ''));
+    expect(Math.abs(volume - (1000 + 1e6 * price))).toBeLessThan(2);
 });

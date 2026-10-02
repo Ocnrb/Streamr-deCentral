@@ -87,7 +87,7 @@ const state = {
     ownSwaps: new Map(),   // this wallet's swaps: txHash -> { pay, receive } symbols of the whole swap
     shown: TRADES_PAGE,    // rows of the trades list
     loadingOlder: false,
-    days: null,            // the pools' days from their DEX subgraphs, added up: { date, volume, txCount }, oldest first
+    days: null,            // the pools' days from their DEX subgraphs, added up: { date, volume, unpricedData, txCount }, oldest first
     daysAt: 0,
     failures: 0,           // failed loads in a row (before the first success: asked again sooner)
     chart: null,
@@ -563,21 +563,39 @@ function loadEthereumPools() {
 // Daily volume (Uniswap v4 subgraph)
 // ============================================
 
-/** One DEX subgraph's days for its pools (one query, an alias per pool) */
+const DAYS_PAGE = 1000;   // days per pool and request (The Graph's maximum)
+
+/** One DEX subgraph's days for its pools (an alias per pool), 1000 days at a time back to each pool's first */
 async function fetchDays(subgraph, pools) {
     // Uniswap v2 schema: pairDayDatas by pair address, daily* fields; the others: poolDayDatas by pool
     const v2 = subgraph === 'ethUniV2';
-    const query = `{ ${pools.map((p, i) => (v2
-        ? `p${i}: pairDayDatas(first: 1000, orderBy: date, orderDirection: desc, where: { pairAddress: "${p.address.toLowerCase()}" }) { date volumeUSD: dailyVolumeUSD txCount: dailyTxns }`
-        : `p${i}: poolDayDatas(first: 1000, orderBy: date, orderDirection: desc, where: { pool: "${(p.kind === 'v4' ? p.id : p.address).toLowerCase()}" }) { date volumeUSD txCount }`)).join(' ')} }`;
-    const json = await fetch(getDexSubgraphUrl(subgraph), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query })
-    }).then(r => r.json());
-    const lists = pools.map((p, i) => json?.data?.[`p${i}`]);
-    if (!lists.some(Array.isArray)) throw new Error(json?.errors?.[0]?.message || 'No pool days');
-    return lists.filter(Array.isArray).flat();
+    const fields = v2
+        ? 'date volumeUSD: dailyVolumeUSD txCount: dailyTxns volumeToken0: dailyVolumeToken0 volumeToken1: dailyVolumeToken1'
+        : 'date volumeUSD txCount volumeToken0 volumeToken1';
+    const rows = [];
+    let pending = pools.map(pool => ({ pool, before: null }));
+    for (let round = 0; pending.length && round < 5; round++) {
+        const query = `{ ${pending.map(({ pool, before }, i) => {
+            const where = `${v2 ? 'pairAddress' : 'pool'}: "${(pool.kind === 'v4' ? pool.id : pool.address).toLowerCase()}"${before ? `, date_lt: ${before}` : ''}`;
+            return `p${i}: ${v2 ? 'pairDayDatas' : 'poolDayDatas'}(first: ${DAYS_PAGE}, orderBy: date, orderDirection: desc, where: { ${where} }) { ${fields} }`;
+        }).join(' ')} }`;
+        const json = await fetch(getDexSubgraphUrl(subgraph), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ query })
+        }).then(r => r.json());
+        const lists = pending.map((p, i) => json?.data?.[`p${i}`]);
+        if (!round && !lists.some(Array.isArray)) throw new Error(json?.errors?.[0]?.message || 'No pool days');
+        const next = [];
+        pending.forEach(({ pool }, i) => {
+            const list = lists[i];
+            if (!Array.isArray(list)) return;
+            rows.push(...list.map(d => ({ ...d, dataIs0: pool.dataIs0 })));
+            if (list.length === DAYS_PAGE) next.push({ pool, before: list[list.length - 1].date });
+        });
+        pending = next;
+    }
+    return rows;
 }
 
 /** Daily volume and transactions of every pool whose DEX has a subgraph here, added up by day */
@@ -597,8 +615,11 @@ async function loadDays() {
     const byDate = new Map();
     for (const d of rows) {
         const date = Number(d.date) * 1000;
-        const day = byDate.get(date) || { date, volume: 0, txCount: 0 };
-        day.volume += Number(d.volumeUSD) || 0;
+        const day = byDate.get(date) || { date, volume: 0, unpricedData: 0, txCount: 0 };
+        // A day the subgraph has no USD value for (it couldn't price DATA then): its DATA, valued at the day's price
+        const usd = Number(d.volumeUSD) || 0;
+        if (usd > 0) day.volume += usd;
+        else day.unpricedData += Number(d.dataIs0 ? d.volumeToken0 : d.volumeToken1) || 0;
         day.txCount += Number(d.txCount) || 0;
         byDate.set(date, day);
     }
@@ -618,7 +639,14 @@ function rangeStats() {
     if (state.days) {
         const firstDay = start === -Infinity ? -Infinity : Math.floor(start / DAY) * DAY;
         const days = state.days.filter(d => d.date >= firstDay);
-        return { volume: days.reduce((sum, d) => sum + d.volume, 0), count: days.reduce((sum, d) => sum + d.txCount, 0) };
+        // The DATA/USD history's price of each day (its last one before the day ends); both lists are oldest first
+        let i = 0;
+        const volume = days.reduce((sum, d) => {
+            while (i + 1 < state.history.length && state.history[i + 1].t < d.date + DAY) i++;
+            const price = state.history[i]?.t < d.date + DAY ? state.history[i].p : 0;   // none before the history starts
+            return sum + d.volume + d.unpricedData * price;
+        }, 0);
+        return { volume, count: days.reduce((sum, d) => sum + d.txCount, 0) };
     }
     return null;
 }
