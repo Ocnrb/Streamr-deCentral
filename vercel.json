@@ -3,27 +3,7 @@
   "outputDirectory": "dist",
   "rewrites": [
     {
-      "source": "/assets/(.*)",
-      "destination": "/assets/$1"
-    },
-    {
-      "source": "/libs/(.*)",
-      "destination": "/libs/$1"
-    },
-    {
-      "source": "/favicon/(.*)",
-      "destination": "/favicon/$1"
-    },
-    {
-      "source": "/data/(.*)",
-      "destination": "/data/$1"
-    },
-    {
-      "source": "/workers/(.*)",
-      "destination": "/workers/$1"
-    },
-    {
-      "source": "/(.*)",
+      "source": "/((?!assets/|libs/|favicon/|data/|workers/).*)",
       "destination": "/index.html"
     }
   ],
@@ -50,24 +30,6 @@
         {
           "key": "Permissions-Policy",
           "value": "camera=(), microphone=(), geolocation=(), payment=(), usb=()"
-        }
-      ]
-    },
-    {
-      "source": "/libs/(.*)",
-      "headers": [
-        {
-          "key": "Content-Type",
-          "value": "application/javascript; charset=utf-8"
-        }
-      ]
-    },
-    {
-      "source": "/(.*).js",
-      "headers": [
-        {
-          "key": "Content-Type",
-          "value": "application/javascript; charset=utf-8"
         }
       ]
     },
