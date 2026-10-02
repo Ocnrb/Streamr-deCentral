@@ -199,7 +199,9 @@ test('the intro can be closed for good and opened again', async ({ page }) => {
     // Hidden from the first paint on the next visit (set before the app runs)
     await page.reload({ waitUntil: 'commit' });
     await page.waitForSelector('#overview-hero', { state: 'attached' });
-    expect(await page.evaluate(() => getComputedStyle(document.getElementById('overview-hero')).display)).toBe('none');
+    expect(await page.evaluate(() => document.documentElement.classList.contains('hero-closed'))).toBe(true);
+    // The stylesheet hides it (the first paint waits for it; a busy test machine may read the style before it loads)
+    await expect.poll(() => page.evaluate(() => getComputedStyle(document.getElementById('overview-hero')).display)).toBe('none');
     await openApp(page, '/');
     await page.click('#overview-hero-reopen button');
     await expect(hero).toBeVisible();

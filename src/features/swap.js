@@ -1,5 +1,6 @@
 /**
- * Swap: DATA against POL / USDC / USDC.e on Polygon, straight through the DEX contracts (no aggregator API)
+ * Swap: DATA against POL / USDC / USDC.e on Polygon, or ETH / USDC / USDT on Ethereum (Uniswap only there),
+ * straight through the DEX contracts (no aggregator API)
  * - Pools are discovered on-chain (factories of QuickSwap V2, SushiSwap V2, QuickSwap V3 (Algebra) and
  *   Uniswap v3, every fee tier): DATA against WPOL / USDC / USDC.e / USDT / WETH / DAI, and the pools
  *   between those tokens (two-hop routes). All reads go through Multicall3 (one RPC call per batch).
@@ -13,8 +14,9 @@
 import * as Utils from '../core/utils.js';
 import * as UI from '../ui/ui.js';
 import * as Services from '../core/services.js';
-import { DATA_TOKEN_ADDRESS_POLYGON, POLYGONSCAN_NETWORK, getEtherscanApiKey } from '../core/constants.js';
-import { SwapMarket } from './swapMarket.js';
+import { DATA_TOKEN_ADDRESS_POLYGON, DATA_TOKEN_ADDRESS_ETHEREUM, POLYGONSCAN_NETWORK, getEtherscanApiKey } from '../core/constants.js';
+import { getEthereumSigner, restorePolygon } from '../core/ethWallet.js';
+import { SwapMarket, getEthProvider } from './swapMarket.js';
 import { SwapBook } from './swapBook.js';
 import { ethers } from 'ethers';
 
@@ -66,6 +68,22 @@ const V4_TIERS = [[100, 1], [500, 10], [3000, 60], [10000, 200]];
 const V4_POOLS_SLOT = 6;
 const NATIVE = ethers.constants.AddressZero;
 const Q96 = ethers.BigNumber.from(2).pow(96);
+
+// ============================================
+// Contracts (Ethereum): SushiSwap V2 and Uniswap v4 here; Uniswap v3's factory, quoter and router have the Polygon addresses
+// ============================================
+
+const ETH_DATA = DATA_TOKEN_ADDRESS_ETHEREUM;
+const ETH_WETH = '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2';
+const ETH_USDC = '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48';
+const ETH_USDT = '0xdac17f958d2ee523a2206206994597c13d831ec7';
+const ETH_DAI = '0x6b175474e89094c44da98b954eedeac495271d0f';
+const ETH_SUSHI_V2_FACTORY = '0xc0aee478e3658e2610c5f7a4a2e1777ce9e4f2ac';
+const ETH_SUSHI_V2_ROUTER = '0xd9e1ce17f2641f24ae83637ab66a2cca9c378b9f';
+const ETH_V4_POOL_MANAGER = '0x000000000004444c5dc75cb358380d2e3de08a90';
+const ETH_V4_QUOTER = '0x52f0e24d1c21c8a0cb1e5a5dd6198556bd9e1203';
+const ETH_UNIVERSAL_ROUTER = '0x66a9893cc07d91d95644aedd05d03f95e1dba8af';
+const ETH_USD_FEED = '0x5f4ec3df9cbd43714fe2740f5e3616155c5b8419';   // Chainlink ETH/USD
 
 const ERC20_ABI = [
     'function balanceOf(address) view returns (uint256)',
@@ -136,6 +154,8 @@ const ICONS = {
     USDC: '<svg class="w-7 h-7 flex-shrink-0" viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="16" fill="#2775CA"/><path fill="#fff" d="M20.2 18.1c0-2.2-1.3-3-4-3.3-1.9-.3-2.3-.8-2.3-1.7s.7-1.4 1.9-1.4c1.1 0 1.8.4 2.1 1.3.1.2.3.3.4.3h1c.3 0 .5-.2.5-.5v-.1a3.2 3.2 0 0 0-2.8-2.6V8.9c0-.3-.2-.5-.6-.5h-.9c-.3 0-.5.2-.6.5v1.2c-1.9.3-3.1 1.5-3.1 3.1 0 2.1 1.3 2.9 4 3.2 1.8.3 2.3.7 2.3 1.7s-.9 1.7-2.1 1.7c-1.6 0-2.2-.7-2.4-1.6-.1-.2-.3-.4-.5-.4h-1c-.3 0-.5.2-.5.5v.1c.3 1.6 1.3 2.7 3.3 3v1.2c0 .3.2.5.6.5h.9c.3 0 .5-.2.6-.5v-1.2c1.9-.3 3.2-1.6 3.2-3.3z"/><path fill="#fff" d="M12.8 24.6a9 9 0 0 1 0-17.2c.3-.1.5-.4.5-.7V5.8c0-.3-.2-.5-.4-.5h-.2a10.9 10.9 0 0 0 0 21.4c.3.1.5 0 .6-.3v-1.1c0-.3-.2-.6-.5-.7zm6.6-19.3c-.3-.1-.5 0-.6.3v.9c0 .3.2.6.5.7a9 9 0 0 1 0 17.2c-.3.1-.5.4-.5.7v.9c0 .3.2.5.4.5h.2a10.9 10.9 0 0 0 0-21.4z"/></svg>'
 };
 
+ICONS.USDT = '<svg class="w-7 h-7 flex-shrink-0" viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="16" fill="#26A17B"/><path fill="#fff" d="M9 9h14v3.2h-5.4v3c3.3.2 5.8.9 5.8 1.7s-2.5 1.5-5.8 1.7V24h-3.2v-5.4c-3.3-.2-5.8-.9-5.8-1.7s2.5-1.5 5.8-1.7v-3H9V9zm5.4 7.1v1.2c.5 0 1 .1 1.6.1s1.1 0 1.6-.1v-1.2c-.5 0-1-.1-1.6-.1s-1.1 0-1.6.1z"/></svg>';
+
 const TOKENS = {
     DATA: { symbol: 'DATA', address: DATA, decimals: 18, icon: ICONS.DATA },
     POL: { symbol: 'POL', address: WPOL, decimals: 18, native: true, icon: ICONS.POL },
@@ -156,6 +176,21 @@ const KNOWN_TOKENS = {
     [NATIVE]: { symbol: 'POL', decimals: 18 }
 };
 
+const ETH_TOKENS = {
+    DATA: { symbol: 'DATA', address: ETH_DATA, decimals: 18, icon: ICONS.DATA },
+    ETH: { symbol: 'ETH', address: ETH_WETH, decimals: 18, native: true, icon: ICONS.ETH },
+    USDC: { symbol: 'USDC', address: ETH_USDC, decimals: 6, icon: ICONS.USDC },
+    USDT: { symbol: 'USDT', address: ETH_USDT, decimals: 6, icon: ICONS.USDT }
+};
+const ETH_KNOWN_TOKENS = {
+    [ETH_DATA.toLowerCase()]: { symbol: 'DATA', decimals: 18 },
+    [ETH_WETH]: { symbol: 'WETH', decimals: 18 },
+    [ETH_USDC]: { symbol: 'USDC', decimals: 6 },
+    [ETH_USDT]: { symbol: 'USDT', decimals: 6 },
+    [ETH_DAI]: { symbol: 'DAI', decimals: 18 },
+    [NATIVE]: { symbol: 'ETH', decimals: 18 }
+};
+
 const DEADLINE_SECONDS = 20 * 60;
 const QUOTE_REFRESH_MS = 30 * 1000;
 const HISTORY_REFRESH_TICKS = 4;    // the wallet's swaps every 4 refreshes (2 min): explorer calls are rate limited
@@ -164,6 +199,28 @@ const IMPACT_BLOCK = 15;   // %
 const POL_GAS_RESERVE = ethers.utils.parseEther('0.2');   // kept by MAX when paying with POL
 const SWAP_GAS_FALLBACK = 300000;                          // before approval the swap can't be estimated
 const SLIPPAGE_KEY = 'swapSlippage';
+const CHAIN_KEY = 'swapChain';
+
+// The chains the swap runs on: their tokens, DEXes (Polygon: QuickSwap, SushiSwap, Uniswap; Ethereum: SushiSwap V2,
+// Uniswap v3 and v4), their contracts and the session caches of their pools
+const NETWORKS = {
+    137: {
+        id: 137, name: 'Polygon', native: 'POL', wrapped: WPOL, tokens: TOKENS, counters: COUNTER_TOKENS, intermediates: INTERMEDIATES, known: KNOWN_TOKENS,
+        v4: { manager: UNISWAP_V4_POOL_MANAGER, quoter: UNISWAP_V4_QUOTER, router: UNIVERSAL_ROUTER }, v2v3Venues: ['qv2', 'sushi', 'qv3'],
+        factories: { qv2: QUICKSWAP_V2_FACTORY, sushi: SUSHI_V2_FACTORY },
+        routers: { qv2: QUICKSWAP_V2_ROUTER, sushi: SUSHI_V2_ROUTER, qv3: QUICKSWAP_V3_ROUTER, uni: UNISWAP_V3_ROUTER, v4: UNIVERSAL_ROUTER },
+        gasReserve: POL_GAS_RESERVE, explorer: 'https://polygonscan.com', dexes: 'QuickSwap, SushiSwap or Uniswap', dexList: 'QuickSwap, SushiSwap and Uniswap'
+    },
+    1: {
+        id: 1, name: 'Ethereum', native: 'ETH', wrapped: ETH_WETH, tokens: ETH_TOKENS, counters: ['ETH', 'USDC', 'USDT'], intermediates: [ETH_WETH, ETH_USDC, ETH_USDT, ETH_DAI], known: ETH_KNOWN_TOKENS,
+        v4: { manager: ETH_V4_POOL_MANAGER, quoter: ETH_V4_QUOTER, router: ETH_UNIVERSAL_ROUTER }, v2v3Venues: ['sushi'],
+        factories: { sushi: ETH_SUSHI_V2_FACTORY },
+        routers: { sushi: ETH_SUSHI_V2_ROUTER, uni: UNISWAP_V3_ROUTER, v4: ETH_UNIVERSAL_ROUTER },
+        gasReserve: ethers.utils.parseEther('0.005'), explorer: 'https://etherscan.io', dexes: 'SushiSwap or Uniswap', dexList: 'SushiSwap and Uniswap'
+    }
+};
+for (const net of Object.values(NETWORKS)) net.cache = { pools: new Map(), v4Pairs: new Map(), poolBalances: new Map() };
+const POLYGON = NETWORKS[137];
 
 // ============================================
 // State
@@ -172,14 +229,13 @@ const SLIPPAGE_KEY = 'swapSlippage';
 const state = {
     active: false,
     address: null,
+    chain: 137,              // the chain of the swap (137 Polygon, 1 Ethereum)
     counter: 'USDC',         // the token traded against DATA
     sellData: false,         // true: pay DATA, receive counter; false: the reverse (default: pay USDC, buy DATA)
     slippage: 0.5,
     balances: {},            // symbol -> BigNumber
-    pools: new Map(),        // pairKey -> { qv2, sushi, qv3: pool address | null, uni: Map(fee -> pool) } (session cache)
-    liquidity: null,         // DATA pools with their balances (Liquidity section)
-    poolBalances: new Map(), // pool address -> { [token]: BigNumber, at } (skips empty pools before quoting)
-    v4Pairs: new Map(),      // pairKey -> initialized Uniswap v4 pools with liquidity (session cache)
+    liquidity: null,         // Polygon's DATA pools with their balances (DATA pools list, the market's pools)
+    ethLiquidity: null,      // Ethereum's
     quote: null,             // { route, amountIn, amountOut, impact, key }
     quoteSeq: 0,
     quoteError: null,
@@ -195,11 +251,14 @@ const state = {
 const $ = (id) => document.getElementById(id);
 const debouncedQuote = Utils.debounce(() => updateQuote(), 450);
 
-const payToken = () => TOKENS[state.sellData ? 'DATA' : state.counter];
-const receiveToken = () => TOKENS[state.sellData ? state.counter : 'DATA'];
+const NET = () => NETWORKS[state.chain];
+const payToken = () => NET().tokens[state.sellData ? 'DATA' : state.counter];
+const receiveToken = () => NET().tokens[state.sellData ? state.counter : 'DATA'];
 const lower = (a) => a.toLowerCase();
 const pairKey = (a, b) => [lower(a), lower(b)].sort().join('-');
-const read = (fn) => Services.readWithFallback(() => fn(Services.getReadOnlyProvider()));
+/** Reads on a chain: Polygon through the app's RPCs (with fallback), Ethereum through the market's providers */
+const readOn = (net) => (fn) => (net.id === 137 ? Services.readWithFallback(() => fn(Services.getReadOnlyProvider())) : fn(getEthProvider()));
+const read = readOn(POLYGON);
 
 // ============================================
 // Formatting
@@ -225,7 +284,7 @@ function parseAmount(value, decimals) {
 function formatTxError(error) {
     if (error?.code === 4001 || error?.code === 'ACTION_REJECTED') return 'Rejected in your wallet.';
     const text = `${error?.reason || ''} ${error?.error?.message || ''} ${error?.data?.message || ''} ${error?.message || ''}`;
-    if (text.toLowerCase().includes('insufficient funds')) return 'Not enough POL to pay for gas.';
+    if (text.toLowerCase().includes('insufficient funds')) return `Not enough ${NET().native} to pay for gas.`;
     if (/INSUFFICIENT_OUTPUT_AMOUNT|Too little received|Too much requested|price slippage/i.test(text)) return 'The price moved beyond your max slippage. Get a new quote and try again.';
     if (/Transaction too old|EXPIRED/i.test(text)) return 'The swap expired before it was mined. Try again.';
     if (Services.isRateLimitError(error)) return 'RPC rate limited. Please try again in a few seconds.';
@@ -236,13 +295,13 @@ function formatTxError(error) {
 // Pools and quotes
 // ============================================
 
-/** Read calls in batches through Multicall3; a failed call gives null */
-async function multicall(calls, batchSize = 60) {
+/** Read calls on a chain (Polygon unless told) in batches through Multicall3; a failed call gives null */
+async function multicall(calls, batchSize = 60, net = POLYGON) {
     const results = [];
     for (let i = 0; i < calls.length; i += batchSize) {
         const batch = calls.slice(i, i + batchSize);
         const encoded = batch.map(c => ({ target: c.target, allowFailure: true, callData: c.iface.encodeFunctionData(c.fn, c.args) }));
-        const raw = await read(p => new ethers.Contract(MULTICALL3, MULTICALL_ABI, p).callStatic.aggregate3(encoded));
+        const raw = await readOn(net)(p => new ethers.Contract(MULTICALL3, MULTICALL_ABI, p).callStatic.aggregate3(encoded));
         raw.forEach((r, j) => {
             if (!r.success) { results.push(null); return; }
             try {
@@ -273,30 +332,41 @@ const poolAddress = (result) => {
     return address && address !== ethers.constants.AddressZero ? address : null;
 };
 
-/** Looks up the pools of each pair on every venue (cached; a pair whose lookup failed is asked again next time) */
-async function ensurePairs(pairs) {
-    const missing = [...new Map(pairs.map(([a, b]) => [pairKey(a, b), [a, b]])).values()].filter(([a, b]) => !state.pools.has(pairKey(a, b)));
+/** Looks up the pools of each pair on every venue of the chain (cached; a pair whose lookup failed is asked again next time) */
+async function ensurePairs(pairs, net = POLYGON) {
+    const cache = net.cache.pools;
+    const missing = [...new Map(pairs.map(([a, b]) => [pairKey(a, b), [a, b]])).values()].filter(([a, b]) => !cache.has(pairKey(a, b)));
     if (!missing.length) return;
+    // The chain's v2 / Algebra venues (their factories), then Uniswap v3 (the same factory address on both chains)
+    const others = net.v2v3Venues.length;
+    const venueCall = (venue, a, b) => (venue === 'qv3'
+        ? { target: QUICKSWAP_V3_FACTORY, iface: IFACES.algebraFactory, fn: 'poolByPair', args: [a, b] }
+        : { target: net.factories[venue], iface: IFACES.v2Factory, fn: 'getPair', args: [a, b] });
     const calls = missing.flatMap(([a, b]) => [
-        { target: QUICKSWAP_V2_FACTORY, iface: IFACES.v2Factory, fn: 'getPair', args: [a, b] },
-        { target: SUSHI_V2_FACTORY, iface: IFACES.v2Factory, fn: 'getPair', args: [a, b] },
-        { target: QUICKSWAP_V3_FACTORY, iface: IFACES.algebraFactory, fn: 'poolByPair', args: [a, b] },
+        ...net.v2v3Venues.map(venue => venueCall(venue, a, b)),
         ...UNISWAP_FEES.map(fee => ({ target: UNISWAP_V3_FACTORY, iface: IFACES.uniFactory, fn: 'getPool', args: [a, b, fee] }))
     ]);
-    const results = await multicall(calls);
-    const perPair = 3 + UNISWAP_FEES.length;
+    const results = await multicall(calls, 60, net);
+    const perPair = others + UNISWAP_FEES.length;
     missing.forEach(([a, b], i) => {
         const r = results.slice(i * perPair, (i + 1) * perPair);
         if (r.some(x => x === null)) return;   // incomplete answer: not cached
         const uni = new Map();
-        UNISWAP_FEES.forEach((fee, j) => { const pool = poolAddress(r[3 + j]); if (pool) uni.set(fee, pool); });
-        state.pools.set(pairKey(a, b), { a, b, qv2: poolAddress(r[0]), sushi: poolAddress(r[1]), qv3: poolAddress(r[2]), uni });
+        UNISWAP_FEES.forEach((fee, j) => { const pool = poolAddress(r[others + j]); if (pool) uni.set(fee, pool); });
+        const entry = { a, b, qv2: null, sushi: null, qv3: null, uni };
+        net.v2v3Venues.forEach((venue, k) => { entry[venue] = poolAddress(r[k]); });
+        cache.set(pairKey(a, b), entry);
     });
 }
 
 // Below these balances a pool is treated as empty (quoting an empty Uniswap v3 pool can burn a lot of gas)
 const MIN_POOL_BALANCE = {
     [DATA.toLowerCase()]: ethers.utils.parseUnits('1', 18),
+    [ETH_DATA.toLowerCase()]: ethers.utils.parseUnits('1', 18),
+    [ETH_WETH]: ethers.utils.parseUnits('0.000005', 18),
+    [ETH_USDC]: ethers.utils.parseUnits('0.01', 6),
+    [ETH_USDT]: ethers.utils.parseUnits('0.01', 6),
+    [ETH_DAI]: ethers.utils.parseUnits('0.01', 18),
     [WPOL.toLowerCase()]: ethers.utils.parseUnits('0.01', 18),
     [USDC.toLowerCase()]: ethers.utils.parseUnits('0.01', 6),
     [USDCE.toLowerCase()]: ethers.utils.parseUnits('0.01', 6),
@@ -307,25 +377,25 @@ const MIN_POOL_BALANCE = {
 const POOL_BALANCE_TTL_MS = 5 * 60 * 1000;
 
 /** Token balances of the pools (cached for a few minutes) */
-async function ensurePoolBalances(pools) {
+async function ensurePoolBalances(pools, net = POLYGON) {
     const now = Date.now();
     const missing = [...new Map(pools.map(pool => [lower(pool.address), pool])).values()]
-        .filter(pool => !(state.poolBalances.get(lower(pool.address))?.at > now - POOL_BALANCE_TTL_MS));
+        .filter(pool => !(net.cache.poolBalances.get(lower(pool.address))?.at > now - POOL_BALANCE_TTL_MS));
     if (!missing.length) return;
     const results = await multicall(missing.flatMap(pool => [
         { target: pool.a, iface: IFACES.erc20, fn: 'balanceOf', args: [pool.address] },
         { target: pool.b, iface: IFACES.erc20, fn: 'balanceOf', args: [pool.address] }
-    ]));
+    ]), 60, net);
     missing.forEach((pool, i) => {
         const balanceA = results[i * 2]?.[0];
         const balanceB = results[i * 2 + 1]?.[0];
         if (!balanceA || !balanceB) return;   // unknown: not cached, the pool stays a candidate
-        state.poolBalances.set(lower(pool.address), { [lower(pool.a)]: balanceA, [lower(pool.b)]: balanceB, at: now });
+        net.cache.poolBalances.set(lower(pool.address), { [lower(pool.a)]: balanceA, [lower(pool.b)]: balanceB, at: now });
     });
 }
 
-function hasLiquidity(address, a, b) {
-    const balances = state.poolBalances.get(lower(address));
+function hasLiquidity(address, a, b, net = POLYGON) {
+    const balances = net.cache.poolBalances.get(lower(address));
     if (!balances) return true;   // balances unknown: let the quote decide
     return [a, b].every(token => balances[lower(token)]?.gte(MIN_POOL_BALANCE[lower(token)] || 1));
 }
@@ -345,8 +415,9 @@ function v4PoolId(key) {
 }
 
 /** Looks up the hookless v4 pools of each pair (every standard tier); a pair whose lookup failed is asked again next time */
-async function ensureV4Pairs(pairs) {
-    const missing = [...new Map(pairs.map(([a, b]) => [pairKey(a, b), [a, b]])).values()].filter(([a, b]) => !state.v4Pairs.has(pairKey(a, b)));
+async function ensureV4Pairs(pairs, net = POLYGON) {
+    const cache = net.cache.v4Pairs;
+    const missing = [...new Map(pairs.map(([a, b]) => [pairKey(a, b), [a, b]])).values()].filter(([a, b]) => !cache.has(pairKey(a, b)));
     if (!missing.length) return;
     const candidates = [];
     for (const [a, b] of missing) {
@@ -359,9 +430,9 @@ async function ensureV4Pairs(pairs) {
         }
     }
     const results = await multicall(candidates.flatMap(c => [
-        { target: UNISWAP_V4_POOL_MANAGER, iface: IFACES.v4Manager, fn: 'extsload', args: [c.stateSlot] },
-        { target: UNISWAP_V4_POOL_MANAGER, iface: IFACES.v4Manager, fn: 'extsload', args: [c.liquiditySlot] }
-    ]));
+        { target: net.v4.manager, iface: IFACES.v4Manager, fn: 'extsload', args: [c.stateSlot] },
+        { target: net.v4.manager, iface: IFACES.v4Manager, fn: 'extsload', args: [c.liquiditySlot] }
+    ]), 60, net);
     const mask160 = ethers.BigNumber.from(2).pow(160).sub(1);
     const mask128 = ethers.BigNumber.from(2).pow(128).sub(1);
     const byPair = new Map();
@@ -376,18 +447,19 @@ async function ensureV4Pairs(pairs) {
     });
     for (const [a, b] of missing) {
         const key = pairKey(a, b);
-        if (!failed.has(key)) state.v4Pairs.set(key, byPair.get(key) || []);
+        if (!failed.has(key)) cache.set(key, byPair.get(key) || []);
     }
 }
 
-const v4PoolsFor = (a, b) => state.v4Pairs.get(pairKey(a, b)) || [];
+const v4PoolsFor = (a, b, net = POLYGON) => net.cache.v4Pairs.get(pairKey(a, b)) || [];
 
-/** DATA pools on v4 (Liquidity section) */
-async function discoverV4Pools() {
-    const counters = [NATIVE, ...INTERMEDIATES];
-    await ensureV4Pairs(counters.map(c => [DATA, c]));
-    if (!counters.every(c => state.v4Pairs.has(pairKey(DATA, c)))) throw new Error('Uniswap v4 lookup incomplete');
-    return counters.flatMap(counter => v4PoolsFor(DATA, counter).map(pool => ({ ...pool, counter })));
+/** A chain's DATA pools on v4 (DATA pools list) */
+async function discoverV4Pools(net = POLYGON) {
+    const data = net.tokens.DATA.address;
+    const counters = [NATIVE, ...net.intermediates];
+    await ensureV4Pairs(counters.map(c => [data, c]), net);
+    if (!counters.every(c => net.cache.v4Pairs.has(pairKey(data, c)))) throw new Error('Uniswap v4 lookup incomplete');
+    return counters.flatMap(counter => v4PoolsFor(data, counter, net).map(pool => ({ ...pool, counter })));
 }
 
 /** Amount out within the current price range (no tick crossing): fallback when the v4 quoter is not reachable */
@@ -404,67 +476,67 @@ function v4LocalEstimate(pool, zeroForOne, amountIn) {
 }
 
 /** 1 DATA in the other token, from the pool's sqrt price */
-function v4DataPrice(pool) {
-    const counterInfo = KNOWN_TOKENS[lower(pool.counter)];
+function v4DataPrice(pool, net = POLYGON) {
+    const counterInfo = net.known[lower(pool.counter)];
     const ratio = Math.pow(parseFloat(pool.sqrtPriceX96.toString()) / Math.pow(2, 96), 2);   // currency1 per currency0 (raw units)
-    const dataIsZero = lower(pool.key.currency0) === lower(DATA);
+    const dataIsZero = lower(pool.key.currency0) === lower(net.tokens.DATA.address);
     const raw = dataIsZero ? ratio : 1 / ratio;
     return raw * Math.pow(10, 18 - counterInfo.decimals);
 }
 
 const v4Currency = (token) => (token.native ? NATIVE : token.address);
 
-/** v4 routes: one pool, or two pools through an intermediate currency (POL is native POL on v4) */
-async function v4Routes(tokenIn, tokenOut) {
+/** v4 routes: one pool, or two pools through an intermediate currency (POL / ETH is the native currency on v4) */
+async function v4Routes(tokenIn, tokenOut, net = POLYGON) {
     const cin = v4Currency(tokenIn);
     const cout = v4Currency(tokenOut);
-    const mids = [NATIVE, ...INTERMEDIATES].filter(m => lower(m) !== lower(cin) && lower(m) !== lower(cout));
+    const mids = [NATIVE, ...net.intermediates].filter(m => lower(m) !== lower(cin) && lower(m) !== lower(cout));
     try {
-        await ensureV4Pairs([[cin, cout], ...mids.flatMap(m => [[cin, m], [m, cout]])]);
+        await ensureV4Pairs([[cin, cout], ...mids.flatMap(m => [[cin, m], [m, cout]])], net);
     } catch (e) {
         logger.warn('Swap: Uniswap v4 lookup failed', e);
         return [];
     }
-    const route = (currencies, pools) => ({ venue: 'v4', currencies, pools, path: currencies.map(c => (c === NATIVE ? WPOL : c)) });
-    const routes = v4PoolsFor(cin, cout).map(pool => route([cin, cout], [pool]));
+    const route = (currencies, pools) => ({ venue: 'v4', chain: net.id, currencies, pools, path: currencies.map(c => (c === NATIVE ? net.wrapped : c)) });
+    const routes = v4PoolsFor(cin, cout, net).map(pool => route([cin, cout], [pool]));
     for (const m of mids) {
-        for (const first of v4PoolsFor(cin, m)) {
-            for (const second of v4PoolsFor(m, cout)) routes.push(route([cin, m, cout], [first, second]));
+        for (const first of v4PoolsFor(cin, m, net)) {
+            for (const second of v4PoolsFor(m, cout, net)) routes.push(route([cin, m, cout], [first, second]));
         }
     }
     return routes;
 }
 
 /** Candidate routes from tokenIn to tokenOut: direct, or through one intermediate on the same venue (empty pools skipped) */
-async function candidateRoutes(tokenIn, tokenOut) {
-    const mids = INTERMEDIATES.filter(m => lower(m) !== lower(tokenIn) && lower(m) !== lower(tokenOut));
+async function candidateRoutes(tokenIn, tokenOut, net = POLYGON) {
+    const mids = net.intermediates.filter(m => lower(m) !== lower(tokenIn) && lower(m) !== lower(tokenOut));
     const paths = [[tokenIn, tokenOut], ...mids.map(m => [tokenIn, m, tokenOut])];
-    await ensurePairs(paths.flatMap(path => path.slice(1).map((token, i) => [path[i], token])));
+    await ensurePairs(paths.flatMap(path => path.slice(1).map((token, i) => [path[i], token])), net);
 
-    const hopsOf = (path) => path.slice(1).map((token, i) => state.pools.get(pairKey(path[i], token)));
+    const hopsOf = (path) => path.slice(1).map((token, i) => net.cache.pools.get(pairKey(path[i], token)));
     const pools = [];
     for (const path of paths) {
         for (const h of hopsOf(path)) {
             if (!h) continue;
-            for (const venue of ['qv2', 'sushi', 'qv3']) if (h[venue]) pools.push({ address: h[venue], a: h.a, b: h.b });
+            for (const venue of net.v2v3Venues) if (h[venue]) pools.push({ address: h[venue], a: h.a, b: h.b });
             for (const address of h.uni.values()) pools.push({ address, a: h.a, b: h.b });
         }
     }
-    await ensurePoolBalances(pools);
+    await ensurePoolBalances(pools, net);
 
     const routes = [];
     for (const path of paths) {
         const hops = hopsOf(path);
         if (hops.some(h => !h)) continue;
-        for (const venue of ['qv2', 'sushi', 'qv3']) {
-            if (hops.every(h => h[venue] && hasLiquidity(h[venue], h.a, h.b))) routes.push({ venue, path });
+        for (const venue of net.v2v3Venues) {
+            if (hops.every(h => h[venue] && hasLiquidity(h[venue], h.a, h.b, net))) routes.push({ venue, chain: net.id, path });
         }
-        const feesPerHop = hops.map(h => [...h.uni.entries()].filter(([, address]) => hasLiquidity(address, h.a, h.b)).map(([fee]) => fee));
+        const feesPerHop = hops.map(h => [...h.uni.entries()].filter(([, address]) => hasLiquidity(address, h.a, h.b, net)).map(([fee]) => fee));
         if (feesPerHop.every(fees => fees.length)) {
             // Every fee tier combination of the pools with liquidity
             let combos = [[]];
             for (const fees of feesPerHop) combos = combos.flatMap(c => fees.map(fee => [...c, fee]));
-            for (const fees of combos) routes.push({ venue: 'uni', path, fees });
+            for (const fees of combos) routes.push({ venue: 'uni', chain: net.id, path, fees });
         }
     }
     return routes;
@@ -505,12 +577,12 @@ function quoteCall(route, amountIn) {
     if (route.venue === 'v4') {
         if (route.pools.length === 1) {
             const pool = route.pools[0];
-            return { target: UNISWAP_V4_QUOTER, iface: IFACES.v4Quoter, fn: 'quoteExactInputSingle', args: [{ poolKey: pool.key, zeroForOne: v4ZeroForOne(route.currencies[0], pool), exactAmount: amountIn, hookData: '0x' }] };
+            return { target: NETWORKS[route.chain].v4.quoter, iface: IFACES.v4Quoter, fn: 'quoteExactInputSingle', args: [{ poolKey: pool.key, zeroForOne: v4ZeroForOne(route.currencies[0], pool), exactAmount: amountIn, hookData: '0x' }] };
         }
-        return { target: UNISWAP_V4_QUOTER, iface: IFACES.v4Quoter, fn: 'quoteExactInput', args: [{ exactCurrency: route.currencies[0], path: v4PathKeys(route), exactAmount: amountIn }] };
+        return { target: NETWORKS[route.chain].v4.quoter, iface: IFACES.v4Quoter, fn: 'quoteExactInput', args: [{ exactCurrency: route.currencies[0], path: v4PathKeys(route), exactAmount: amountIn }] };
     }
     if (route.venue === 'qv2' || route.venue === 'sushi') {
-        return { target: VENUES[route.venue].router, iface: IFACES.v2Router, fn: 'getAmountsOut', args: [amountIn, route.path] };
+        return { target: NETWORKS[route.chain].routers[route.venue], iface: IFACES.v2Router, fn: 'getAmountsOut', args: [amountIn, route.path] };
     }
     if (route.venue === 'qv3') {
         return { target: QUICKSWAP_V3_QUOTER, iface: IFACES.algebraQuoter, fn: 'quoteExactInput', args: [encodeAlgebraPath(route.path), amountIn] };
@@ -536,7 +608,7 @@ async function quoteRoutes(routes, amountIn, errors = []) {
             const i = next++;
             const call = quoteCall(routes[i], amountIn);
             try {
-                const data = await read(p => p.call({ to: call.target, data: call.iface.encodeFunctionData(call.fn, call.args) }));
+                const data = await readOn(NETWORKS[routes[i].chain])(p => p.call({ to: call.target, data: call.iface.encodeFunctionData(call.fn, call.args) }));
                 outputs[i] = quoteOutput(routes[i], call.iface.decodeFunctionResult(call.fn, data));
                 if (!outputs[i]) errors[i] = 'no output';
             } catch (e) {
@@ -566,10 +638,10 @@ async function quoteRoute(route, amountIn) {
     return out;
 }
 
-/** Best route for amountIn, with its price impact */
-async function findBestQuote(tokenIn, tokenOut, amountIn) {
-    const routes = [...await candidateRoutes(tokenIn.address, tokenOut.address), ...await v4Routes(tokenIn, tokenOut)];
-    if (!routes.length) throw new Error(`No ${tokenIn.symbol} / ${tokenOut.symbol} pool found on QuickSwap, SushiSwap or Uniswap.`);
+/** Best route for amountIn on a chain, with its price impact */
+async function findBestQuote(tokenIn, tokenOut, amountIn, net = POLYGON) {
+    const routes = [...await candidateRoutes(tokenIn.address, tokenOut.address, net), ...await v4Routes(tokenIn, tokenOut, net)];
+    if (!routes.length) throw new Error(`No ${tokenIn.symbol} / ${tokenOut.symbol} pool found on ${net.dexes}.`);
     const errors = [];
     const outputs = await quoteRoutes(routes, amountIn, errors);
     // Every route that was tried, for the "Routes checked" list
@@ -599,41 +671,46 @@ async function findBestQuote(tokenIn, tokenOut, amountIn) {
     return { ...best, amountIn, impact, checked };
 }
 
-/** Every DATA pool with its token balances (Liquidity section) */
-async function loadLiquidity() {
-    await ensurePairs(INTERMEDIATES.map(m => [DATA, m]));
+const liquidityOf = (net) => (net.id === 137 ? state.liquidity : state.ethLiquidity);
+
+/** A chain's DATA pools with their token balances (DATA pools list; Polygon's also feed the market's trades) */
+async function loadLiquidity(net = POLYGON) {
+    const data = net.tokens.DATA.address;
+    await ensurePairs(net.intermediates.map(m => [data, m]), net);
     const pools = [];
-    for (const m of INTERMEDIATES) {
-        const entry = state.pools.get(pairKey(DATA, m));
+    for (const m of net.intermediates) {
+        const entry = net.cache.pools.get(pairKey(data, m));
         if (!entry) continue;
-        for (const venue of ['qv2', 'sushi', 'qv3']) if (entry[venue]) pools.push({ venue, partner: m, address: entry[venue] });
+        for (const venue of net.v2v3Venues) if (entry[venue]) pools.push({ venue, partner: m, address: entry[venue] });
         for (const [fee, address] of entry.uni) pools.push({ venue: 'uni', fee, partner: m, address });
     }
     const balances = await multicall(pools.flatMap(pool => [
-        { target: DATA, iface: IFACES.erc20, fn: 'balanceOf', args: [pool.address] },
+        { target: data, iface: IFACES.erc20, fn: 'balanceOf', args: [pool.address] },
         { target: pool.partner, iface: IFACES.erc20, fn: 'balanceOf', args: [pool.address] }
-    ]));
+    ]), 60, net);
     const now = Date.now();
     pools.forEach((pool, i) => {
         pool.data = balances[i * 2]?.[0] || ethers.constants.Zero;
         pool.other = balances[i * 2 + 1]?.[0] || ethers.constants.Zero;
         if (balances[i * 2] && balances[i * 2 + 1]) {
-            state.poolBalances.set(lower(pool.address), { [lower(DATA)]: pool.data, [lower(pool.partner)]: pool.other, at: now });
+            net.cache.poolBalances.set(lower(pool.address), { [lower(data)]: pool.data, [lower(pool.partner)]: pool.other, at: now });
         }
     });
     pools.sort((x, y) => (y.data.gt(x.data) ? 1 : y.data.lt(x.data) ? -1 : 0));
     let v4 = [];
     let v4Complete = true;
-    state.v4Pairs.clear();   // fresh v4 prices
+    net.cache.v4Pairs.clear();   // fresh v4 prices
     try {
-        v4 = await discoverV4Pools();
+        v4 = await discoverV4Pools(net);
     } catch (e) {
         v4Complete = false;
         logger.warn('Swap: Uniswap v4 lookup failed', e);
     }
-    state.liquidity = { pools, v4, complete: v4Complete && INTERMEDIATES.every(m => state.pools.has(pairKey(DATA, m))) };
+    const liquidity = { pools, v4, complete: v4Complete && net.intermediates.every(m => net.cache.pools.has(pairKey(data, m))) };
+    if (net.id === 137) state.liquidity = liquidity;
+    else state.ethLiquidity = liquidity;
     renderLiquidity();
-    SwapMarket.setPools(marketPools());
+    if (net.id === 137) SwapMarket.setPools(marketPools());
 }
 
 // Pools whose trades the market list shows: at least this much DATA (v2 / v3), any liquidity (v4)
@@ -665,15 +742,25 @@ function marketPools() {
     return list.slice(0, MARKET_POOLS_MAX);
 }
 
+/** The DATA pools list of the swap's chain */
 function renderLiquidity() {
     const list = $('swap-liquidity-list');
     const count = $('swap-liquidity-count');
-    if (!list || !state.liquidity) return;
-    const { pools, v4 = [], complete } = state.liquidity;
+    const net = NET();
+    if ($('swap-liquidity-chain')) $('swap-liquidity-chain').textContent = net.name;
+    if ($('swap-liquidity-dexes')) $('swap-liquidity-dexes').textContent = net.dexList;
+    const liquidity = liquidityOf(net);
+    if (!list) return;
+    if (!liquidity) {
+        count.textContent = '';
+        list.innerHTML = '<li class="py-1.5 text-gray-400">Looking for pools...</li>';
+        return;
+    }
+    const { pools, v4 = [], complete } = liquidity;
     count.textContent = `(${pools.length + v4.length})`;
     const v4Rows = v4.map(pool => {
-        const counter = KNOWN_TOKENS[lower(pool.counter)];
-        const price = v4DataPrice(pool);
+        const counter = net.known[lower(pool.counter)];
+        const price = v4DataPrice(pool, net);
         return `
             <li class="flex items-center justify-between gap-3 py-1.5 border-b border-[#2a2a2a] last:border-0">
                 <span class="text-gray-300">Uniswap v4 ${pool.fee / 10000}% · DATA / ${counter.symbol}</span>
@@ -681,11 +768,11 @@ function renderLiquidity() {
             </li>`;
     });
     const rows = pools.map(pool => {
-        const partner = KNOWN_TOKENS[lower(pool.partner)];
+        const partner = net.known[lower(pool.partner)];
         const venue = `${VENUES[pool.venue].name}${pool.fee ? ` ${pool.fee / 10000}%` : ''}`;
         return `
             <li class="flex items-center justify-between gap-3 py-1.5 border-b border-[#2a2a2a] last:border-0">
-                <a href="https://polygonscan.com/address/${Utils.escapeHtml(pool.address)}" target="_blank" rel="noopener noreferrer" class="text-gray-300 hover:text-white">${venue} · DATA / ${partner.symbol}</a>
+                <a href="${net.explorer}/address/${Utils.escapeHtml(pool.address)}" target="_blank" rel="noopener noreferrer" class="text-gray-300 hover:text-white">${venue} · DATA / ${partner.symbol}</a>
                 <span class="text-right text-gray-300 whitespace-nowrap">${formatAmount(pool.data, 18)} DATA · ${formatAmount(pool.other, partner.decimals)} ${partner.symbol}</span>
             </li>`;
     });
@@ -694,7 +781,7 @@ function renderLiquidity() {
 }
 
 function routeLabel(route) {
-    const symbol = (address) => KNOWN_TOKENS[lower(address)]?.symbol || Utils.shortAddress(address);
+    const symbol = (address) => NETWORKS[route.chain].known[lower(address)]?.symbol || Utils.shortAddress(address);
     if (route.venue === 'v4') {
         const fees = route.pools.map(pool => `${pool.fee / 10000}%`).join(' / ');
         return `Uniswap v4 (${fees}) · ${route.currencies.map(symbol).join(' → ')}`;
@@ -714,6 +801,7 @@ function buildSwapTx(quote, recipient, permit = null) {
     const tokenIn = payToken();
     const tokenOut = receiveToken();
     const { route, amountIn } = quote;
+    const net = NETWORKS[route.chain];
     const minimum = minOut(quote.amountOut);
     const deadline = Math.floor(Date.now() / 1000) + DEADLINE_SECONDS;
     const value = tokenIn.native ? amountIn : ethers.constants.Zero;
@@ -725,7 +813,7 @@ function buildSwapTx(quote, recipient, permit = null) {
             : tokenOut.native
                 ? iface.encodeFunctionData('swapExactTokensForETH', [amountIn, minimum, route.path, recipient, deadline])
                 : iface.encodeFunctionData('swapExactTokensForTokens', [amountIn, minimum, route.path, recipient, deadline]);
-        return { to: VENUES[route.venue].router, data, value };
+        return { to: net.routers[route.venue], data, value };
     }
     if (route.venue === 'qv3') {
         const iface = new ethers.utils.Interface(ALGEBRA_ROUTER_ABI);
@@ -745,7 +833,7 @@ function buildSwapTx(quote, recipient, permit = null) {
         const swap = route.pools.length === 1
             ? [V4_SWAP_EXACT_IN_SINGLE, coder.encode([V4_SINGLE_PARAMS], [{ poolKey: route.pools[0].key, zeroForOne: v4ZeroForOne(cin, route.pools[0]), amountIn, amountOutMinimum: minimum, hookData: '0x' }])]
             : [V4_SWAP_EXACT_IN, coder.encode([V4_MULTI_PARAMS], [{ currencyIn: cin, path: v4PathKeys(route), amountIn, amountOutMinimum: minimum }])];
-        // Native POL is sent with the call and settled from the router; ERC-20 is pulled from the wallet through Permit2
+        // Native POL / ETH is sent with the call and settled from the router; ERC-20 is pulled from the wallet through Permit2
         const settle = cin === NATIVE
             ? [V4_SETTLE, coder.encode(['address', 'uint256', 'bool'], [NATIVE, amountIn, false])]
             : [V4_SETTLE_ALL, coder.encode(['address', 'uint256'], [cin, amountIn])];
@@ -756,9 +844,9 @@ function buildSwapTx(quote, recipient, permit = null) {
         if (permit) {
             // The signed Permit2 allowance is submitted by the router in the same transaction
             const permitInput = coder.encode([PERMIT_SINGLE, 'bytes'], [permit.permitSingle, permit.signature]);
-            return { to: UNIVERSAL_ROUTER, data: iface.encodeFunctionData('execute', [ethers.utils.hexConcat([UR_PERMIT2_PERMIT, UR_V4_SWAP]), [permitInput, input], deadline]), value };
+            return { to: net.v4.router, data: iface.encodeFunctionData('execute', [ethers.utils.hexConcat([UR_PERMIT2_PERMIT, UR_V4_SWAP]), [permitInput, input], deadline]), value };
         }
-        return { to: UNIVERSAL_ROUTER, data: iface.encodeFunctionData('execute', [UR_V4_SWAP, [input], deadline]), value };
+        return { to: net.v4.router, data: iface.encodeFunctionData('execute', [UR_V4_SWAP, [input], deadline]), value };
     }
     const iface = new ethers.utils.Interface(UNISWAP_ROUTER_ABI);
     const path = encodeUniswapPath(route.path, route.fees);
@@ -771,8 +859,8 @@ function buildSwapTx(quote, recipient, permit = null) {
     return { to: UNISWAP_V3_ROUTER, data: iface.encodeFunctionData('multicall(uint256,bytes[])', [deadline, calls]), value };
 }
 
-async function allowanceOf(token, spender) {
-    return read(p => new ethers.Contract(token.address, ERC20_ABI, p).allowance(state.address, spender));
+async function allowanceOf(token, spender, net = POLYGON) {
+    return readOn(net)(p => new ethers.Contract(token.address, ERC20_ABI, p).allowance(state.address, spender));
 }
 
 /**
@@ -782,15 +870,17 @@ async function allowanceOf(token, spender) {
 async function approvalSteps(quote) {
     const pay = payToken();
     if (pay.native) return [];
+    const net = NETWORKS[quote.route.chain];
     const amount = formatToken(quote.amountIn, pay);
     const venue = VENUES[quote.route.venue];
     if (quote.route.venue !== 'v4') {
-        const needed = await allowanceOf(pay, venue.router).then(a => a.lt(quote.amountIn)).catch(() => true);
-        return needed ? [{ key: 'approve', spender: venue.router, label: `Approve ${amount} for ${venue.name}` }] : [];
+        const router = net.routers[quote.route.venue];
+        const needed = await allowanceOf(pay, router, net).then(a => a.lt(quote.amountIn)).catch(() => true);
+        return needed ? [{ key: 'approve', spender: router, label: `Approve ${amount} for ${venue.name}` }] : [];
     }
     const [tokenAllowance, permit] = await Promise.all([
-        allowanceOf(pay, PERMIT2).catch(() => ethers.constants.Zero),
-        read(p => new ethers.Contract(PERMIT2, PERMIT2_ABI, p).allowance(state.address, pay.address, UNIVERSAL_ROUTER)).catch(() => null)
+        allowanceOf(pay, PERMIT2, net).catch(() => ethers.constants.Zero),
+        readOn(net)(p => new ethers.Contract(PERMIT2, PERMIT2_ABI, p).allowance(state.address, pay.address, net.v4.router)).catch(() => null)
     ]);
     const steps = [];
     if (tokenAllowance.lt(quote.amountIn)) steps.push({ key: 'approve', spender: PERMIT2, label: `Approve ${amount} for Permit2 (Uniswap)` });
@@ -806,11 +896,11 @@ async function approvalSteps(quote) {
 // ============================================
 
 function tokenSlotHtml(symbol, selectable) {
-    const token = TOKENS[symbol];
+    const token = NET().tokens[symbol];
     if (!selectable) {
         return `${token.icon}<span class="text-lg font-semibold text-white">${token.symbol}</span>`;
     }
-    const options = COUNTER_TOKENS.map(s => `<option value="${s}" ${s === symbol ? 'selected' : ''}>${Utils.escapeHtml(s)}</option>`).join('');
+    const options = NET().counters.map(s => `<option value="${s}" ${s === symbol ? 'selected' : ''}>${Utils.escapeHtml(s)}</option>`).join('');
     return `${token.icon}<select data-token-select aria-label="Token" class="w-[7.5rem] bg-[#2C2C2C] hover:bg-[#3C3C3C] text-white text-sm font-semibold rounded-lg pl-2 pr-7 py-1.5 border border-[#444] focus:outline-none focus:ring-2 focus:ring-blue-500/50 disabled:opacity-50">${options}</select>`;
 }
 
@@ -831,6 +921,43 @@ function renderBalances() {
     };
     $('swap-from-balance').textContent = show(pay);
     $('swap-to-balance').textContent = show(receive);
+}
+
+/** The chain selector, the description of its DEXes, and the DATA pools list of the chain */
+function renderChain() {
+    document.querySelectorAll('#swap-chain button').forEach(btn => {
+        const active = Number(btn.dataset.chain) === state.chain;
+        btn.classList.toggle('bg-blue-800', active);
+        btn.classList.toggle('text-white', active);
+        btn.classList.toggle('text-gray-300', !active);
+    });
+    document.querySelectorAll('[data-chain-text]').forEach(el => {
+        const shown = Number(el.dataset.chainText) === state.chain;
+        el.classList.toggle('hidden', !shown);
+        el.classList.toggle('flex', shown);
+    });
+    renderLiquidity();
+}
+
+/** Swaps on another chain: the same counter where it has one (POL and ETH stand for each other), else USDC */
+function setChain(chain) {
+    if (state.flow || !NETWORKS[chain] || chain === state.chain) return;
+    state.chain = chain;
+    try { localStorage.setItem(CHAIN_KEY, String(chain)); } catch (e) { /* this visit only */ }
+    const native = { POL: 'ETH', ETH: 'POL' }[state.counter];
+    state.counter = NET().counters.includes(state.counter) ? state.counter : NET().counters.includes(native) ? native : 'USDC';
+    state.balances = {};
+    state.quote = null;
+    state.quoteError = null;
+    state.quoteChecked = null;
+    showError('');
+    renderChain();
+    renderTokens();
+    updateAmountStatus();
+    renderQuote();
+    loadBalances();
+    updateQuote();
+    if (!$('swapPoolsModal')?.classList.contains('hidden')) loadLiquidity(NET()).catch(e => logger.warn('Swap: pool discovery failed', e));
 }
 
 function renderSlippage() {
@@ -884,7 +1011,23 @@ function loadPolUsdNow() {
         });
 }
 
-/** Price per DATA of the quote in USD: straight from a USDC side, through POL/USD for a POL side */
+// ETH/USD for the quote's DATA/USD on Ethereum (Chainlink, read again after a minute)
+let ethUsdNow = null;   // { price, at }
+let ethUsdLoading = false;
+
+function loadEthUsdNow() {
+    if (ethUsdLoading) return;
+    ethUsdLoading = true;
+    multicall([{ target: ETH_USD_FEED, iface: IFACES.feed, fn: 'latestRoundData', args: [] }], 60, NETWORKS[1])
+        .then(([round]) => { if (round?.answer.gt(0)) ethUsdNow = { price: Number(round.answer.toString()) / 1e8, at: Date.now() }; })
+        .catch(e => logger.warn('Swap: ETH/USD not read', e))
+        .finally(() => {
+            ethUsdLoading = false;
+            if (ethUsdNow) renderQuote();
+        });
+}
+
+/** Price per DATA of the quote in USD: straight from a USD side, through POL/USD or ETH/USD for a POL or ETH side */
 function quoteDataUsd(q, pay, receive) {
     const payIsData = pay.symbol === 'DATA';
     const data = parseFloat(ethers.utils.formatUnits(payIsData ? q.amountIn : q.amountOut, 18));
@@ -896,6 +1039,9 @@ function quoteDataUsd(q, pay, receive) {
     } else if (other.symbol === 'POL') {
         if (!polUsdNow || Date.now() - polUsdNow.at > POL_USD_MAX_AGE_MS) loadPolUsdNow();
         if (polUsdNow) usd = otherAmount * polUsdNow.price;
+    } else if (other.symbol === 'ETH') {
+        if (!ethUsdNow || Date.now() - ethUsdNow.at > POL_USD_MAX_AGE_MS) loadEthUsdNow();
+        if (ethUsdNow) usd = otherAmount * ethUsdNow.price;
     }
     if (!(data > 0) || !(usd > 0)) return '--';
     const value = usd / data;
@@ -913,7 +1059,7 @@ function renderQuote() {
     $('swap-receive').classList.toggle('text-gray-300', !valid);
     if (valid) {
         const rate = parseFloat(ethers.utils.formatUnits(q.amountOut, receive.decimals)) / parseFloat(ethers.utils.formatUnits(q.amountIn, pay.decimals));
-        $('swap-rate').textContent = `1 ${pay.symbol} = ${rate < 0.0001 ? rate.toExponential(3) : Number(rate.toPrecision(5))} ${receive.symbol}`;
+        $('swap-rate').textContent = `1 ${pay.symbol} = ${rate < 0.0001 ? rate.toExponential(3) : Utils.formatBigNumber(String(Number(rate.toPrecision(5))))} ${receive.symbol}`;
         $('swap-rate-usd').textContent = quoteDataUsd(q, pay, receive);
         $('swap-route').textContent = routeLabel(q.route);
         $('swap-min').textContent = formatToken(minOut(q.amountOut), receive);
@@ -987,7 +1133,7 @@ function setSubmitState(label, busy) {
 
 function setFormLocked(locked) {
     ['swap-amount', 'swap-max', 'swap-flip', 'swap-refresh'].forEach(id => { const el = $(id); if (el) el.disabled = locked; });
-    document.querySelectorAll('#swap-view select[data-token-select], #swap-slippage button').forEach(el => { el.disabled = locked; });
+    document.querySelectorAll('#swap-view select[data-token-select], #swap-slippage button, #swap-chain button').forEach(el => { el.disabled = locked; });
 }
 
 function renderProgress() {
@@ -1006,7 +1152,7 @@ function renderProgress() {
         <li class="flex items-center gap-2">
             ${icons[step.status]}
             <span class="${textClass[step.status]}">${Utils.escapeHtml(step.label)}</span>
-            ${step.txHash ? `<a href="https://polygonscan.com/tx/${Utils.escapeHtml(step.txHash)}" target="_blank" rel="noopener noreferrer" class="ml-auto text-xs text-blue-400 hover:text-blue-300">tx</a>` : ''}
+            ${step.txHash ? `<a href="${NETWORKS[state.flow.chain].explorer}/tx/${Utils.escapeHtml(step.txHash)}" target="_blank" rel="noopener noreferrer" class="ml-auto text-xs text-blue-400 hover:text-blue-300">tx</a>` : ''}
         </li>
     `).join('');
 }
@@ -1032,17 +1178,18 @@ function showSuccess(message) {
 async function loadBalances() {
     if (!state.address) return;
     const address = state.address;
-    const entries = await Promise.all(Object.values(TOKENS).map(async token => {
+    const net = NET();
+    const entries = await Promise.all(Object.values(net.tokens).map(async token => {
         try {
             const balance = token.native
-                ? await read(p => p.getBalance(address))
-                : await read(p => new ethers.Contract(token.address, ERC20_ABI, p).balanceOf(address));
+                ? await readOn(net)(p => p.getBalance(address))
+                : await readOn(net)(p => new ethers.Contract(token.address, ERC20_ABI, p).balanceOf(address));
             return [token.symbol, balance];
         } catch (e) {
             return [token.symbol, null];
         }
     }));
-    if (address !== state.address) return;
+    if (address !== state.address || net !== NET()) return;
     state.balances = Object.fromEntries(entries.filter(([, b]) => b));
     renderBalances();
     updateAmountStatus();
@@ -1072,7 +1219,7 @@ async function updateQuote() {
     state.quoting = true;
     renderQuote();
     try {
-        const quote = await findBestQuote(payToken(), receiveToken(), wei);
+        const quote = await findBestQuote(payToken(), receiveToken(), wei, NET());
         if (seq !== state.quoteSeq) return;
         state.quote = quote;
     } catch (e) {
@@ -1096,17 +1243,18 @@ async function updateCost() {
         return;
     }
     try {
+        const net = NETWORKS[q.route.chain];
         const approvals = (await approvalSteps(q)).filter(step => !step.noTx);
         const [gasPrice, swapGas] = await Promise.all([
-            read(p => p.getGasPrice()),
+            readOn(net)(p => p.getGasPrice()),
             approvals.length
                 ? ethers.BigNumber.from(SWAP_GAS_FALLBACK)
-                : read(p => p.estimateGas({ ...buildSwapTx(q, state.address), from: state.address }))
+                : readOn(net)(p => p.estimateGas({ ...buildSwapTx(q, state.address), from: state.address }))
         ]);
         if (q !== state.quote) return;
         const approveGas = ethers.BigNumber.from(60000).mul(approvals.length);
         const cost = swapGas.add(approveGas).mul(gasPrice);
-        el.textContent = `≈ ${formatAmount(cost, 18)} POL${approvals.length ? ` (${approvals.length} approval${approvals.length > 1 ? 's' : ''} + swap)` : ''}`;
+        el.textContent = `≈ ${formatAmount(cost, 18)} ${net.native}${approvals.length ? ` (${approvals.length} approval${approvals.length > 1 ? 's' : ''} + swap)` : ''}`;
     } catch (e) {
         if (q !== state.quote) return;
         logger.warn('Swap cost estimate failed:', e);
@@ -1118,12 +1266,12 @@ async function updateCost() {
 // Swap flow
 // ============================================
 
-/** What the swap delivered: Transfer logs to the wallet (tokens), or the POL balance change plus the swap's gas */
-async function receivedAmount(receipt, token, polBefore) {
+/** What the swap delivered: Transfer logs to the wallet (tokens), or the POL / ETH balance change plus the swap's gas */
+async function receivedAmount(receipt, token, polBefore, net) {
     try {
         if (token.native) {
             if (!polBefore) return null;
-            const after = await read(p => p.getBalance(state.address, receipt.blockNumber));
+            const after = await readOn(net)(p => p.getBalance(state.address, receipt.blockNumber));
             const gas = receipt.gasUsed.mul(receipt.effectiveGasPrice || 0);
             const received = after.sub(polBefore).add(gas);
             return received.gt(0) ? received : null;
@@ -1147,7 +1295,7 @@ const HISTORY_PAGE = 20;            // rows shown at first, and added by Show mo
 const EXPLORER_RECORDS = 1000;      // latest token transfers / transactions of the wallet read from the explorer
 let historyShown = HISTORY_PAGE;
 const historyKey = () => `swapHistory:${state.address}`;
-const SYMBOL_DECIMALS = { DATA: 18, POL: 18, WPOL: 18, USDC: 6, 'USDC.e': 6, USDT: 6, WETH: 18, DAI: 18 };
+const SYMBOL_DECIMALS = { DATA: 18, POL: 18, WPOL: 18, ETH: 18, USDC: 6, 'USDC.e': 6, USDT: 6, WETH: 18, DAI: 18 };
 
 function loadStoredHistory() {
     try {
@@ -1251,7 +1399,7 @@ async function recoverSwapsFromExplorer() {
 /** Swaps left pending (page closed before the receipt): confirmed or failed */
 async function settlePendingSwaps() {
     for (const entry of state.history.filter(h => h.status === 'pending')) {
-        const receipt = await read(p => p.getTransactionReceipt(entry.txHash)).catch(() => null);
+        const receipt = await readOn(NETWORKS[entry.chain || 137])(p => p.getTransactionReceipt(entry.txHash)).catch(() => null);
         if (receipt) upsertSwap({ txHash: entry.txHash, status: receipt.status === 1 ? 'done' : 'failed' });
     }
 }
@@ -1260,11 +1408,12 @@ async function settlePendingSwaps() {
 
 const USD_STABLES = ['USDC', 'USDC.e', 'USDT', 'DAI'];
 
-/** POL/USD at each time (seconds): the last Chainlink round before it, by a binary search over the feed's rounds */
-async function polUsdAt(times) {
+/** POL/USD (or another Chainlink USD feed's price) at each time (seconds): the last round before it, by a binary search over the feed's rounds */
+async function polUsdAt(times, feedAddress = POL_USD_FEED, net = POLYGON) {
     const feed = IFACES.feed;
     const price = (round) => (round && round.answer.gt(0) && round.updatedAt.gt(0) ? Number(round.answer.toString()) / 1e8 : null);
-    const [latest] = await multicall([{ target: POL_USD_FEED, iface: feed, fn: 'latestRoundData', args: [] }]);
+    const call = (calls) => multicall(calls, 60, net);
+    const [latest] = await call([{ target: feedAddress, iface: feed, fn: 'latestRoundData', args: [] }]);
     if (!latest) return times.map(() => null);
     const results = times.map(t => (t >= latest.updatedAt.toNumber() ? price(latest) : undefined));
     let phase = latest.roundId.shr(64).toNumber();
@@ -1272,14 +1421,14 @@ async function polUsdAt(times) {
     // Current phase first, then the earlier ones for older swaps
     for (let hops = 0; hops < 3 && phase > 0 && lastRound > 0 && results.includes(undefined); hops++) {
         const roundId = (n) => ethers.BigNumber.from(phase).shl(64).or(n);
-        const getRound = (n) => ({ target: POL_USD_FEED, iface: feed, fn: 'getRoundData', args: [roundId(n)] });
-        const [first] = await multicall([getRound(1)]);
+        const getRound = (n) => ({ target: feedAddress, iface: feed, fn: 'getRoundData', args: [roundId(n)] });
+        const [first] = await call([getRound(1)]);
         if (!price(first)) break;
         // The answer stays in [lo, hi]: the last round with updatedAt <= t
         const searches = results.flatMap((r, i) => (r === undefined && times[i] >= first.updatedAt.toNumber() ? [{ i, lo: 1, hi: lastRound, round: first }] : []));
         for (let open = searches; open.length; open = searches.filter(s => s.lo < s.hi)) {
             const mids = open.map(s => Math.ceil((s.lo + s.hi) / 2));
-            const rounds = await multicall(mids.map(getRound));
+            const rounds = await call(mids.map(getRound));
             open.forEach((s, j) => {
                 if (!price(rounds[j])) s.lo = s.hi = 0;   // round unreadable: no price for this swap
                 else if (rounds[j].updatedAt.toNumber() <= times[s.i]) [s.lo, s.round] = [mids[j], rounds[j]];
@@ -1289,30 +1438,39 @@ async function polUsdAt(times) {
         searches.forEach(s => { results[s.i] = s.lo ? price(s.round) : null; });
         phase -= 1;
         if (phase < 1) break;
-        const [aggregator] = await multicall([{ target: POL_USD_FEED, iface: feed, fn: 'phaseAggregators', args: [phase] }]);
+        const [aggregator] = await call([{ target: feedAddress, iface: feed, fn: 'phaseAggregators', args: [phase] }]);
         const address = poolAddress(aggregator);
-        const [round] = address ? await multicall([{ target: address, iface: feed, fn: 'latestRound', args: [] }]) : [null];
+        const [round] = address ? await call([{ target: address, iface: feed, fn: 'latestRound', args: [] }]) : [null];
         lastRound = round ? round[0].toNumber() : 0;
     }
     return results.map(r => r ?? null);
 }
 
 const needsPolPrice = (entry) => [entry.pay?.symbol, entry.receive?.symbol].some(s => s === 'POL' || s === 'WPOL');
+const needsEthPrice = (entry) => [entry.pay?.symbol, entry.receive?.symbol].some(s => s === 'ETH' || s === 'WETH');
 const polPriceTried = new Set();
 let pricingSwaps = false;
 
-/** POL/USD at the time of each POL swap, kept with the swap */
+/** POL/USD or ETH/USD (Chainlink, on Polygon / Ethereum) at the time of each POL or ETH swap, kept with the swap */
 async function fillPolPrices() {
-    const missing = state.history.filter(h => h.status === 'done' && h.polUsd === undefined && needsPolPrice(h) && !polPriceTried.has(lower(h.txHash)));
+    const missing = state.history.filter(h => h.status === 'done' && !polPriceTried.has(lower(h.txHash))
+        && ((h.polUsd === undefined && needsPolPrice(h)) || (h.ethUsd === undefined && needsEthPrice(h))));
     if (pricingSwaps || !missing.length) return;
     pricingSwaps = true;
     missing.forEach(h => polPriceTried.add(lower(h.txHash)));
     try {
-        const prices = await polUsdAt(missing.map(h => Math.floor(h.createdAt / 1000)));
-        missing.forEach((h, i) => { if (prices[i]) h.polUsd = prices[i]; });
+        const time = (h) => Math.floor(h.createdAt / 1000);
+        const pol = missing.filter(needsPolPrice);
+        const eth = missing.filter(needsEthPrice);
+        const [polPrices, ethPrices] = await Promise.all([
+            pol.length ? polUsdAt(pol.map(time)) : [],
+            eth.length ? polUsdAt(eth.map(time), ETH_USD_FEED, NETWORKS[1]) : []
+        ]);
+        pol.forEach((h, i) => { if (polPrices[i]) h.polUsd = polPrices[i]; });
+        eth.forEach((h, i) => { if (ethPrices[i]) h.ethUsd = ethPrices[i]; });
         saveHistory();
     } catch (e) {
-        logger.warn('Swap: POL/USD price not found', e);
+        logger.warn('Swap: POL/USD or ETH/USD price not found', e);
     } finally {
         pricingSwaps = false;
         renderHistory();
@@ -1339,6 +1497,12 @@ function dataUsdCell(entry) {
         }
         usd = other * entry.polUsd;
         tip = `Price per DATA in this swap, with POL at ${entry.polUsd.toFixed(4)} USD`;
+    } else if (otherLeg.symbol === 'ETH' || otherLeg.symbol === 'WETH') {
+        if (entry.ethUsd === undefined) {
+            return pricingSwaps || entry.status === 'pending' ? '<span class="text-gray-400">…</span>' : none('ETH/USD price not available');
+        }
+        usd = other * entry.ethUsd;
+        tip = `Price per DATA in this swap, with ETH at ${entry.ethUsd.toFixed(2)} USD`;
     } else {
         return none();
     }
@@ -1455,7 +1619,7 @@ let inferringRoutes = false;
 
 /** Route of each swap without one (recovered from the explorer, or its local record lost), kept with the swap */
 async function fillRoutes() {
-    const missing = state.history.filter(h => h.status === 'done' && !h.route && !routeTried.has(lower(h.txHash)));
+    const missing = state.history.filter(h => h.status === 'done' && !h.route && !h.chain && !routeTried.has(lower(h.txHash)));
     if (inferringRoutes || !missing.length) return;
     inferringRoutes = true;
     let changed = false;
@@ -1508,6 +1672,7 @@ function formatDateTime(ms) {
 
 /** Route column: the route of swaps made here, else the router / aggregator the transaction went to */
 function routeCell(entry) {
+    if (entry.chain === 1) return `${Utils.escapeHtml(entry.route || 'Uniswap')}<div class="text-gray-400">on Ethereum</div>`;
     if (entry.route) {
         // Swaps made through an aggregator or wallet: which one, under the route
         const app = entry.via && !DEX_ROUTERS.has(lower(entry.via)) ? KNOWN_ROUTERS[lower(entry.via)] : null;
@@ -1529,7 +1694,8 @@ function renderHistory() {
         body.innerHTML = empty(state.address ? 'No DATA swaps yet.' : 'Connect a wallet to see your swaps.');
         return;
     }
-    const amount = (leg) => `<span class="inline-flex items-center gap-2 whitespace-nowrap"><span class="text-white font-medium">${leg.estimated ? '≈ ' : ''}${formatAmount(leg.amount, SYMBOL_DECIMALS[leg.symbol] ?? 18)}</span>${tokenChip(leg.symbol)}</span>`;
+    // The amount right-aligned before its chip, the chips in a box of one width: they line up from row to row
+    const amount = (leg) => `<span class="flex items-center justify-end gap-2 whitespace-nowrap"><span class="text-white font-medium">${leg.estimated ? '≈ ' : ''}${formatAmount(leg.amount, SYMBOL_DECIMALS[leg.symbol] ?? 18)}</span><span class="inline-flex w-[5rem]">${tokenChip(leg.symbol)}</span></span>`;
     const more = $('swap-history-more');
     more?.classList.toggle('hidden', state.history.length <= historyShown);
     body.innerHTML = state.history.slice(0, historyShown).map(entry => {
@@ -1548,7 +1714,7 @@ function renderHistory() {
                 <td class="py-3 pr-3">${dataUsdCell(entry)}</td>
                 <td class="py-3 pr-3 text-xs text-gray-300">${routeCell(entry)}</td>
                 <td class="py-3 pr-3"><span class="px-2 py-0.5 rounded-full text-[11px] font-semibold whitespace-nowrap ${badge}">${label}</span></td>
-                <td class="py-3 text-right whitespace-nowrap"><a href="https://polygonscan.com/tx/${hash}" target="_blank" rel="noopener noreferrer" class="font-mono text-xs text-blue-400 hover:text-blue-300">${hash.slice(0, 6)}…${hash.slice(-4)}</a></td>
+                <td class="py-3 text-right whitespace-nowrap"><a href="${NETWORKS[entry.chain || 137].explorer}/tx/${hash}" target="_blank" rel="noopener noreferrer" class="font-mono text-xs text-blue-400 hover:text-blue-300">${hash.slice(0, 6)}…${hash.slice(-4)}</a></td>
             </tr>`;
     }).join('');
     fillPolPrices();
@@ -1584,51 +1750,69 @@ async function sendPolygonTx(buildTx) {
     }, window.appSigner);
 }
 
+/** The flow's signer: the app's on Polygon; on Ethereum the private key with an Ethereum RPC, or the wallet switched to Ethereum */
+async function flowSigner(flow) {
+    return flow.chain === 137 ? window.appSigner : getEthereumSigner(state.address, getEthProvider());
+}
+
+/** Sends one transaction of the flow on its chain (Ethereum: the provider's fee data, no Polygon gas overrides) */
+async function sendTx(flow, buildTx) {
+    if (flow.chain === 137) return sendPolygonTx(buildTx);
+    return buildTx(await flowSigner(flow), {});
+}
+
 async function runStep(step, flow) {
     const pay = payToken();
+    const net = NETWORKS[flow.chain];
     if (step.key === 'approve') {
-        const tx = await sendPolygonTx((signer, overrides) => new ethers.Contract(pay.address, ERC20_ABI, signer).approve(step.spender, flow.quote.amountIn, overrides));
+        const tx = await sendTx(flow, (signer, overrides) => new ethers.Contract(pay.address, ERC20_ABI, signer).approve(step.spender, flow.quote.amountIn, overrides));
         step.txHash = tx.hash;
         renderProgress();
         const receipt = await tx.wait();
         if (receipt.status !== 1) throw new Error('The approval failed on-chain.');
     } else if (step.key === 'permit-sign') {
         // EIP-712 PermitSingle for the Universal Router: exact amount, expires with the signature
-        const allowance = await read(p => new ethers.Contract(PERMIT2, PERMIT2_ABI, p).allowance(state.address, pay.address, UNIVERSAL_ROUTER));
+        const allowance = await readOn(net)(p => new ethers.Contract(PERMIT2, PERMIT2_ABI, p).allowance(state.address, pay.address, net.v4.router));
         const expiration = Math.floor(Date.now() / 1000) + PERMIT2_EXPIRATION_SECONDS;
         const permitSingle = {
             details: { token: pay.address, amount: flow.quote.amountIn, expiration, nonce: allowance.nonce },
-            spender: UNIVERSAL_ROUTER,
+            spender: net.v4.router,
             sigDeadline: expiration
         };
-        const domain = { name: 'Permit2', chainId: 137, verifyingContract: PERMIT2 };
+        const domain = { name: 'Permit2', chainId: net.id, verifyingContract: PERMIT2 };
         const types = {
             PermitSingle: [{ name: 'details', type: 'PermitDetails' }, { name: 'spender', type: 'address' }, { name: 'sigDeadline', type: 'uint256' }],
             PermitDetails: [{ name: 'token', type: 'address' }, { name: 'amount', type: 'uint160' }, { name: 'expiration', type: 'uint48' }, { name: 'nonce', type: 'uint48' }]
         };
-        const signature = await window.appSigner._signTypedData(domain, types, permitSingle);
+        const signature = await (await flowSigner(flow))._signTypedData(domain, types, permitSingle);
         flow.permit = { permitSingle, signature, amount: flow.quote.amountIn };
     } else if (step.key === 'swap') {
-        // Fresh quote right before sending (the minimum output follows the current price)
-        const fresh = await findBestQuote(pay, receiveToken(), flow.quote.amountIn);
-        if (fresh.route.venue !== flow.quote.route.venue && !pay.native) {
-            // The best venue changed after the approval: stay on the approved router
-            const same = await quoteRoute(flow.quote.route, flow.quote.amountIn).catch(() => null);
-            if (same) flow.quote = { ...flow.quote, amountOut: same };
+        // The route shown in the form, quoted again right before sending (the minimum output follows the current
+        // price); only a route that can no longer fill the amount gives way to the best one now, and not after
+        // approvals for another router
+        const same = await quoteRoute(flow.quote.route, flow.quote.amountIn).catch(() => null);
+        if (same) {
+            flow.quote = { ...flow.quote, amountOut: same };
         } else {
+            const fresh = await findBestQuote(pay, receiveToken(), flow.quote.amountIn, net);
+            if (fresh.route.venue !== flow.quote.route.venue && flow.steps.some(s => s.key !== 'swap')) {
+                throw new Error('The quoted route can no longer fill this amount. Start a new swap for a new quote.');
+            }
             flow.quote = fresh;
+            step.label = swapLabel(flow.quote, pay);
+            renderProgress();
         }
         if (flow.quote.impact !== null && flow.quote.impact >= IMPACT_BLOCK) throw new Error('The price impact is now too high. Try a smaller amount.');
         const permit = flow.quote.route.venue === 'v4' && flow.permit && flow.permit.permitSingle.sigDeadline > Math.floor(Date.now() / 1000) + 60 ? flow.permit : null;
         const txData = buildSwapTx(flow.quote, state.address, permit);
         const receive = receiveToken();
-        // POL output: measured as the balance change plus the swap's own gas
-        const polBefore = receive.native ? await read(p => p.getBalance(state.address)).catch(() => null) : null;
-        const tx = await sendPolygonTx((signer, overrides) => signer.sendTransaction({ ...txData, ...overrides }));
+        // POL / ETH output: measured as the balance change plus the swap's own gas
+        const polBefore = receive.native ? await readOn(net)(p => p.getBalance(state.address)).catch(() => null) : null;
+        const tx = await sendTx(flow, (signer, overrides) => signer.sendTransaction({ ...txData, ...overrides }));
         step.txHash = tx.hash;
         flow.sent = true;
         upsertSwap({
-            txHash: tx.hash, createdAt: Date.now(), status: 'pending', route: routeLabel(flow.quote.route),
+            txHash: tx.hash, createdAt: Date.now(), status: 'pending', route: routeLabel(flow.quote.route), ...(flow.chain === 137 ? {} : { chain: flow.chain }),
             pay: { symbol: pay.symbol, amount: flow.quote.amountIn.toString() },
             receive: { symbol: receive.symbol, amount: flow.quote.amountOut.toString(), estimated: true }
         });
@@ -1638,11 +1822,13 @@ async function runStep(step, flow) {
             upsertSwap({ txHash: tx.hash, status: 'failed' });
             throw new Error('The swap failed on-chain.');
         }
-        flow.received = await receivedAmount(receipt, receive, polBefore);
+        flow.received = await receivedAmount(receipt, receive, polBefore, net);
         upsertSwap({ txHash: tx.hash, status: 'done', receive: { symbol: receive.symbol, amount: (flow.received || flow.quote.amountOut).toString(), estimated: !flow.received } });
         SwapMarket.refresh();
     }
 }
+
+const swapLabel = (quote, pay) => `Swap ${formatToken(quote.amountIn, pay)} for ${receiveToken().symbol} on ${VENUES[quote.route.venue].name}`;
 
 async function handleSubmit() {
     if (state.submitting || !state.address) return;
@@ -1657,17 +1843,14 @@ async function handleSubmit() {
     if (!state.flow) {
         const quote = state.quote;
         const pay = payToken();
-        const receive = receiveToken();
-        const router = VENUES[quote.route.venue].router;
         const approvals = await approvalSteps(quote);
-        const amount = formatToken(quote.amountIn, pay);
         state.flow = {
             quote,
-            router,
+            chain: quote.route.chain,
             sent: false,
             steps: [
                 ...approvals,
-                { key: 'swap', label: `Swap ${amount} for ${receive.symbol}` }
+                { key: 'swap', label: swapLabel(quote, pay) }
             ].map(step => ({ ...step, status: 'pending', txHash: null }))
         };
     }
@@ -1677,9 +1860,10 @@ async function handleSubmit() {
     setFormLocked(true);
     renderProgress();
     try {
-        if (sessionStorage.getItem('authMethod') !== 'privateKey' && !await Services.checkAndSwitchNetwork()) {
+        if (flow.chain === 137 && sessionStorage.getItem('authMethod') !== 'privateKey' && !await Services.checkAndSwitchNetwork()) {
             throw new Error('Switch your wallet to Polygon to continue.');
         }
+        if (flow.chain !== 137) await flowSigner(flow);   // the wallet on Ethereum (asked once, before the first step)
         for (const step of flow.steps) {
             if (step.status === 'done') continue;
             step.status = 'active';
@@ -1698,7 +1882,9 @@ async function handleSubmit() {
             : `Swapped: at least ${formatToken(minOut(flow.quote.amountOut), receive)} are in your wallet.`);
         setSubmitState('New swap', false);
         UI.showToast({ type: 'success', title: 'Swap Complete', message: `${payToken().symbol} → ${receive.symbol}`, duration: 6000 });
+        if (flow.chain !== 137) restorePolygon();
     } catch (e) {
+        if (flow.chain !== 137) restorePolygon();
         logger.error('Swap failed:', e);
         const failed = flow.steps.find(s => s.status === 'active');
         if (failed) failed.status = 'error';
@@ -1775,7 +1961,7 @@ function openPoolsModal() {
     $('swapPoolsModal')?.classList.remove('hidden');
     document.body.classList.add('overflow-hidden');
     renderLiquidity();
-    loadLiquidity().catch(e => logger.warn('Swap: pool discovery failed', e));
+    loadLiquidity(NET()).catch(e => logger.warn('Swap: pool discovery failed', e));
 }
 
 function closePoolsModal() {
@@ -1799,7 +1985,8 @@ function setupListeners() {
         const token = payToken();
         let balance = state.balances[token.symbol];
         if (!balance || state.flow) return;
-        if (token.native) balance = balance.gt(POL_GAS_RESERVE) ? balance.sub(POL_GAS_RESERVE) : ethers.constants.Zero;
+        const reserve = NET().gasReserve;
+        if (token.native) balance = balance.gt(reserve) ? balance.sub(reserve) : ethers.constants.Zero;
         $('swap-amount').value = ethers.utils.formatUnits(balance, token.decimals).replace(/\.0$/, '');
         updateAmountStatus();
         state.quote = null;
@@ -1826,6 +2013,10 @@ function setupListeners() {
         renderQuote();
         updateQuote();
     });
+    $('swap-chain')?.addEventListener('click', (e) => {
+        const btn = e.target.closest('button[data-chain]');
+        if (btn) setChain(Number(btn.dataset.chain));
+    });
     $('swap-slippage')?.addEventListener('click', (e) => {
         const btn = e.target.closest('button[data-slippage]');
         if (!btn || state.flow) return;
@@ -1836,7 +2027,7 @@ function setupListeners() {
     });
     $('swap-refresh')?.addEventListener('click', () => {
         if (state.flow) return;
-        loadLiquidity().catch(e => logger.warn('Swap: pool discovery failed', e));
+        loadLiquidity(NET()).catch(e => logger.warn('Swap: pool discovery failed', e));
         withSpinner('swap-refresh', Promise.all([loadBalances(), updateQuote()]));
     });
     $('swap-submit')?.addEventListener('click', handleSubmit);
@@ -1868,6 +2059,11 @@ export const SwapLogic = {
         try {
             const saved = Number(localStorage.getItem(SLIPPAGE_KEY));
             if ([0.5, 1, 3].includes(saved)) state.slippage = saved;
+            const chain = Number(localStorage.getItem(CHAIN_KEY));
+            if (NETWORKS[chain] && !state.flow) {
+                state.chain = chain;
+                if (!NET().counters.includes(state.counter)) state.counter = 'USDC';
+            }
         } catch (e) { /* private mode */ }
         let address;
         try {
@@ -1893,6 +2089,7 @@ export const SwapLogic = {
             showSuccess('');
             showError('');
         }
+        renderChain();
         renderTokens();
         renderSlippage();
         renderQuote();
