@@ -690,11 +690,17 @@ function listedTrades() {
 // Beside the price of an off-market trade (kept out of the volume and the chart)
 const OUTLIER_INFO = '<button type="button" class="inline-flex text-gray-300 hover:text-white cursor-help" aria-label="Off-market price" data-tooltip-content="Price far from the market, a bot passing its own funds through a nearly empty pool.<br>Left out of the volume and the chart."><svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg></button>';
 
-// Small Ethereum logo beside the trades of Ethereum pools
-const ETHEREUM_MARK = '<svg class="w-3.5 h-3.5 flex-shrink-0" viewBox="0 0 32 32" aria-label="Ethereum" role="img"><circle cx="16" cy="16" r="16" fill="#627EEA"/><path fill="#fff" fill-opacity=".6" d="M16.5 4v8.87l7.5 3.35z"/><path fill="#fff" d="M16.5 4 9 16.22l7.5-3.35z"/><path fill="#fff" fill-opacity=".6" d="M16.5 21.97v6.03L24 17.62z"/><path fill="#fff" d="M16.5 28v-6.03L9 17.62z"/></svg>';
-/** The swap page's token chip, a size smaller for the trades list */
+// Chain logos, in the trades' Chain column
+const ETHEREUM_MARK = '<svg class="w-3.5 h-3.5 flex-shrink-0" viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="16" fill="#627EEA"/><path fill="#fff" fill-opacity=".6" d="M16.5 4v8.87l7.5 3.35z"/><path fill="#fff" d="M16.5 4 9 16.22l7.5-3.35z"/><path fill="#fff" fill-opacity=".6" d="M16.5 21.97v6.03L24 17.62z"/><path fill="#fff" d="M16.5 28v-6.03L9 17.62z"/></svg>';
+const POLYGON_MARK = '<svg class="w-3.5 h-3.5 flex-shrink-0" viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="16" fill="#8247E5"/><path fill="#fff" d="M21.1 13.1a1.3 1.3 0 0 0-1.3 0l-2.9 1.7-2 1.1-2.9 1.7a1.3 1.3 0 0 1-1.3 0l-2.3-1.3a1.3 1.3 0 0 1-.6-1.1v-2.6c0-.4.2-.9.6-1.1l2.2-1.3a1.3 1.3 0 0 1 1.3 0l2.2 1.3c.4.2.6.7.6 1.1v1.7l2-1.2v-1.7c0-.4-.2-.9-.6-1.1l-4.2-2.4a1.3 1.3 0 0 0-1.3 0l-4.3 2.5c-.4.2-.6.6-.6 1v4.9c0 .4.2.9.6 1.1l4.3 2.4c.4.2.9.2 1.3 0l2.9-1.6 2-1.2 2.9-1.6a1.3 1.3 0 0 1 1.3 0l2.2 1.3c.4.2.6.7.6 1.1v2.6c0 .4-.2.9-.6 1.1l-2.2 1.3a1.3 1.3 0 0 1-1.3 0l-2.2-1.3a1.3 1.3 0 0 1-.6-1.1v-1.7l-2 1.2v1.7c0 .4.2.9.6 1.1l4.3 2.4c.4.2.9.2 1.3 0l4.3-2.4c.4-.2.6-.7.6-1.1v-4.9c0-.4-.2-.9-.6-1.1z"/></svg>';
+/** A trade's chain: logo + name, as the token chips (the logo alone on smaller screens, the name in its tooltip) */
+function chainChip(chain) {
+    const name = chain === 1 ? 'Ethereum' : 'Polygon';
+    return `<span class="inline-flex items-center gap-1 p-0.5 2xl:pr-1.5 rounded-full bg-[#2C2C2C] text-[11px] font-semibold text-gray-200 whitespace-nowrap" data-tooltip-content="${name}">${chain === 1 ? ETHEREUM_MARK : POLYGON_MARK}<span class="hidden 2xl:inline">${name}</span></span>`;
+}
+/** The swap page's token chip, a size smaller for the trades list, all of one width (their arrows line up) */
 const compactChip = (symbol) => state.tokenChip(symbol)
-    .replace('gap-1.5 pl-1 pr-2', 'gap-1 pl-0.5 pr-1.5')
+    .replace('gap-1.5 pl-1 pr-2', 'gap-1 pl-0.5 pr-1.5 min-w-[3.75rem]')
     .replace('text-xs', 'text-[11px]')
     .replaceAll('w-4 h-4', 'w-3.5 h-3.5');
 const poolFullName = (pool) => (pool ? `${pool.label} · DATA/${counterName(pool)} · ${CHAINS[pool.chain].name}` : '');
@@ -711,7 +717,7 @@ function renderFilter() {
 function renderTrades() {
     const body = $('swap-trades');
     if (!body) return;
-    const row = (text) => `<tr><td colspan="5" class="py-4 text-sm text-gray-300">${text}</td></tr>`;
+    const row = (text) => `<tr><td colspan="6" class="py-4 text-sm text-gray-300">${text}</td></tr>`;
     if (!state.loaded) {
         $('swap-trades-more')?.classList.add('hidden');
         const spinner = '<span class="w-4 h-4 flex-shrink-0 border-2 border-gray-500 border-t-transparent rounded-full animate-spin" aria-hidden="true"></span>';
@@ -732,22 +738,24 @@ function renderTrades() {
         const hash = Utils.escapeHtml(trade.txHash);
         const pool = pools.get(trade.pool);
         const ownSwap = state.ownSwaps.get(trade.txHash.toLowerCase());
+        // Of fixed widths (as the chips): the badges, chips and arrows line up from row to row
         const side = trade.buy
-            ? '<span class="tx-badge tx-badge-in whitespace-nowrap">Buy</span>'
-            : '<span class="tx-badge tx-badge-out whitespace-nowrap">Sell</span>';
+            ? '<span class="tx-badge tx-badge-in inline-block w-12 text-center">Buy</span>'
+            : '<span class="tx-badge tx-badge-out inline-block w-12 text-center">Sell</span>';
         // What was paid -> what was received in the pool (the pool's full name in the tooltip)
         // The wallet's own swaps show what it paid and received in the whole swap (e.g. DATA -> POL through USDC)
         const counter = pool ? counterName(pool) : '';
         const [paid, received] = ownSwap?.pay && ownSwap?.receive
             ? [ownSwap.pay, ownSwap.receive]
             : trade.buy ? [counter, 'DATA'] : ['DATA', counter];
-        const tradeCell = `<span class="inline-flex items-center gap-2.5 whitespace-nowrap" data-tooltip-content="${Utils.escapeHtml(poolFullName(pool))}">${side}<span class="inline-flex items-center gap-1">${pool?.chain === 1 ? ETHEREUM_MARK : ''}${compactChip(paid)}<span class="text-gray-400 text-xs">→</span>${compactChip(received)}</span></span>`;
+        const tradeCell = `<span class="inline-flex items-center gap-2.5 whitespace-nowrap" data-tooltip-content="${Utils.escapeHtml(poolFullName(pool))}">${side}<span class="inline-flex items-center gap-1.5">${compactChip(paid)}<span class="text-gray-400 text-xs">→</span>${compactChip(received)}</span></span>`;
         const own = ownSwap
             ? '<span class="ml-2 px-1.5 py-0.5 rounded bg-[#2C2C2C] text-[10px] font-semibold text-gray-300">You</span>'
             : '';
         return `
             <tr class="border-b border-[#2a2a2a] last:border-0${trade.outlier ? ' opacity-50' : ''}">
                 <td class="py-2 pr-2 whitespace-nowrap"><a href="${CHAINS[pool?.chain || 137].explorer}${hash}" target="_blank" rel="noopener noreferrer" class="text-gray-300 hover:text-blue-300" data-tooltip-content="${Utils.escapeHtml(new Date(trade.time).toLocaleString())}">${formatTime(trade.time)}</a>${own}</td>
+                <td class="py-2 pr-2 whitespace-nowrap">${chainChip(pool?.chain || 137)}</td>
                 <td class="py-2 pr-2">${tradeCell}</td>
                 <td class="py-2 pr-2 text-right whitespace-nowrap text-white font-medium">${trade.outlier ? `<span class="inline-flex items-center gap-1">${OUTLIER_INFO}${formatPrice(trade.price)}</span>` : formatPrice(trade.price)}</td>
                 <td class="py-2 pr-2 text-right whitespace-nowrap text-gray-200">${formatData(trade.data)}</td>
