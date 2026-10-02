@@ -5,8 +5,9 @@
  *   Ethereum (Uniswap v2 / v3 / v4, SushiSwap; found here), read with the explorer's log API. A trade's price is its USD value over its DATA amount: USD stablecoins as is,
  *   POL and ETH at the Chainlink POL/USD and ETH/USD prices of the hour. Buy / sell: the amounts' signs (v2 / v3), the move of
  *   the pool price for v4 (only swaps move it).
- * - Chart: the main pool's price. 24H and 7D follow it trade by trade; longer ranges use the daily
- *   DATA/USD history (DATA_History stream, CSV fallback). Every range ends at the pool's current price.
+ * - Chart: the price of the Uniswap v4 pools (Polygon and Ethereum, where the market is). 24H and 7D follow
+ *   their trades, each at its pool's USD price after it; longer ranges use the daily DATA/USD history
+ *   (DATA_History stream, CSV fallback). Every range ends at the latest of those prices.
  * - Volume and trades of the range: from the loaded trades of every pool (24H / 7D, to the minute), else
  *   from the daily volume and transaction counts of the pools in their DEX's subgraph (Uniswap v4 / v3,
  *   QuickSwap V3; the others have none here).
@@ -746,19 +747,34 @@ function setHistory({ priceMap }) {
 // Stats
 // ============================================
 
+/**
+ * The trades of the Uniswap v4 pools (Polygon and Ethereum), oldest first, each at its pool's USD price after it:
+ * a USD counter as is, POL and ETH at Chainlink's price of the hour. Off-market ones are left out.
+ */
+function priceTrades() {
+    const pools = new Map(state.pools.filter(p => p.kind === 'v4').map(p => [p.key, p]));
+    const list = [];
+    for (const trade of state.trades) {
+        const pool = pools.get(trade.pool);
+        if (!pool || trade.outlier || !trade.poolPrice) continue;
+        const rate = USD_STABLES.includes(pool.counterSymbol) ? 1 : (isPol(pool) ? state.polUsd : state.ethUsd).get(hourOf(trade.time));
+        if (rate) list.push({ time: trade.time, price: trade.poolPrice * rate });
+    }
+    return list;
+}
+
 function currentPrice() {
-    const main = mainTrades();
-    const last = main[main.length - 1];
-    return last?.poolPrice || Services.getCurrentLivePrice() || state.history[state.history.length - 1]?.p || null;
+    const trades = priceTrades();
+    return trades[trades.length - 1]?.price || Services.getCurrentLivePrice() || state.history[state.history.length - 1]?.p || null;
 }
 
 /** Price at a past time: the pool price after the last trade before it, else the daily history */
 function priceAt(time) {
     let price = null;
     if (state.windowStart !== null && time >= state.windowStart) {
-        for (const trade of mainTrades()) {
+        for (const trade of priceTrades()) {
             if (trade.time > time) break;
-            price = trade.poolPrice;
+            price = trade.price;
         }
         if (price) return price;
     }
@@ -776,7 +792,7 @@ function renderStats() {
     // Change over the chart's range: from the price at its start (All: the first price known)
     const span = RANGES[state.range];
     const before = span === Infinity
-        ? (state.history[0]?.p || mainTrades()[0]?.poolPrice || null)
+        ? (state.history[0]?.p || priceTrades()[0]?.price || null)
         : priceAt(Date.now() - span);
     if (now && before) {
         const pct = (now / before - 1) * 100;
@@ -901,8 +917,8 @@ function chartPoints() {
     if (tradeStart !== Infinity) {
         const opening = priceAt(tradeStart);
         if (opening) points.push({ x: tradeStart, y: opening });
-        for (const trade of mainTrades()) {
-            if (trade.time >= tradeStart) points.push({ x: trade.time, y: trade.poolPrice });
+        for (const trade of priceTrades()) {
+            if (trade.time >= tradeStart) points.push({ x: trade.time, y: trade.price });
         }
     } else if (!points.length && start !== -Infinity) {
         const opening = priceAt(start);
