@@ -97,3 +97,32 @@ test('a DEX subgraph without token volumes still gives its USD volume', async ({
     await page.click('#swap-chart-range [data-range="3M"]');
     await expect(page.locator('#swap-market-stats')).toHaveText('3M volume $30.00 · 6 trades', { timeout: 30000 });
 });
+
+test('the all-time volume counts the emptied pools, and prices their old days from the DEX subgraphs', async ({ page }) => {
+    // Polygon's Uniswap v4: an emptied DATA/USDC pool (counted), and one against an unknown token (left out)
+    const DATA = '0x3a9a81d576d83ff21f26f325066054540720fc34', USDC = '0x3c499c542cef5e3811e1192ce70d8cc03d5c3359';
+    const EMPTIED = '0x' + 'e'.repeat(64), FAKE = '0x' + 'f'.repeat(64);
+    const day2021 = Date.UTC(2021, 5, 1) / 1000;
+    const asked = [];
+    await page.route('https://gateway.thegraph.com/**', (route) => {
+        const v4 = route.request().url().includes('2CB2uQxcDKWDenagn2z17KQVCtfwSx5eXYuvqTciRTJu');
+        const query = route.request().postDataJSON()?.query || '';
+        asked.push(query);
+        if (query.includes('tokenDayDatas')) {
+            return route.fulfill({ json: { data: { tokenDayDatas: route.request().url().includes('GmSczq') ? [{ date: day2021, priceUSD: '0.1' }] : [] } } });
+        }
+        if (query.includes('token0: {') || query.includes('token0 {')) {
+            const pools = v4 ? [{ id: EMPTIED, token0: { id: DATA }, token1: { id: USDC } }, { id: FAKE, token0: { id: DATA }, token1: { id: '0x' + '1'.repeat(40) } }] : [];
+            return route.fulfill({ json: { data: { token0: pools, token1: [] } } });
+        }
+        if (!query.includes('poolDayDatas')) return route.fallback();
+        // Each alias: its pool's days (the emptied pool: 2021, 1000 DATA without USD)
+        const data = Object.fromEntries([...query.matchAll(/(p\d+): poolDayDatas\(.*?pool: "([^"]+)"/g)].map(([, alias, pool]) => [alias,
+            pool === EMPTIED ? [{ date: day2021, volumeUSD: '0', txCount: '3', volumeToken0: '1000', volumeToken1: '0' }] : []]));
+        return route.fulfill({ json: { data } });
+    });
+    await openApp(page, '/swap');
+    await page.click('#swap-chart-range [data-range="All"]');
+    await expect(page.locator('#swap-market-stats')).toHaveText('All-time volume $100.00 · 3 trades', { timeout: 30000 });
+    expect(asked.some(query => query.includes(FAKE) && query.includes('poolDayDatas'))).toBe(false);
+});
