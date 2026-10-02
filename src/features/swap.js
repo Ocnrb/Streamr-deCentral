@@ -971,7 +971,7 @@ function renderSubmit() {
         return;
     }
     if (state.flow) return;
-    setSubmitState(state.address ? 'Swap' : 'Connect a wallet to swap', false);
+    setSubmitState(state.address ? 'Swap' : 'Connect wallet', false);
     btn.disabled = !canSubmit();
 }
 

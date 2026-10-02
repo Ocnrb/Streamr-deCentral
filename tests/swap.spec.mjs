@@ -49,6 +49,7 @@ test('market trades show their chain, with the trades lined up', async ({ page }
     const rows = page.locator('#swap-trades tr');
     await expect(rows).toHaveCount(4, { timeout: 30000 });
     await expect(page.locator('#swap-trades').locator('xpath=ancestor::table//th').nth(1)).toHaveText('Chain');
+    await expect(page.locator('#swap-submit')).toHaveText('Connect wallet');   // a guest
     await expect(rows.nth(0).locator('td').nth(1).locator('[data-tooltip-content]')).toHaveAttribute('data-tooltip-content', 'Polygon');
     // Buys and sells: their arrows at the same place in every row
     const arrows = await rows.evaluateAll(trs => trs.map(tr => Math.round([...tr.querySelectorAll('span')].find(s => s.textContent === '→').getBoundingClientRect().left)));
