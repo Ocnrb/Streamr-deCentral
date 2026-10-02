@@ -102,19 +102,19 @@ const $ = (id) => document.getElementById(id);
 // Formatting
 // ============================================
 
-function formatPrice(value) {
+export function formatPrice(value) {
     if (!(value > 0)) return '--';
     // Always 4 significant digits (0.0003750, not 0.000375): the prices line up in the trades list
     return `$${value >= 1 ? value.toFixed(2) : value.toPrecision(4)}`;
 }
 
-function formatUsd(value) {
+export function formatUsd(value) {
     if (!(value > 0)) return '$0';
     if (value < 0.01) return '< $0.01';
     return `$${Utils.formatBigNumber(value >= 1000 ? value.toFixed(0) : value.toFixed(2))}`;
 }
 
-function formatData(value) {
+export function formatData(value) {
     return Utils.formatBigNumber(value >= 1000 ? value.toFixed(0) : Number(value.toFixed(2)).toString());
 }
 

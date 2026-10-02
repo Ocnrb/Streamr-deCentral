@@ -15,6 +15,7 @@ import * as UI from '../ui/ui.js';
 import * as Services from '../core/services.js';
 import { DATA_TOKEN_ADDRESS_POLYGON, POLYGONSCAN_NETWORK, getEtherscanApiKey } from '../core/constants.js';
 import { SwapMarket } from './swapMarket.js';
+import { SwapBook } from './swapBook.js';
 import { ethers } from 'ethers';
 
 const { logger } = Utils;
@@ -1885,6 +1886,7 @@ export const SwapLogic = {
         SwapMarket.setPolUsdSource(polUsdAt);
         SwapMarket.setTokenChip(tokenChip);
         SwapMarket.show();
+        SwapBook.show();
         if (state.liquidity) SwapMarket.setPools(marketPools());
         if (!state.flow) {
             $('swap-progress')?.classList.add('hidden');
@@ -1906,5 +1908,6 @@ export const SwapLogic = {
         clearTimeout(state.refreshTimer);
         state.refreshTimer = null;
         SwapMarket.stop();
+        SwapBook.stop();
     }
 };

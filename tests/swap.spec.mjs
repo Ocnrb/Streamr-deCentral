@@ -7,6 +7,24 @@ import { mockNetwork, openApp } from './support/network.mjs';
 const V4_SWAP = ethers.utils.id('Swap(bytes32,address,int128,int128,uint160,uint128,int24,uint24)');
 const SQRT_PRICE = ethers.BigNumber.from('1252700000000000000000');   // 0.00025 USDC per DATA (DATA is currency0)
 
+// The main pool's storage in the PoolManager (extsload): its price, and one position 10 levels (600 ticks) each side of it
+const POOL_ID = ethers.utils.keccak256(ethers.utils.defaultAbiCoder.encode(['address', 'address', 'uint24', 'int24', 'address'],
+    ['0x3a9a81d576d83ff21f26f325066054540720fc34', '0x3c499c542cef5e3811e1192ce70d8cc03d5c3359', 3000, 60, ethers.constants.AddressZero]));
+const STATE_SLOT = ethers.BigNumber.from(ethers.utils.keccak256(ethers.utils.solidityPack(['bytes32', 'bytes32'], [POOL_ID, ethers.utils.hexZeroPad('0x06', 32)])));
+const TICK = Math.floor(Math.log((Number(SQRT_PRICE.toString()) / 2 ** 96) ** 2) / Math.log(1.0001));
+const BASE = Math.floor(TICK / 60) * 60;
+const LIQUIDITY = ethers.BigNumber.from(10).pow(18);
+const word = (value) => ethers.utils.hexZeroPad(ethers.BigNumber.from(value).toTwos(256).toHexString(), 32);
+const POOL_STORAGE = new Map([
+    [word(STATE_SLOT), word(ethers.BigNumber.from(TICK).toTwos(24).shl(160).or(SQRT_PRICE))],
+    [word(STATE_SLOT.add(3)), word(LIQUIDITY)],
+    ...[[BASE - 600, LIQUIDITY], [BASE + 600, LIQUIDITY.mul(-1)]].map(([tick, net]) => [
+        ethers.utils.keccak256(ethers.utils.defaultAbiCoder.encode(['int24', 'bytes32'], [tick, word(STATE_SLOT.add(4))])),
+        word(net.toTwos(128).shl(128).or(LIQUIDITY))
+    ])
+]);
+const EXTSLOAD = new ethers.utils.Interface(['function extsload(bytes32[] slots) view returns (bytes32[])']);
+
 let ranges;   // block ranges asked of the main pool's swaps
 test.beforeEach(async ({ page }) => {
     await mockNetwork(page.context());
@@ -14,6 +32,12 @@ test.beforeEach(async ({ page }) => {
     // Polygon blocks of 1.5 s (not the 2 s estimated)
     await page.route('**/*', (route) => {
         const body = route.request().postDataJSON?.();
+        const call = body?.method === 'eth_call' ? body.params[0] : null;
+        if (call?.to?.toLowerCase() === '0x67366782805870060151383f4bbff9dab53e5cd6' && call.data.startsWith(EXTSLOAD.getSighash('extsload'))) {
+            const [slots] = EXTSLOAD.decodeFunctionData('extsload', call.data);
+            const result = EXTSLOAD.encodeFunctionResult('extsload', [slots.map(slot => POOL_STORAGE.get(slot.toLowerCase()) || ethers.constants.HashZero)]);
+            return route.fulfill({ json: { jsonrpc: '2.0', id: body.id, result } });
+        }
         if (body?.method !== 'eth_getBlockByNumber') return route.fallback();
         const number = parseInt(body.params[0], 16);
         return route.fulfill({ json: { jsonrpc: '2.0', id: body.id, result: {
@@ -125,4 +149,27 @@ test('the all-time volume counts the emptied pools, and prices their old days fr
     await page.click('#swap-chart-range [data-range="All"]');
     await expect(page.locator('#swap-market-stats')).toHaveText('All-time volume $100.00 · 3 trades', { timeout: 30000 });
     expect(asked.some(query => query.includes(FAKE) && query.includes('poolDayDatas'))).toBe(false);
+});
+
+test('the order book shows the main pool\'s liquidity by price, in place of the trades', async ({ page }) => {
+    await openApp(page, '/swap');
+    await page.click('[data-market-view="book"]');
+    await expect(page.locator('#swap-trades-view')).toBeHidden();
+    await expect(page.locator('#swap-trades-filter')).toBeHidden();
+    await expect(page.locator('#swap-book-pool')).toHaveText('Uniswap v4 · DATA/USDC 0.3%');
+    // The position's 10 levels above the price (DATA for sale) and the 11 below it (the one the price is in, then 10)
+    const asks = page.locator('#swap-book-asks > div');
+    const bids = page.locator('#swap-book-bids > div');
+    await expect(asks).toHaveCount(10, { timeout: 30000 });
+    await expect(bids).toHaveCount(11);
+    await expect(page.locator('#swap-book-mid')).toContainText('$0.0002500');
+    await expect(page.locator('#swap-book-mid')).toContainText('2% depth');
+    // The nearest ask just above the price, the farthest at the top
+    const prices = await asks.evaluateAll(rows => rows.map(row => Number(row.querySelector('span').textContent.replace('$', ''))));
+    expect(prices[prices.length - 1]).toBeGreaterThan(0.00025);
+    expect(prices[0]).toBeGreaterThan(prices[prices.length - 1]);
+    // Back to the trades
+    await page.click('[data-market-view="trades"]');
+    await expect(page.locator('#swap-trades-view')).toBeVisible();
+    await expect(page.locator('#swap-book-view')).toBeHidden();
 });
