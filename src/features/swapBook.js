@@ -24,7 +24,6 @@ const POOLS_SLOT = 6n;                     // the PoolManager's pools mapping
 const LEVELS = 20;                         // levels on each side
 const STEPS = [0.005, 0.01, 0.02, 0.04, 0.08];   // level sizes (the + shows more depth); 20 levels of 8%: about x4.7
 const RANGE_TICKS = Math.ceil(Math.log(6) / Math.log(1.0001));   // ticks read each side of a pool's price (x6)
-const DEPTH = 0.02;                        // the depth beside the price: within 2% of it
 const REFRESH_MS = 30 * 1000;
 const VIEW_KEY = 'swapMarketView';
 const STABLES = ['USDC', 'USDC.e', 'USDT', 'DAI'];
@@ -218,9 +217,9 @@ function sweep(m, edges, side) {
     });
 }
 
-/** The book of the pools shown: levels from the deepest pool's price, the depth within 2% of it */
+/** The book of the pools shown: levels from the price of the deepest pool (its liquidity within 2% of its price) */
 function buildBook(models) {
-    const depth = (m, price) => sweep(m, [price * (1 + DEPTH)], 'ask')[0].usd + sweep(m, [price / (1 + DEPTH)], 'bid')[0].usd;
+    const depth = (m, price) => sweep(m, [price * 1.02], 'ask')[0].usd + sweep(m, [price / 1.02], 'bid')[0].usd;
     const deepest = models.reduce((best, m) => {
         const d = depth(m, m.price);
         return !best || d > best.d ? { m, d } : best;
@@ -230,14 +229,7 @@ function buildBook(models) {
     const askEdges = Array.from({ length: LEVELS }, (_, k) => price * (1 + step) ** (k + 1));
     const bidEdges = Array.from({ length: LEVELS }, (_, k) => price / (1 + step) ** (k + 1));
     const add = (edges, side) => edges.map((edge, k) => ({ price: edge, ...models.map(m => sweep(m, edges, side)[k]).reduce((sum, l) => ({ data: sum.data + l.data, usd: sum.usd + l.usd }), { data: 0, usd: 0 }) }));
-    const total = (side, edge) => models.reduce((sum, m) => sum + sweep(m, [edge], side)[0].usd, 0);
-    return {
-        price,
-        asks: add(askEdges, 'ask'),
-        bids: add(bidEdges, 'bid'),
-        askDepth: total('ask', price * (1 + DEPTH)),
-        bidDepth: total('bid', price / (1 + DEPTH))
-    };
+    return { price, asks: add(askEdges, 'ask'), bids: add(bidEdges, 'bid') };
 }
 
 function shownModels() {
@@ -320,13 +312,11 @@ function render() {
             <span class="text-base font-semibold text-white">${formatPrice(book.price)}</span>
             <span class="text-xs text-gray-400" data-tooltip-content="${Utils.escapeHtml(names)}">${models.length} ${models.length === 1 ? 'pool' : 'pools'}</span>
         </span>
-        <span class="flex items-center gap-3 text-xs text-gray-300">
-            <span data-tooltip-content="The DATA a buy takes up to 2% above the price · the DATA a sale gets down to 2% below it">2% depth <span class="text-red-400">${formatUsd(book.askDepth)}</span> · <span class="text-green-400">${formatUsd(book.bidDepth)}</span></span>
-            <span class="inline-flex items-center gap-1" data-tooltip-content="Size of each level: wider levels show more depth">
-                <button type="button" data-book-step="-1" class="${ZOOM_BUTTON}" aria-label="Narrower levels" ${state.step === 0 ? 'disabled' : ''}><svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="M5 12h14"/></svg></button>
-                <span class="w-8 text-center tabular-nums">${percent}</span>
-                <button type="button" data-book-step="1" class="${ZOOM_BUTTON}" aria-label="Wider levels" ${state.step === STEPS.length - 1 ? 'disabled' : ''}><svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="M5 12h14"/><path d="M12 5v14"/></svg></button>
-            </span>
+        <span class="inline-flex items-center gap-1 text-xs text-gray-300">
+            <span class="mr-1 text-gray-400">Levels</span>
+            <button type="button" data-book-step="-1" class="${ZOOM_BUTTON}" aria-label="Narrower levels" ${state.step === 0 ? 'disabled' : ''}><svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="M5 12h14"/></svg></button>
+            <span class="w-8 text-center tabular-nums">${percent}</span>
+            <button type="button" data-book-step="1" class="${ZOOM_BUTTON}" aria-label="Wider levels" ${state.step === STEPS.length - 1 ? 'disabled' : ''}><svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="M5 12h14"/><path d="M12 5v14"/></svg></button>
         </span>`;
 }
 

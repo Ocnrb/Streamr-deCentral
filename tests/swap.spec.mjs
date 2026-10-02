@@ -189,7 +189,7 @@ test('the liquidity book shows the v4 pools\' liquidity by price, in place of th
     const mid = page.locator('#swap-book-mid');
     await expect(mid).toContainText('$0.0002500');
     await expect(mid).toContainText('1 pool');
-    await expect(mid).toContainText('2% depth');
+    await expect(mid).toContainText('Levels');
     // The nearest ask just above the price, the farthest at the top
     const prices = await asks.evaluateAll(rows => rows.map(row => Number(row.querySelector('span').textContent.replace('$', ''))));
     expect(prices[prices.length - 1]).toBeGreaterThan(0.00025);
