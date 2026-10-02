@@ -759,7 +759,7 @@ function renderTrades() {
                 <td class="py-2 pr-2">${tradeCell}</td>
                 <td class="py-2 pr-2 text-right whitespace-nowrap text-white font-medium">${trade.outlier ? `<span class="inline-flex items-center gap-1">${OUTLIER_INFO}${formatPrice(trade.price)}</span>` : formatPrice(trade.price)}</td>
                 <td class="py-2 pr-2 text-right whitespace-nowrap text-gray-200">${formatData(trade.data)}</td>
-                <td class="py-2 text-right whitespace-nowrap text-gray-200">${trade.usd === null ? '--' : formatUsd(trade.usd)}</td>
+                <td class="py-2 pr-3 text-right whitespace-nowrap text-gray-200">${trade.usd === null ? '--' : formatUsd(trade.usd)}</td>
             </tr>`;
     }).join('');
 }
