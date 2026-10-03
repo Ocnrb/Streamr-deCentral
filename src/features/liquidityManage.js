@@ -338,10 +338,32 @@ function depositLabel(quote, wallet, action) {
     return [action, true];
 }
 
+/**
+ * The form is taller than the pool's numbers: while it is open the positions move up beside it, under the chart, and
+ * narrow down, when the whole table fits there (else they stay below, full width)
+ */
+function placePositions() {
+    const positions = $('market-positions-section');
+    const card = $('liquidity-new')?.closest('section');
+    const table = positions?.querySelector('table');
+    const scroller = table?.parentElement;
+    if (!positions || !card || !table) return;
+    const place = (beside) => {
+        card.classList.toggle('xl:row-span-2', beside);
+        positions.classList.toggle('xl:col-span-1', beside);
+        positions.classList.toggle('xl:col-start-1', beside);
+        table.classList.toggle('min-w-[860px]', !beside);
+    };
+    const beside = state.form.open && window.matchMedia('(min-width: 1280px)').matches;
+    place(beside);
+    if (beside && scroller.scrollWidth > scroller.clientWidth + 1) place(false);
+}
+
 function renderForm(focused = null) {
     const f = state.form;
     $('liquidity-overview')?.classList.toggle('hidden', f.open);
     $('liquidity-new')?.classList.toggle('hidden', !f.open);
+    placePositions();
     if (!f.open) return;
     const pool = formPool();
     const slot = state.slots[f.chain];
@@ -648,6 +670,16 @@ function setupListeners() {
         }
     }
     $('liquidity-new-submit')?.addEventListener('click', submitNew);
+    // The page's width (the window, the sidebar collapsed or not): the positions placed again
+    const view = $('market-liquidity-view');
+    let width = 0;
+    if (view && window.ResizeObserver) {
+        new ResizeObserver(() => {
+            if (view.offsetWidth === width) return;
+            width = view.offsetWidth;
+            placePositions();
+        }).observe(view);
+    }
 
     $('liquidity-modal-close')?.addEventListener('click', closeManage);
     $('liquidityModal')?.addEventListener('click', (e) => { if (e.target.id === 'liquidityModal') closeManage(); });

@@ -952,39 +952,34 @@ function renderChain() {
 // Liquidity tab
 // ============================================
 
-/** A position's status: its label and color */
+/** A position's status: its label and the color of its dot */
 const POSITION_STATUS = {
-    in: ['In range', 'text-green-400'],
-    out: ['Out of range', 'text-amber-300'],
-    closed: ['Closed', 'text-gray-400']
+    in: ['In range', 'bg-green-400'],
+    out: ['Out of range', 'bg-amber-300'],
+    closed: ['Closed', 'bg-gray-400']
 };
 
 /**
- * A position's tokens as a bar between its two ends: DATA (orange) on the left, where the price falling leaves it all in
- * DATA, USDC (blue) on the right, where the price rising leaves it all in USDC, each by its share of the value. A green
- * dot on the bar in range; out of range a yellow dot outside, on the side the price went. The amounts in its tooltip.
+ * A position's tokens as a bar: DATA (orange) on the left, USDC (blue) on the right, each by its share of the value,
+ * and their shares below. In range a green dot on the bar where they meet; out of range a yellow dot at the bar's end
+ * on the price's side (left: the price fell below, all DATA; right: it rose above, all USDC).
  */
 function distributionCell(p) {
     if (p.closed || !(p.value > 0)) return '<div class="text-center text-gray-400">--</div>';
     const share = Math.min(100, Math.max(0, (p.value - p.usdc) / p.value * 100));
     const below = !p.inRange && p.price < p.min;
-    const side = (shown) => `<span class="w-2 h-2 rounded-full flex-shrink-0 ${shown ? 'bg-amber-300 ring-4 ring-amber-300/15' : 'invisible'}"></span>`;
+    const [at, dot] = p.inRange ? [share, 'bg-green-400'] : [below ? 0 : 100, 'bg-amber-300'];
     const pct = (value) => `${value > 0 && value < 1 ? '<1' : value > 99 && value < 100 ? '>99' : Math.round(value)}%`;
-    const tip = `${formatData(p.data)} DATA and ${Utils.formatBigNumber(p.usdc.toFixed(2))} USDC`;
     return `
-        <div class="flex items-center justify-center gap-1.5" data-tooltip-content="${tip}">
-            ${side(below)}
-            <div class="w-[6.5rem] flex-shrink-0">
-                <div class="relative h-1.5">
-                    <div class="flex h-full rounded-full overflow-hidden bg-[#2C2C2C] gap-px">
-                        ${share > 0 ? `<div class="bg-orange-500" style="width: ${share.toFixed(1)}%"></div>` : ''}
-                        ${share < 100 ? '<div class="flex-1 bg-blue-500"></div>' : ''}
-                    </div>
-                    ${p.inRange ? `<span class="absolute top-1/2 w-2.5 h-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-green-400 ring-2 ring-[#1E1E1E]" style="left: ${share.toFixed(1)}%"></span>` : ''}
+        <div class="w-28 mx-auto">
+            <div class="relative h-1.5">
+                <div class="flex h-full rounded-full overflow-hidden bg-[#2C2C2C] gap-px">
+                    ${share > 0 ? `<div class="bg-orange-500" style="width: ${share.toFixed(1)}%"></div>` : ''}
+                    ${share < 100 ? '<div class="flex-1 bg-blue-500"></div>' : ''}
                 </div>
-                <div class="mt-1.5 flex justify-between text-[11px] text-gray-300 tabular-nums whitespace-nowrap"><span>DATA ${pct(share)}</span><span>${pct(100 - share)} USDC</span></div>
+                <span class="absolute top-1/2 w-2.5 h-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full ${dot} ring-2 ring-[#1E1E1E]" style="left: ${at.toFixed(1)}%"></span>
             </div>
-            ${side(!p.inRange && !below)}
+            <div class="mt-1.5 flex justify-between text-[11px] text-gray-300 tabular-nums whitespace-nowrap"><span>DATA ${pct(share)}</span><span>${pct(100 - share)} USDC</span></div>
         </div>`;
 }
 
@@ -1246,31 +1241,29 @@ function renderPositions() {
 
     const body = $('liquidity-positions');
     if (body) {
-        const empty = (text) => `<tr><td colspan="5" class="py-4 text-sm text-gray-300">${text}</td></tr>`;
+        const empty = (text) => `<tr><td colspan="9" class="py-4 text-sm text-gray-300">${text}</td></tr>`;
         const errors = Liquidity.errors();
         if (!state.address) body.innerHTML = empty('Connect a wallet to see your liquidity positions.');
         else if (positions === null) body.innerHTML = empty('Reading your positions...');
         else if (!positions.length) body.innerHTML = empty(errors.length ? `Your positions on ${errors.join(' and ')} could not be read. Try again in a moment.` : 'No positions in the DATA/USDC pools on Uniswap v4.');
         else {
             body.innerHTML = [...positions].sort((a, b) => b.chain - a.chain || Number(b.tokenId) - Number(a.tokenId)).map(p => {
-                const [label, text] = POSITION_STATUS[p.closed ? 'closed' : p.inRange ? 'in' : 'out'];
+                const [label, dot] = POSITION_STATUS[p.closed ? 'closed' : p.inRange ? 'in' : 'out'];
                 const fees = `${formatData(p.feeData)} DATA and ${p.feeUsdc.toFixed(2)} USDC`;
                 const hovered = p.tokenId === state.hoverPosition ? ' bg-white/5' : '';
                 return `
                 <tr data-position="${Utils.escapeHtml(p.tokenId)}" class="border-b border-[#2a2a2a] last:border-0 transition-colors${hovered}">
-                    <td class="py-3 pr-2 whitespace-nowrap">
-                        <span class="inline-flex items-center gap-1.5">${chainChip(p.chain).replace('2xl:pr-1.5', '').replace('hidden 2xl:inline', 'hidden')}<a href="${p.url}" target="_blank" rel="noopener noreferrer" class="text-blue-400 hover:text-blue-300">#${Utils.escapeHtml(p.tokenId)}</a></span>
+                    <td class="py-3 pr-3 whitespace-nowrap"><a href="${p.url}" target="_blank" rel="noopener noreferrer" class="text-blue-400 hover:text-blue-300">#${Utils.escapeHtml(p.tokenId)}</a></td>
+                    <td class="py-3 pr-3 text-center whitespace-nowrap">${chainChip(p.chain, { named: true })}</td>
+                    <td class="py-3 pr-3 whitespace-nowrap">
+                        <span class="inline-flex items-center gap-2 text-gray-200"><span class="w-2 h-2 rounded-full flex-shrink-0 ${dot}" aria-hidden="true"></span><span class="sr-only">${label}</span>${formatPrice(p.min)} – ${formatPrice(p.max)}</span>
                     </td>
-                    <td class="py-3 pr-2 whitespace-nowrap">
-                        <div class="text-gray-200">${formatPrice(p.min)} – ${formatPrice(p.max)}</div>
-                        <div class="mt-1 text-xs font-medium ${text}">${label}</div>
-                    </td>
-                    <td class="py-3 pr-2">${distributionCell(p)}</td>
-                    <td class="py-3 pr-2 text-right whitespace-nowrap">
-                        <div class="text-white font-medium">${formatUsd(p.value)}</div>
-                        <div class="mt-1 text-xs text-gray-300" data-tooltip-content="Uncollected fees<br>${fees}">${formatUsd(p.feeValue)} fees</div>
-                    </td>
-                    <td class="py-3 text-right"><button type="button" data-manage-position="${Utils.escapeHtml(p.tokenId)}" data-chain="${p.chain}" class="px-2.5 py-1 rounded-lg bg-[#2C2C2C] hover:bg-[#3A3A3A] text-xs font-semibold text-white transition-colors">Manage</button></td>
+                    <td class="py-3 pr-3">${distributionCell(p)}</td>
+                    <td class="py-3 pr-3 text-right whitespace-nowrap text-gray-200">${formatData(p.data)}</td>
+                    <td class="py-3 pr-3 text-right whitespace-nowrap text-gray-200">${Utils.formatBigNumber(p.usdc.toFixed(2))}</td>
+                    <td class="py-3 pr-3 text-right whitespace-nowrap text-white font-medium">${formatUsd(p.value)}</td>
+                    <td class="py-3 pr-3 text-right whitespace-nowrap text-gray-200" data-tooltip-content="${fees}">${formatUsd(p.feeValue)}</td>
+                    <td class="py-3 text-right"><button type="button" data-manage-position="${Utils.escapeHtml(p.tokenId)}" data-chain="${p.chain}" class="px-3 py-1 rounded-lg bg-[#2C2C2C] hover:bg-[#3A3A3A] text-xs font-semibold text-white transition-colors">Manage</button></td>
                 </tr>`;
             }).join('');
         }

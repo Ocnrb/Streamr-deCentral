@@ -169,17 +169,20 @@
             <!-- As tall as the swap form beside it (lg): the table scrolls inside -->
             <div id="swap-trades-view" class="relative flex-1 lg:min-h-[16rem]">
             <div class="overflow-auto max-h-[26rem] lg:max-h-none lg:absolute lg:inset-0">
-                <table class="w-full min-w-[480px] text-sm">
-                    <thead class="sticky top-0 bg-[#1E1E1E] text-xs text-gray-300 border-b border-[#333]">
-                        <tr>
-                            <th class="text-left font-medium py-2 pr-2 whitespace-nowrap">Time</th>
-                            <th class="text-center font-medium py-2 pr-2 whitespace-nowrap">Chain</th>
-                            <th class="text-center font-medium py-2 pr-2 whitespace-nowrap">Trade</th>
-                            <th class="text-center font-medium py-2 pr-2 whitespace-nowrap">Price</th>
-                            <th class="text-right font-medium py-2 pr-2 whitespace-nowrap">DATA</th>
-                            <th class="text-right font-medium py-2 pr-2 whitespace-nowrap">Value</th>
-                        </tr>
-                    </thead>
+                <table class="w-full min-w-[860px] text-sm">
+                            <thead class="text-xs text-gray-300 border-b border-[#333]">
+                                <tr>
+                                    <th class="text-left font-medium py-2 pr-3">Position</th>
+                                    <th class="text-center font-medium py-2 pr-3">Chain</th>
+                                    <th class="text-left font-medium py-2 pr-3">Range</th>
+                                    <th class="text-center font-medium py-2 pr-3">Distribution</th>
+                                    <th class="text-right font-medium py-2 pr-3">DATA</th>
+                                    <th class="text-right font-medium py-2 pr-3">USDC</th>
+                                    <th class="text-right font-medium py-2 pr-3">Value</th>
+                                    <th class="text-right font-medium py-2 pr-3">Uncollected fees</th>
+                                    <th class="py-2"><span class="sr-only">Manage</span></th>
+                                </tr>
+                            </thead>
                     <tbody id="swap-trades"></tbody>
                 </table>
                 <div class="py-3 text-center">
@@ -233,8 +236,8 @@
                     </div>
                     <div id="liquidity-depth" class="relative flex-1 min-h-64 sm:min-h-80 mt-3"></div>
                 </section>
-                <!-- The pool's numbers and the wallet's liquidity in it (from xl beside the chart and the positions) -->
-                <section class="detail-section p-4 sm:p-5 lg:col-start-2 lg:row-start-1 xl:row-span-2">
+                <!-- The pool's numbers and the wallet's liquidity in it; the new position's form takes their place -->
+                <section class="detail-section p-4 sm:p-5 lg:col-start-2 lg:row-start-1">
                     <div id="liquidity-overview" class="space-y-4">
                         <dl id="liquidity-stats" class="space-y-3 text-sm"></dl>
                         <div class="border-t border-[#2a2a2a] pt-4">
@@ -309,18 +312,23 @@
                     </div>
                 </section>
                 <!-- Liquidity positions of this wallet in the DATA/USDC v4 pools -->
-                <section id="market-positions-section" class="detail-section p-4 sm:p-5 min-w-0 lg:col-span-2 lg:row-start-2 xl:col-span-1 xl:col-start-1">
+                <!-- (below both; from xl, while the new position's form is open, beside it under the chart) -->
+                <section id="market-positions-section" class="detail-section p-4 sm:p-5 min-w-0 lg:col-span-2 lg:row-start-2">
                     <div class="flex items-center justify-between gap-3 mb-4">
                         <h3 class="text-lg font-semibold text-white">Your positions</h3>
                     </div>
                     <div class="overflow-x-auto">
-                        <table class="w-full min-w-[480px] text-sm">
+                        <table class="w-full min-w-[860px] text-sm">
                             <thead class="text-xs text-gray-300 border-b border-[#333]">
                                 <tr>
                                     <th class="text-left font-medium py-2 pr-3">Position</th>
+                                    <th class="text-center font-medium py-2 pr-3">Chain</th>
                                     <th class="text-left font-medium py-2 pr-3">Range</th>
                                     <th class="text-center font-medium py-2 pr-3">Distribution</th>
+                                    <th class="text-right font-medium py-2 pr-3">DATA</th>
+                                    <th class="text-right font-medium py-2 pr-3">USDC</th>
                                     <th class="text-right font-medium py-2 pr-3">Value</th>
+                                    <th class="text-right font-medium py-2 pr-3">Uncollected fees</th>
                                     <th class="py-2"><span class="sr-only">Manage</span></th>
                                 </tr>
                             </thead>
