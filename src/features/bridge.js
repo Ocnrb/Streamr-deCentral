@@ -196,7 +196,7 @@ const GNOSIS_ICON = '<svg class="w-5 h-5 flex-shrink-0" viewBox="0 0 32 32" aria
 const SUPPLY_CHAINS = [
     {
         chain: 'Polygon', color: '#8247E5', icon: () => CHAINS[POLYGON_CHAIN_ID].icon, token: DATA_TOKEN_ADDRESS_POLYGON,
-        read: (fn) => polygonRead(fn), locks: [ERC20_PREDICATE], bridge: 'Polygon PoS bridge'
+        read: (fn) => polygonRead(fn), locks: [ERC20_PREDICATE], bridge: 'PoS bridge'
     },
     {
         chain: 'Gnosis', color: '#04795B', icon: () => GNOSIS_ICON, token: '0x256eb8a51f382650B2A1e946b8811953640ee47D',
@@ -260,9 +260,9 @@ async function loadSupply() {
             const bridged = Math.min(lock, supply);
             const old = c.chain === 'Gnosis' ? gnosisXdata : 0;
             const parts = [
-                { label: c.bridge ? `Via ${c.bridge}` : 'Bridged from Ethereum', amount: bridged, color: c.color },
-                { label: `Issued on ${c.chain}`, amount: supply - bridged, color: lighter(c.color, 0.18) },
-                { label: 'XDATA, not migrated', amount: old, color: lighter(c.color, 0.3) }
+                { unit: 'DATA', note: `via ${c.bridge}`, amount: bridged, color: c.color },
+                { unit: 'DATA', note: `minted on ${c.chain}`, amount: supply - bridged, color: lighter(c.color, 0.18) },
+                { unit: 'XDATA', note: 'not migrated', amount: old, color: lighter(c.color, 0.3) }
             ].filter(part => part.amount >= 1);
             return { ...c, lock, amount: supply + old, parts };
         });
@@ -271,8 +271,8 @@ async function loadSupply() {
         const ethData = toData(ethTotal) - chains.reduce((sum, c) => sum + (c.amount === null ? 0 : c.lock), 0) - xdata.reserved;
         const ethXdata = Math.max(0, xdata.supply - gnosisXdata);
         const ethParts = [
-            { label: 'DATA', amount: ethData, color: '#627EEA' },
-            { label: 'XDATA, not migrated', amount: ethXdata, color: lighter('#627EEA', 0.22) }
+            { unit: 'DATA', note: '', amount: ethData, color: '#627EEA' },
+            { unit: 'XDATA', note: 'not migrated', amount: ethXdata, color: lighter('#627EEA', 0.22) }
         ].filter(part => part.amount >= 1);
         const all = [{ chain: 'Ethereum', color: '#627EEA', icon: () => CHAINS[ETH_CHAIN_ID].icon, amount: ethData + ethXdata, parts: ethParts }, ...chains];
         state.supply = {
@@ -331,7 +331,7 @@ function renderSupply() {
         ${supply.chains.map((c) => {
             const i = shown.indexOf(c);
             // Where it is: the chain's parts in a tooltip
-            const where = c.parts.length > 1 ? ` data-tooltip-content="<span class='font-semibold'>${c.chain}</span>${c.parts.map(part => `<br>${part.label} ${whole(part.amount)}`).join('')}"` : '';
+            const where = c.parts.length > 1 ? ` data-tooltip-content="<span class='font-semibold'>${c.chain}</span>${c.parts.map(part => `<br>${whole(part.amount)} ${part.unit}${part.note ? ` ${part.note}` : ''}`).join('')}"` : '';
             const head = `
             <li${i >= 0 ? ` data-slice="${i}"` : ''}${where} class="px-2 py-1 -mx-2 rounded-lg transition-colors cursor-default">
                 <div class="flex items-center justify-between gap-6">

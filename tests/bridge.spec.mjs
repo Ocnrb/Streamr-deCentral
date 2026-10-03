@@ -59,14 +59,14 @@ test('the bridge page shows DATA\'s whole supply by chain: each chain\'s supply,
     // Ethereum: its DATA less the bridges' and the migration's, and the XDATA not migrated (less Gnosis's)
     await expect(rows.nth(0)).toContainText('Ethereum');
     await expect(rows.nth(0)).toContainText('756 000 000 DATA');
-    await expect(rows.nth(0)).toHaveAttribute('data-tooltip-content', /DATA 710 000 000<br>XDATA, not migrated 46 000 000/);
+    await expect(rows.nth(0)).toHaveAttribute('data-tooltip-content', /<br>710 000 000 DATA<br>46 000 000 XDATA not migrated$/);
     // Polygon: its supply, in its bridged and issued parts
     await expect(rows.nth(1)).toContainText('270 000 000 DATA');
-    await expect(rows.nth(1)).toHaveAttribute('data-tooltip-content', /Polygon.*<br>Via Polygon PoS bridge 240 000 000<br>Issued on Polygon 30 000 000/);
-    await expect(rows.nth(1)).not.toContainText('Issued');   // in the tooltip only
+    await expect(rows.nth(1)).toHaveAttribute('data-tooltip-content', /Polygon<\/span><br>240 000 000 DATA via PoS bridge<br>30 000 000 DATA minted on Polygon$/);
+    await expect(rows.nth(1)).not.toContainText('minted');   // in the tooltip only
     await expect(rows.nth(2)).toContainText('Gnosis');
     await expect(rows.nth(2)).toContainText('9 000 000 DATA');
-    await expect(rows.nth(2)).toHaveAttribute('data-tooltip-content', /XDATA, not migrated 4 000 000/);
+    await expect(rows.nth(2)).toHaveAttribute('data-tooltip-content', /<br>5 000 000 DATA minted on Gnosis<br>4 000 000 XDATA not migrated$/);
     await expect(legend).toContainText('Total supply1 035 000 000 DATA');
     await expect(legend).not.toContainText('BNB');
     // The ring: a slice per part, with its chain, part and amount in the tooltip
