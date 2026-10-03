@@ -36,8 +36,13 @@ test('the bridge page shows where DATA\'s supply is: each chain\'s bridge balanc
     await expect(legend.locator('li').nth(1)).toContainText('Polygon');
     await expect(legend.locator('li').nth(1)).toContainText('24.0%');
     await expect(legend).toContainText('Total supply1 000 000 000 DATA');
-    const slices = await page.evaluate(() => window.Chart.getChart(document.querySelector('#bridge-supply-chart canvas')).data.datasets[0].data);
-    expect(slices).toEqual([760000000, 240000000]);
+    // The ring: a slice per chain on its top, with its amount in the tooltip
+    const top = page.locator('#bridge-supply-chart svg:last-of-type path');
+    await expect(top).toHaveCount(2);
+    await expect(top.nth(1)).toHaveAttribute('data-tooltip-content', /Polygon.*240 000 000 DATA.*24\.0%/);
+    // A legend row stands out with its slice
+    await legend.locator('li').nth(1).hover();
+    await expect(page.locator('#bridge-supply-chart g[data-slice="1"]').last()).toHaveAttribute('style', /translate/);
     // The bridge times below the form, Polygon's with its longer case
     await expect(page.locator('#bridge-view [role="note"]')).toContainText('sometimes up to 20 minutes');
 });
