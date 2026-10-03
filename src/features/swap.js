@@ -20,6 +20,7 @@ import { SwapMarket, getEthProvider, chainChip, formatPrice, formatUsd, formatDa
 import { SwapBook } from './swapBook.js';
 import { Liquidity, LIQUIDITY_POOLS } from './liquidity.js';
 import { ethers } from 'ethers';
+import Chart from 'chart.js/auto';
 
 const { logger } = Utils;
 
@@ -957,10 +958,9 @@ const POSITION_BADGES = {
 /** The tab's card and list shown, its link underlined */
 function renderTab() {
     const liquidity = state.tab === 'liquidity';
-    $('market-swap-card')?.classList.toggle('hidden', liquidity);
+    $('market-swap-grid')?.classList.toggle('hidden', liquidity);
     $('market-swaps-section')?.classList.toggle('hidden', liquidity);
-    $('market-liquidity-card')?.classList.toggle('hidden', !liquidity);
-    $('market-positions-section')?.classList.toggle('hidden', !liquidity);
+    $('market-liquidity-view')?.classList.toggle('hidden', !liquidity);
     document.querySelectorAll('#market-tabs [data-market-tab]').forEach(link => {
         const active = link.dataset.marketTab === state.tab;
         link.classList.toggle('text-white', active);
@@ -973,26 +973,134 @@ function renderTab() {
     renderPositions();
 }
 
-/** The Liquidity card (the chain's pool and the wallet's liquidity in it), the positions list and their ranges on the books */
+let depthChart = null;
+
+/** The pool's liquidity by price in bars (bids green, asks red, the wallet's ranges blue), the price between them */
+function renderDepth(depth, ranges) {
+    const container = $('liquidity-depth');
+    if (!container) return;
+    if (!depth) {
+        depthChart?.destroy();
+        depthChart = null;
+        container.innerHTML = `<div class="flex items-center justify-center h-full text-sm text-gray-300">${Liquidity.loading() ? 'Reading the pool...' : 'The pool could not be read.'}</div>`;
+        return;
+    }
+    const mine = (l) => ranges.some(r => Math.max(l.lo, r.min) < Math.min(l.hi, r.max));
+    const colors = depth.levels.map(l => (mine(l) ? 'rgba(59, 130, 246, 0.85)' : l.side === 'bid' ? 'rgba(34, 197, 94, 0.45)' : 'rgba(239, 68, 68, 0.45)'));
+    const data = {
+        labels: depth.levels.map(l => formatPrice(Math.sqrt(l.lo * l.hi))),
+        datasets: [{ data: depth.levels.map(l => l.usd), backgroundColor: colors, borderWidth: 0, barPercentage: 1, categoryPercentage: 0.9, levels: depth.levels }]
+    };
+    const legend = $('liquidity-depth-legend');
+    if (legend) legend.textContent = `Levels of 2% around ${formatPrice(depth.price)}${ranges.length ? ' · your ranges in blue' : ''}`;
+    if (depthChart && container.querySelector('canvas')) {
+        depthChart.data = data;
+        depthChart.update('none');
+        return;
+    }
+    depthChart?.destroy();
+    container.innerHTML = '<canvas aria-label="Liquidity of the pool by price" role="img"></canvas>';
+    // The price: a line between the bids and the asks
+    const priceLine = {
+        id: 'liquidityPrice',
+        afterDatasetsDraw(chart) {
+            const bars = chart.getDatasetMeta(0).data;
+            const levels = chart.data.datasets[0].levels;
+            const k = levels.findIndex(l => l.side === 'ask');
+            if (k < 1 || !bars[k]) return;
+            const x = (bars[k - 1].x + bars[k].x) / 2;
+            const { ctx, chartArea } = chart;
+            ctx.save();
+            ctx.strokeStyle = '#e5e7eb';
+            ctx.lineWidth = 1;
+            ctx.setLineDash([4, 4]);
+            ctx.beginPath();
+            ctx.moveTo(x, chartArea.top);
+            ctx.lineTo(x, chartArea.bottom);
+            ctx.stroke();
+            ctx.restore();
+        }
+    };
+    depthChart = new Chart(container.querySelector('canvas').getContext('2d'), {
+        type: 'bar',
+        data,
+        plugins: [priceLine],
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            animation: false,
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    displayColors: false,
+                    callbacks: {
+                        title: (items) => {
+                            const l = items[0].dataset.levels[items[0].dataIndex];
+                            return `${formatPrice(l.lo)} – ${formatPrice(l.hi)}`;
+                        },
+                        label: (item) => {
+                            const l = item.dataset.levels[item.dataIndex];
+                            return `${formatData(l.data)} DATA · ${formatUsd(l.usd)}`;
+                        }
+                    }
+                }
+            },
+            scales: {
+                x: { grid: { display: false }, ticks: { color: '#9ca3af', maxRotation: 0, autoSkip: true, maxTicksLimit: 6 } },
+                y: { grid: { color: 'rgba(255, 255, 255, 0.05)' }, ticks: { color: '#9ca3af', callback: (v) => formatUsd(v) } }
+            }
+        }
+    });
+}
+
+/** The Liquidity tab: the chain's pool (tags, numbers, liquidity by price), the wallet's liquidity and its positions */
 function renderPositions() {
     const pool = LIQUIDITY_POOLS[state.chain];
     const link = $('liquidity-pool-link');
     if (link) link.href = pool.url;
+    const logos = $('liquidity-pool-logos');
+    if (logos && !logos.innerHTML) logos.innerHTML = [ICONS.DATA, ICONS.USDC].map(icon => icon.replace('w-7 h-7', 'w-10 h-10 ring-2 ring-[#1E1E1E] rounded-full')).join('');
+    const tags = $('liquidity-pool-tags');
+    if (tags) {
+        const tag = (text) => `<span class="px-1.5 py-0.5 rounded bg-[#2C2C2C] text-gray-200 font-medium">${text}</span>`;
+        tags.innerHTML = `${chainChip(pool.chain, { named: true })}${tag('v4')}${tag('0.3%')}<a href="${pool.url}" target="_blank" rel="noopener noreferrer" class="font-mono text-gray-300 hover:text-white" data-tooltip-content="${pool.id}">${pool.id.slice(0, 6)}…${pool.id.slice(-4)}</a>`;
+    }
     const positions = Liquidity.positions();
     const mine = (positions || []).filter(p => p.chain === state.chain);
     const sum = (key) => mine.reduce((total, p) => total + p[key], 0);
-    const price = Liquidity.price(state.chain);
+    const depth = Liquidity.depth(state.chain);
     const row = (label, value) => `<div class="flex justify-between gap-3"><dt class="text-gray-300">${label}</dt><dd class="text-white font-medium text-right">${value}</dd></div>`;
+
+    const stats = $('liquidity-stats');
+    if (stats) {
+        const volume = SwapMarket.poolVolume(state.chain, pool.id);
+        const fees = volume ? volume.volume * 0.003 : null;
+        const share = depth && depth.tvl > 0 ? (depth.data * depth.price) / depth.tvl * 100 : 50;
+        const balances = depth ? `
+            <div>
+                <div class="flex justify-between gap-3 text-gray-300"><span>Pool balances</span></div>
+                <div class="mt-1 flex justify-between gap-3 text-white font-medium"><span>${formatData(depth.data)} DATA</span><span>${Utils.formatBigNumber(depth.usdc.toFixed(0))} USDC</span></div>
+                <div class="mt-1.5 flex h-1.5 rounded-full overflow-hidden bg-[#2C2C2C]"><div class="bg-orange-500" style="width: ${share.toFixed(1)}%"></div><div class="flex-1 bg-blue-500"></div></div>
+            </div>` : '';
+        stats.innerHTML = [
+            row('Price', depth ? formatPrice(depth.price) : '--'),
+            row('TVL', depth ? formatUsd(depth.tvl) : '--'),
+            balances,
+            row('24H volume', volume ? formatUsd(volume.volume) : '--'),
+            row('24H fees', fees !== null ? formatUsd(fees) : '--'),
+            row('APR (24H fees)', fees !== null && depth?.tvl ? `${(fees * 365 / depth.tvl * 100).toFixed(1)}%` : '--')
+        ].join('');
+    }
     const summary = $('liquidity-summary');
     if (summary) {
         const yours = !state.address ? 'Connect a wallet' : positions === null ? '...' : null;
         summary.innerHTML = [
-            row('Pool price', price ? formatPrice(price) : '--'),
-            row('Your positions', yours ?? String(mine.length)),
-            row('Your liquidity', yours ?? formatUsd(sum('value'))),
+            row('Positions', yours ?? String(mine.length)),
+            row('Liquidity', yours ?? formatUsd(sum('value'))),
             row('Uncollected fees', yours ?? formatUsd(sum('feeValue')))
         ].join('');
     }
+    if (state.tab === 'liquidity') renderDepth(depth, mine.filter(p => !p.closed));
 
     const body = $('liquidity-positions');
     if (body) {
@@ -1019,8 +1127,6 @@ function renderPositions() {
             }).join('');
         }
     }
-    // The ranges on the books, in the Liquidity tab
-    SwapBook.setRanges(state.tab === 'liquidity' ? (positions || []).filter(p => !p.closed).map(p => ({ chain: p.chain, min: p.min, max: p.max })) : []);
 }
 
 /** The market's chain filter of the form's chain */
@@ -2141,6 +2247,7 @@ function setupListeners() {
     });
     $('liquidity-refresh')?.addEventListener('click', () => Liquidity.refresh(state.address));
     Liquidity.onChange(renderPositions);
+    SwapMarket.onChange(() => { if (state.tab === 'liquidity') renderPositions(); });
     $('swap-chain')?.addEventListener('click', (e) => {
         const btn = e.target.closest('button[data-chain]');
         if (btn) setChain(Number(btn.dataset.chain));

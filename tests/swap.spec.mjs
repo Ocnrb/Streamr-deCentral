@@ -268,16 +268,17 @@ test('the market\'s old address opens it, on its Swap tab', async ({ page }) => 
     await openSwap(page);
     await expect(page).toHaveURL(/\/market$/);
     await expect(page.locator('#market-tabs [data-market-tab="swap"]')).toHaveAttribute('aria-current', 'page');
-    await expect(page.locator('#market-liquidity-card')).toBeHidden();
+    await expect(page.locator('#market-liquidity-view')).toBeHidden();
     // As a guest, the Liquidity tab asks for a wallet
     await page.click('#market-tabs [data-market-tab="liquidity"]');
     await expect(page).toHaveURL(/\/market\/liquidity$/);
-    await expect(page.locator('#market-swap-card')).toBeHidden();
-    await expect(page.locator('#market-liquidity-card')).toBeVisible();
+    await expect(page.locator('#market-swap-grid')).toBeHidden();
+    await expect(page.locator('#market-liquidity-view')).toBeVisible();
+    await expect(page.locator('#swap-market-views')).toBeHidden();
     await expect(page.locator('#liquidity-positions')).toHaveText('Connect a wallet to see your liquidity positions.');
 });
 
-test('the Liquidity tab shows the wallet\'s v4 positions, their fees and their ranges on the books', async ({ page }) => {
+test('the Liquidity tab shows the pool, and the wallet\'s v4 positions with their fees and ranges', async ({ page }) => {
     const me = '0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266';
     const POSITIONS = '0x1ec2ebf4f37e7363fdfe3551602425af0b3ceef9';
     const PM = new ethers.utils.Interface([
@@ -322,19 +323,23 @@ test('the Liquidity tab shows the wallet\'s v4 positions, their fees and their r
     await expect(row).toContainText('$934.54');
     await expect(row).toContainText('$2.25');
     const summary = page.locator('#liquidity-summary');
-    await expect(summary).toContainText('Your positions1');
+    await expect(summary).toContainText('Positions1');
     await expect(summary).toContainText('Uncollected fees$2.25');
     await expect(page.locator('#liquidity-pool-link')).toHaveAttribute('href', /app\.uniswap\.org\/explore\/pools\/polygon\/0x/);
-    // The position covers all the pool's liquidity: every level of the books is marked
-    await page.click('[data-market-view="book"]');
-    const levels = page.locator('#swap-book-asks > div, #swap-book-bids > div');
-    await expect(levels.first()).toBeVisible({ timeout: 30000 });
-    await expect(page.locator('[data-book-mine]')).toHaveCount(await levels.count());
-    // The Swap tab: the form and the swaps, no marks
+    // The pool: its tags, and its value (the mocked pool holds that position only)
+    await expect(page.locator('#liquidity-pool-tags')).toContainText('Polygon');
+    await expect(page.locator('#liquidity-pool-tags')).toContainText('v4');
+    await expect(page.locator('#liquidity-stats')).toContainText('TVL$934.54');
+    await expect(page.locator('#liquidity-stats')).toContainText('1 834 684 DATA');
+    // Its liquidity by price in levels of 2%: the position's range (−5.9% to +6.1%) in blue
+    await expect(page.locator('#liquidity-depth-legend')).toContainText('your ranges in blue');
+    const colors = await page.evaluate(() => window.Chart?.getChart(document.querySelector('#liquidity-depth canvas'))?.data.datasets[0].backgroundColor || []);
+    expect(colors).toHaveLength(50);
+    expect(colors.filter(c => c.startsWith('rgba(59, 130, 246')).length).toBe(7);
+    // The Swap tab: the form, the market and the swaps
     await page.click('#market-tabs [data-market-tab="swap"]');
-    await expect(page.locator('#market-swap-card')).toBeVisible();
-    await expect(page.locator('#market-positions-section')).toBeHidden();
-    await expect(page.locator('[data-book-mine]')).toHaveCount(0);
+    await expect(page.locator('#market-swap-grid')).toBeVisible();
+    await expect(page.locator('#market-liquidity-view')).toBeHidden();
 });
 
 test('the swap form switches to Ethereum: its tokens and DEXes, kept for the next visit', async ({ page }) => {

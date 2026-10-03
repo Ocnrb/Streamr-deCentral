@@ -43,8 +43,7 @@ const state = {
     active: false,
     loading: false,
     timer: null,
-    listening: false,
-    ranges: []            // the wallet's positions, marked on the levels (Liquidity tab)
+    listening: false
 };
 
 // ============================================
@@ -218,6 +217,53 @@ function sweep(m, edges, side) {
     });
 }
 
+/**
+ * The tokens a pool holds: its liquidity walked from the price to the ends of the ticks read (x6 each way), then on to
+ * zero and infinity at the liquidity there (the positions still open that far are taken as full range)
+ */
+function holdings(m) {
+    const span = Math.sqrt(1.0001 ** RANGE_TICKS);
+    const walk = (up) => {
+        const ticks = m.ticks.filter(t => (up ? t.tick > m.tick : t.tick <= m.tick)).sort((a, b) => (up ? a.tick - b.tick : b.tick - a.tick));
+        const end = up ? m.S * span : m.S / span;
+        let L = m.L;
+        let pos = m.S;
+        let amount = 0;
+        for (const t of ticks) {
+            const next = sqrtAt(t.tick);
+            if (up ? next > end : next < end) break;
+            amount += Math.max(0, L) * (up ? 1 / pos - 1 / next : pos - next);
+            pos = next;
+            L += up ? t.net : -t.net;
+        }
+        amount += Math.max(0, L) * (up ? 1 / pos : pos);   // to infinity (token0) or to zero (token1)
+        return amount;
+    };
+    const amount0 = walk(true) / 10 ** m.dec0;
+    const amount1 = walk(false) / 10 ** m.dec1;
+    return m.pool.dataIs0 ? { data: amount0, counter: amount1 } : { data: amount1, counter: amount0 };
+}
+
+/**
+ * One pool's depth (Market page, Liquidity tab): its DATA price, its liquidity in `count` levels of `step` each way from
+ * it ({ lo, hi, data, usd }, the lowest first) and the tokens it holds. Null when the pool is not read
+ */
+export async function readPoolDepth(chain, pool, step = 0.02, count = 25) {
+    const [m] = await readChain(chain, [pool]);
+    if (!m) return null;
+    m.usd = 1;   // against USDC
+    m.dec0 = pool.dataIs0 ? 18 : pool.counterDecimals;
+    m.dec1 = pool.dataIs0 ? pool.counterDecimals : 18;
+    m.price = usdAtSqrt(m, m.S);
+    const price = m.price;
+    const askEdges = Array.from({ length: count }, (_, k) => price * (1 + step) ** (k + 1));
+    const bidEdges = Array.from({ length: count }, (_, k) => price / (1 + step) ** (k + 1));
+    const asks = sweep(m, askEdges, 'ask').map((l, k) => ({ ...l, lo: k ? askEdges[k - 1] : price, hi: askEdges[k], side: 'ask' }));
+    const bids = sweep(m, bidEdges, 'bid').map((l, k) => ({ ...l, lo: bidEdges[k], hi: k ? bidEdges[k - 1] : price, side: 'bid' }));
+    const held = holdings(m);
+    return { price, levels: [...bids.reverse(), ...asks], data: held.data, usdc: held.counter, tvl: held.data * price + held.counter };
+}
+
 /** The book of the pools shown: levels from the price of the deepest pool (its liquidity within 2% of its price) */
 function buildBook(models) {
     const depth = (m, price) => sweep(m, [price * 1.02], 'ask')[0].usd + sweep(m, [price / 1.02], 'bid')[0].usd;
@@ -270,14 +316,10 @@ function schedule() {
  * A side's rows, the nearest level first. Each row's tooltip sums the levels from the price up to it: the DATA and USD
  * of a swap that moves the price that far and its average price (before the pool fee)
  */
-function levelRows(levels, side, max, book, ranges) {
+function levelRows(levels, side, max) {
     let total = 0;
     let data = 0;
     return levels.map((level, k) => {
-        // The level's prices, from the one nearer the price to its own: marked when a position of the wallet covers them
-        const near = k ? levels[k - 1].price : book.price;
-        const [lo, hi] = side === 'ask' ? [near, level.price] : [level.price, near];
-        const mine = ranges.some(r => Math.max(lo, r.min) < Math.min(hi, r.max));
         total += level.usd;
         data += level.data;
         if (level.data < 1) return '';   // no liquidity at these prices
@@ -287,7 +329,7 @@ function levelRows(levels, side, max, book, ranges) {
             `Average price ${formatPrice(total / data)}`
         ].join('<br>');
         return `
-            <div data-book-k="${k}" data-tooltip-content="${Utils.escapeHtml(tooltip)}" class="relative grid grid-cols-3 gap-2 px-1 py-1 text-sm cursor-default transition-colors${mine ? ' shadow-[inset_3px_0_0_#3b82f6]' : ''}"${mine ? ' data-book-mine' : ''}>
+            <div data-book-k="${k}" data-tooltip-content="${Utils.escapeHtml(tooltip)}" class="relative grid grid-cols-3 gap-2 px-1 py-1 text-sm cursor-default transition-colors">
                 <div class="absolute inset-y-0 right-0 ${side === 'ask' ? 'bg-red-500/10' : 'bg-green-500/10'}" style="width: ${width.toFixed(1)}%"></div>
                 <span class="relative ${side === 'ask' ? 'text-red-400' : 'text-green-400'} font-medium">${formatPrice(level.price)}</span>
                 <span class="relative text-right text-gray-200">${formatData(level.data)}</span>
@@ -322,10 +364,8 @@ function render() {
     const sum = (levels) => levels.reduce((total, level) => total + level.usd, 0);
     const max = Math.max(sum(book.asks), sum(book.bids));
     // Asks above the price, the nearest at the bottom; bids below it, the nearest at the top
-    const chains = new Set(models.map(m => m.chain));
-    const ranges = state.ranges.filter(r => chains.has(r.chain));
-    asksEl.innerHTML = levelRows(book.asks, 'ask', max, book, ranges).reverse().join('');
-    bidsEl.innerHTML = levelRows(book.bids, 'bid', max, book, ranges).join('');
+    asksEl.innerHTML = levelRows(book.asks, 'ask', max).reverse().join('');
+    bidsEl.innerHTML = levelRows(book.bids, 'bid', max).join('');
     asksEl.scrollTop = asksEl.scrollHeight;
     bidsEl.scrollTop = 0;
     const names = models.map(m => `${m.pool.label} · DATA/${m.pool.counterSymbol === 'WPOL' ? 'POL' : m.pool.counterSymbol} · ${CHAIN_NAMES[m.chain]}`).join('<br>');
@@ -367,13 +407,6 @@ function setView(view) {
 }
 
 export const SwapBook = {
-    /** The wallet's position ranges ({ chain, min, max } in USD per DATA), marked on the levels they cover */
-    setRanges(ranges) {
-        const same = JSON.stringify(ranges) === JSON.stringify(state.ranges);
-        state.ranges = ranges;
-        if (!same && state.active && state.view === 'book') render();
-    },
-
     show() {
         state.active = true;
         if (!state.listening) {

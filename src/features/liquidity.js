@@ -12,6 +12,7 @@ import * as Services from '../core/services.js';
 import * as Utils from '../core/utils.js';
 import { DATA_TOKEN_ADDRESS_POLYGON, DATA_TOKEN_ADDRESS_ETHEREUM, POLYGONSCAN_NETWORK, getEtherscanApiKey } from '../core/constants.js';
 import { getEthProvider } from './swapMarket.js';
+import { readPoolDepth } from './swapBook.js';
 import { ethers } from 'ethers';
 
 const { logger } = Utils;
@@ -42,6 +43,7 @@ for (const pool of Object.values(LIQUIDITY_POOLS)) {
     pool.id = ethers.utils.keccak256(ethers.utils.defaultAbiCoder.encode(['address', 'address', 'uint24', 'int24', 'address'], [currency0, currency1, FEE, TICK_SPACING, ethers.constants.AddressZero]));
     pool.stateSlot = BigInt(ethers.utils.keccak256(ethers.utils.defaultAbiCoder.encode(['bytes32', 'uint256'], [pool.id, 6])));
     pool.url = `https://app.uniswap.org/explore/pools/${pool.slug}/${pool.id}`;
+    pool.book = { id: pool.id, tickSpacing: TICK_SPACING, dataIs0: pool.dataIs0, counterDecimals: 6, counterSymbol: 'USDC' };   // for its depth
 }
 
 const IFACES = {
@@ -172,7 +174,7 @@ async function readPositions(pool, address) {
 const state = {
     address: null,
     positions: null,        // every chain's, null until read
-    prices: {},             // chain -> DATA's price in its pool
+    depth: {},              // chain -> its pool's price, liquidity by price and holdings (readPoolDepth)
     errors: [],
     loading: false,
     seq: 0
@@ -180,16 +182,8 @@ const state = {
 const listeners = new Set();
 const notify = () => listeners.forEach(fn => fn());
 
-/** The pool's DATA price on a chain (for the card), null when not read */
-async function readPrice(pool) {
-    const [slot0] = await multicall(pool.chain, [load(pool, pool.stateSlot)]);
-    if (!slot0) return null;
-    const sqrtP = Number(BigInt(slot0[0]) & ((1n << 160n) - 1n)) / 2 ** 96;
-    return sqrtP > 0 ? usdAtSqrt(pool, sqrtP) : null;
-}
-
 export const Liquidity = {
-    /** Reads the wallet's positions on both chains (and the pools' prices); listeners are told when done */
+    /** Reads the pools' depth and the wallet's positions on both chains; listeners are told when done */
     async refresh(address) {
         const seq = ++state.seq;
         if (address !== state.address) {
@@ -199,7 +193,7 @@ export const Liquidity = {
         state.loading = true;
         notify();
         const pools = Object.values(LIQUIDITY_POOLS);
-        const prices = await Promise.all(pools.map(pool => readPrice(pool).catch(e => { logger.warn('Liquidity: price not read', e); return null; })));
+        const depths = await Promise.all(pools.map(pool => readPoolDepth(pool.chain, pool.book).catch(e => { logger.warn('Liquidity: pool not read', e); return null; })));
         const positions = [];
         const errors = [];
         if (address) {
@@ -214,14 +208,15 @@ export const Liquidity = {
             }
         }
         if (seq !== state.seq) return;
-        pools.forEach((pool, i) => { state.prices[pool.chain] = prices[i]; });
+        pools.forEach((pool, i) => { state.depth[pool.chain] = depths[i]; });
         state.positions = address ? positions.filter(p => !p.closed || p.feeValue > 0) : null;
         state.errors = errors;
         state.loading = false;
         notify();
     },
     positions: () => state.positions,
-    price: (chain) => state.prices[chain] ?? null,
+    /** A chain's pool: { price, levels, data, usdc, tvl }, null when not read */
+    depth: (chain) => state.depth[chain] ?? null,
     errors: () => state.errors,
     loading: () => state.loading,
     onChange(fn) {
