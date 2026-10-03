@@ -41,7 +41,7 @@ test('the bridge page shows DATA\'s whole supply by chain: each chain\'s supply,
         [ETH_DATA]: { supply: M(1000), balances: { [POLYGON_BRIDGE]: M(240), [MIGRATOR]: M(50) } },
         [XDATA]: { supply: M(50), agent: MIGRATOR }
     }));
-    // Polygon: 270 M (30 M more than its bridge holds); Gnosis 5 M and BNB Chain 2 M, none locked on Ethereum
+    // Polygon: 270 M (30 M more than its bridge holds); Gnosis 5 M, none locked on Ethereum
     await page.route('**/*', (route) => {
         const body = route.request().postDataJSON?.();
         const call = body?.method === 'eth_call' ? body.params[0] : null;
@@ -52,28 +52,26 @@ test('the bridge page shows DATA\'s whole supply by chain: each chain\'s supply,
         '0x256eb8a51f382650b2a1e946b8811953640ee47d': { supply: M(5) },
         '0xe4a2620ede1058d61bee5f45f6414314fdf10548': { supply: M(4) }
     }));
-    await page.route(url => /bsc-dataseed\.binance\.org|bsc-rpc\.publicnode\.com/.test(url.href), rpc(56, { '0x0864c156b3c5f69824564dec60c629ae6401bf2a': { supply: M(2) } }));
     await openApp(page, '/bridge');
     const legend = page.locator('#bridge-supply-legend');
     const rows = legend.locator(':scope > li');
-    await expect(rows).toHaveCount(5, { timeout: 30000 });   // Ethereum, Polygon, Gnosis, BNB Chain, the total
+    await expect(rows).toHaveCount(4, { timeout: 30000 });   // Ethereum, Polygon, Gnosis, the total (not BNB Chain: Binance's DATA, counted on Ethereum)
     // Ethereum: its DATA less the bridges' and the migration's, and the XDATA not migrated (less Gnosis's)
     await expect(rows.nth(0)).toContainText('Ethereum');
     await expect(rows.nth(0)).toContainText('756 000 000 DATA');
-    await expect(rows.nth(0)).toContainText('DATA710 000 000');
-    await expect(rows.nth(0)).toContainText('XDATA, not migrated46 000 000');
+    await expect(rows.nth(0)).toHaveAttribute('data-tooltip-content', /DATA 710 000 000<br>XDATA, not migrated 46 000 000/);
     // Polygon: its supply, in its bridged and issued parts
     await expect(rows.nth(1)).toContainText('270 000 000 DATA');
-    await expect(rows.nth(1)).toContainText('Via Polygon PoS bridge240 000 000');
-    await expect(rows.nth(1)).toContainText('Issued on Polygon30 000 000');
+    await expect(rows.nth(1)).toHaveAttribute('data-tooltip-content', /Polygon.*<br>Via Polygon PoS bridge 240 000 000<br>Issued on Polygon 30 000 000/);
+    await expect(rows.nth(1)).not.toContainText('Issued');   // in the tooltip only
     await expect(rows.nth(2)).toContainText('Gnosis');
     await expect(rows.nth(2)).toContainText('9 000 000 DATA');
-    await expect(rows.nth(2)).toContainText('XDATA, not migrated4 000 000');
-    await expect(rows.nth(3)).toContainText('BNB Chain');
-    await expect(legend).toContainText('Total supply1 037 000 000 DATA');
+    await expect(rows.nth(2)).toHaveAttribute('data-tooltip-content', /XDATA, not migrated 4 000 000/);
+    await expect(legend).toContainText('Total supply1 035 000 000 DATA');
+    await expect(legend).not.toContainText('BNB');
     // The ring: a slice per part, with its chain, part and amount in the tooltip
     const hits = page.locator('#bridge-supply-chart [data-slice-hit]');
-    await expect(hits).toHaveCount(7);   // Ethereum's DATA and XDATA, Polygon's two parts, Gnosis's two, BNB Chain
+    await expect(hits).toHaveCount(6);   // Ethereum's DATA and XDATA, Polygon's two parts, Gnosis's two
     await expect(hits.nth(3)).toHaveAttribute('data-tooltip-content', /Polygon.*Issued on Polygon.*30 000 000 DATA/);
     // Over a slice: its chain stands out, the ring stops floating (the tooltip stays put)
     await hits.nth(2).hover({ force: true });

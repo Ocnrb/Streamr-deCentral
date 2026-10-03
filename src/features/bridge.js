@@ -193,7 +193,6 @@ const polygonRead = (readFn) => Services.readWithFallback(() => readFn(Services.
  * (as its logo), its parts in two shades; the legend's logos, the gaps and the tooltips tell them apart beyond color.
  */
 const GNOSIS_ICON = '<svg class="w-5 h-5 flex-shrink-0" viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="16" fill="#04795B"/><circle cx="11.5" cy="15" r="3.2" fill="none" stroke="#fff" stroke-width="2"/><circle cx="20.5" cy="15" r="3.2" fill="none" stroke="#fff" stroke-width="2"/><path d="M16 20.5l-2.2 2.8h4.4z" fill="#fff"/></svg>';
-const BNB_ICON = '<svg class="w-5 h-5 flex-shrink-0" viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="16" fill="#F0B90B"/><path fill="#fff" d="M16 7.5l2.6 2.6-6.1 6.1-2.6-2.6zm4.5 4.5l2.6 2.6-8.6 8.6-2.6-2.6zm-9 0l2.6 2.6-2.6 2.6-2.6-2.6zm9 4.5l2.6 2.6-6.1 6.1-2.6-2.6zm2.6-2l2.4 2.5-2.4 2.4-2.5-2.4z"/></svg>';
 const SUPPLY_CHAINS = [
     {
         chain: 'Polygon', color: '#8247E5', icon: () => CHAINS[POLYGON_CHAIN_ID].icon, token: DATA_TOKEN_ADDRESS_POLYGON,
@@ -203,11 +202,8 @@ const SUPPLY_CHAINS = [
         chain: 'Gnosis', color: '#04795B', icon: () => GNOSIS_ICON, token: '0x256eb8a51f382650B2A1e946b8811953640ee47D',
         rpcs: ['https://rpc.gnosischain.com', 'https://gnosis-rpc.publicnode.com'], id: 100,
         locks: ['0x88ad09518695c6c3712AC10a214bE5109a655671'], bridge: 'OmniBridge'
-    },
-    {
-        chain: 'BNB Chain', color: '#F0B90B', icon: () => BNB_ICON, token: '0x0864c156b3c5f69824564dec60c629ae6401bf2a',
-        rpcs: ['https://bsc-dataseed.binance.org', 'https://bsc-rpc.publicnode.com'], id: 56, locks: []
     }
+    // Not BNB Chain: its DATA (Binance's) stands for DATA Binance holds on Ethereum, already counted there
 ];
 /**
  * The old token (XDATA) not yet migrated: its supply (a migration burns it, and the migration contract, its upgrade
@@ -334,16 +330,16 @@ function renderSupply() {
     legend.innerHTML = `
         ${supply.chains.map((c) => {
             const i = shown.indexOf(c);
+            // Where it is: the chain's parts in a tooltip
+            const where = c.parts.length > 1 ? ` data-tooltip-content="<span class='font-semibold'>${c.chain}</span>${c.parts.map(part => `<br>${part.label} ${whole(part.amount)}`).join('')}"` : '';
             const head = `
-            <li${i >= 0 ? ` data-slice="${i}"` : ''} class="px-2 py-1 -mx-2 rounded-lg transition-colors cursor-default">
+            <li${i >= 0 ? ` data-slice="${i}"` : ''}${where} class="px-2 py-1 -mx-2 rounded-lg transition-colors cursor-default">
                 <div class="flex items-center justify-between gap-6">
                     <span class="flex items-center gap-2 text-gray-200"><span class="w-2.5 h-2.5 rounded-sm flex-shrink-0" style="background: ${c.color}"></span>${c.icon().replace('w-5 h-5', 'w-4 h-4')}${c.chain}</span>
                     <span class="text-right">${c.amount === null
                         ? '<span class="block text-xs text-gray-400">Not read</span>'
                         : `<span class="block text-white font-medium tabular-nums">${pct(c.amount)}</span><span class="block text-xs text-gray-300 tabular-nums">${whole(c.amount)} DATA</span>`}</span>
                 </div>
-                ${c.parts.length > 1 ? `<ul class="mt-1.5 ml-5 space-y-1">${c.parts.map(part => `
-                    <li class="flex items-center justify-between gap-4 text-xs text-gray-300"><span class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-sm flex-shrink-0" style="background: ${part.color}"></span>${part.label}</span><span class="tabular-nums whitespace-nowrap">${whole(part.amount)}</span></li>`).join('')}</ul>` : ''}
             </li>`;
             return head;
         }).join('')}
