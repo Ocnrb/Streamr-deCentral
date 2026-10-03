@@ -37,9 +37,14 @@ test('the bridge page shows where DATA\'s supply is: each chain\'s bridge balanc
     await expect(legend.locator('li').nth(1)).toContainText('24.0%');
     await expect(legend).toContainText('Total supply1 000 000 000 DATA');
     // The ring: a slice per chain on its top, with its amount in the tooltip
-    const top = page.locator('#bridge-supply-chart svg:last-of-type path');
+    const top = page.locator('#bridge-supply-chart [data-slice-hit]');
     await expect(top).toHaveCount(2);
     await expect(top.nth(1)).toHaveAttribute('data-tooltip-content', /Polygon.*240 000 000 DATA.*24\.0%/);
+    // Over a slice: it stands out, the ring stops floating (the tooltip stays put)
+    await top.nth(1).hover({ force: true });
+    await expect(page.locator('#bridge-supply-chart g[data-slice="1"]').last()).toHaveAttribute('style', /translate/);
+    expect(await page.evaluate(() => getComputedStyle(document.querySelector('.supply-ring-float')).animationPlayState)).toBe('paused');
+    await page.mouse.move(0, 0);
     // A legend row stands out with its slice
     await legend.locator('li').nth(1).hover();
     await expect(page.locator('#bridge-supply-chart g[data-slice="1"]').last()).toHaveAttribute('style', /translate/);

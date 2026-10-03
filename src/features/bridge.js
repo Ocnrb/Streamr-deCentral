@@ -278,14 +278,20 @@ function renderSupply() {
     });
     const DEPTH = 14;   // the ring's thickness: layers 1 px apart, darker below the top
     const layer = (z, top) => `
-        <svg viewBox="0 0 240 240" style="transform: translateZ(${z}px)${top ? '' : '; pointer-events: none'}" aria-hidden="true">
-            ${slices.map(s => `<g data-slice="${s.i}" data-dx="${s.dx}" data-dy="${s.dy}"><path d="${s.d}" fill="${top ? s.c.color : darker(s.c.color, 0.55)}"${top ? ` data-tooltip-content="<span class='font-semibold'>${s.c.chain}</span><br>${whole(s.c.amount)} DATA<br>${pct(s.c.amount)}"` : ''}/></g>`).join('')}
+        <svg viewBox="0 0 240 240" style="transform: translateZ(${z}px); pointer-events: none" aria-hidden="true">
+            ${slices.map(s => `<g data-slice="${s.i}" data-dx="${s.dx}" data-dy="${s.dy}"><path d="${s.d}" fill="${top ? s.c.color : darker(s.c.color, 0.55)}"/></g>`).join('')}
+        </svg>`;
+    // The pointer's layer: the slices at rest, see-through, above the ring (a slice pushed out never slips from under it)
+    const hits = `
+        <svg viewBox="0 0 240 240" style="transform: translateZ(1px)">
+            ${slices.map(s => `<path data-slice-hit="${s.i}" d="${s.d}" fill="transparent" data-tooltip-content="<span class='font-semibold'>${s.c.chain}</span><br>${whole(s.c.amount)} DATA<br>${pct(s.c.amount)}"/>`).join('')}
         </svg>`;
     container.innerHTML = `
         <div class="supply-ring-shadow"></div>
         <div class="supply-ring-float"><div class="supply-ring-tilt">
             ${Array.from({ length: DEPTH }, (_, k) => layer(k - DEPTH, false)).join('')}
             ${layer(0, true)}
+            ${hits}
         </div></div>`;
 }
 
@@ -1214,7 +1220,7 @@ async function refreshAll() {
 function setupSupplyListeners() {
     const chart = $('bridge-supply-chart');
     const legend = $('bridge-supply-legend');
-    chart?.addEventListener('mouseover', (e) => highlightSlice(Number(e.target.closest('g[data-slice]')?.dataset.slice ?? -1)));
+    chart?.addEventListener('mouseover', (e) => highlightSlice(Number(e.target.closest('[data-slice-hit]')?.dataset.sliceHit ?? -1)));
     chart?.addEventListener('mouseleave', () => highlightSlice(-1));
     legend?.addEventListener('mouseover', (e) => highlightSlice(Number(e.target.closest('li[data-slice]')?.dataset.slice ?? -1)));
     legend?.addEventListener('mouseleave', () => highlightSlice(-1));

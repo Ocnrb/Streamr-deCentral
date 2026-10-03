@@ -28,6 +28,8 @@
   .supply-ring-shadow { position: absolute; left: 12%; right: 12%; bottom: -0.75rem; height: 1.5rem; border-radius: 50%; background: radial-gradient(closest-side, rgba(0, 0, 0, 0.7), transparent); filter: blur(4px); animation: supply-shadow 6s ease-in-out infinite; }
   @keyframes supply-float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-8px); } }
   @keyframes supply-shadow { 0%, 100% { transform: scale(1); opacity: 1; } 50% { transform: scale(0.9); opacity: 0.7; } }
+  /* Still while the pointer is on the ring or its legend: a slice and its tooltip stay put */
+  #bridge-supply-section:hover .supply-ring-float, #bridge-supply-section:hover .supply-ring-shadow { animation-play-state: paused; }
   @media (prefers-reduced-motion: reduce) { .supply-ring-float, .supply-ring-shadow { animation: none; } }
 
   @keyframes spin {
