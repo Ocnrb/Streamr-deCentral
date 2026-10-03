@@ -459,8 +459,8 @@ function renderModal(focused = null) {
     $('liquidity-modal-title').textContent = `${MANAGE_TITLES[m.mode]} #${m.tokenId}`;
     const tags = $('liquidity-modal-tags');
     if (tags && p) {
-        const [label, badge] = p.closed ? ['Closed', 'bg-gray-500/15 text-gray-300'] : p.inRange ? ['In range', 'bg-green-500/15 text-green-400'] : ['Out of range', 'bg-amber-500/15 text-amber-300'];
-        tags.innerHTML = `${chainChip(p.chain, { named: true })}<span class="px-2 py-0.5 rounded-full text-[11px] font-semibold ${badge}">${label}</span><span class="text-gray-300">${formatPrice(p.min)} – ${formatPrice(p.max)}</span>`;
+        const [label, text, dot] = p.closed ? ['Closed', 'text-gray-400', 'bg-gray-400'] : p.inRange ? ['In range', 'text-green-400', 'bg-green-400 ring-4 ring-green-400/15'] : ['Out of range', 'text-amber-300', 'bg-amber-300 ring-4 ring-amber-300/15'];
+        tags.innerHTML = `${chainChip(p.chain, { named: true })}<span class="inline-flex items-center gap-1.5 font-medium ${text}"><span class="w-1.5 h-1.5 rounded-full ${dot}"></span>${label}</span><span class="text-gray-300">${formatPrice(p.min)} – ${formatPrice(p.max)}</span>`;
     }
     document.querySelectorAll('#liquidity-modal-tabs [data-manage]').forEach(btn => {
         const active = btn.dataset.manage === m.mode;

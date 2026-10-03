@@ -952,11 +952,27 @@ function renderChain() {
 // Liquidity tab
 // ============================================
 
-const POSITION_BADGES = {
-    in: ['In range', 'bg-green-500/15 text-green-400'],
-    out: ['Out of range', 'bg-amber-500/15 text-amber-300'],
-    closed: ['Closed', 'bg-gray-500/15 text-gray-300']
+/** A position's status: a dot and its label (text color, dot color) */
+const POSITION_STATUS = {
+    in: ['In range', 'text-green-400', 'bg-green-400 ring-4 ring-green-400/15'],
+    out: ['Out of range', 'text-amber-300', 'bg-amber-300 ring-4 ring-amber-300/15'],
+    closed: ['Closed', 'text-gray-400', 'bg-gray-400']
 };
+
+/** A position's tokens by value: a DATA (orange) / USDC (blue) bar, as the pool's balances, and their shares below */
+function distributionCell(p) {
+    if (p.closed || !(p.value > 0)) return '<div class="text-center text-gray-400">--</div>';
+    const data = Math.min(100, Math.max(0, (p.value - p.usdc) / p.value * 100));
+    const pct = (value) => `${value < 1 && value > 0 ? '<1' : value > 99 && value < 100 ? '>99' : Math.round(value)}%`;
+    return `
+        <div class="w-32 mx-auto">
+            <div class="flex h-1.5 rounded-full overflow-hidden bg-[#2C2C2C] gap-px">
+                ${data > 0 ? `<div class="bg-orange-500" style="width: ${data.toFixed(1)}%"></div>` : ''}
+                ${data < 100 ? '<div class="flex-1 bg-blue-500"></div>' : ''}
+            </div>
+            <div class="mt-1 flex justify-between text-[11px] text-gray-300 tabular-nums"><span>${pct(data)} DATA</span><span>${pct(100 - data)} USDC</span></div>
+        </div>`;
+}
 
 /** The tab's card and list shown, its link underlined */
 function renderTab() {
@@ -1207,15 +1223,18 @@ function renderPositions() {
         else if (!positions.length) body.innerHTML = empty(errors.length ? `Your positions on ${errors.join(' and ')} could not be read. Try again in a moment.` : 'No positions in the DATA/USDC pools on Uniswap v4.');
         else {
             body.innerHTML = [...positions].sort((a, b) => b.chain - a.chain || Number(b.tokenId) - Number(a.tokenId)).map(p => {
-                const [label, badge] = POSITION_BADGES[p.closed ? 'closed' : p.inRange ? 'in' : 'out'];
+                const [label, text, dot] = POSITION_STATUS[p.closed ? 'closed' : p.inRange ? 'in' : 'out'];
                 const fees = `${formatData(p.feeData)} DATA and ${p.feeUsdc.toFixed(2)} USDC`;
                 const hovered = p.tokenId === state.hoverPosition ? ' bg-white/5' : '';
                 return `
                 <tr data-position="${Utils.escapeHtml(p.tokenId)}" class="border-b border-[#2a2a2a] last:border-0 transition-colors${hovered}">
                     <td class="py-3 pr-3 whitespace-nowrap"><a href="${p.url}" target="_blank" rel="noopener noreferrer" class="text-blue-400 hover:text-blue-300">#${Utils.escapeHtml(p.tokenId)}</a></td>
                     <td class="py-3 pr-3 text-center whitespace-nowrap">${chainChip(p.chain, { named: true })}</td>
-                    <td class="py-3 pr-3 text-center whitespace-nowrap text-gray-200">${formatPrice(p.min)} – ${formatPrice(p.max)}</td>
-                    <td class="py-3 pr-3 text-center"><span class="px-2 py-0.5 rounded-full text-[11px] font-semibold whitespace-nowrap ${badge}">${label}</span></td>
+                    <td class="py-3 pr-3 whitespace-nowrap">
+                        <div class="text-gray-200">${formatPrice(p.min)} – ${formatPrice(p.max)}</div>
+                        <div class="mt-1 flex items-center gap-2 text-xs font-medium ${text}"><span class="w-1.5 h-1.5 rounded-full ${dot}"></span>${label}</div>
+                    </td>
+                    <td class="py-3 pr-3">${distributionCell(p)}</td>
                     <td class="py-3 pr-3 text-right whitespace-nowrap text-gray-200">${formatData(p.data)}</td>
                     <td class="py-3 pr-3 text-right whitespace-nowrap text-gray-200">${Utils.formatBigNumber(p.usdc.toFixed(2))}</td>
                     <td class="py-3 pr-3 text-right whitespace-nowrap text-white font-medium">${formatUsd(p.value)}</td>
@@ -2344,7 +2363,7 @@ function setupListeners() {
         const btn = e.target.closest('button[data-chain]');
         if (btn) setChain(Number(btn.dataset.chain));
     });
-    $('liquidity-refresh')?.addEventListener('click', () => Liquidity.refresh(state.address));
+    $('liquidity-refresh')?.addEventListener('click', () => withSpinner('liquidity-refresh', Liquidity.refresh(state.address)));
     $('liquidity-positions')?.addEventListener('mouseover', (e) => hoverPosition(e.target.closest('tr[data-position]')?.dataset.position ?? null));
     $('liquidity-positions')?.addEventListener('mouseleave', () => hoverPosition(null));
     $('liquidity-zoom')?.addEventListener('click', (e) => {
