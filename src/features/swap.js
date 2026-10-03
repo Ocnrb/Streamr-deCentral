@@ -941,6 +941,9 @@ function renderChain() {
 }
 
 /** Swaps on another chain: the same counter where it has one (POL and ETH stand for each other), else USDC */
+/** The market's chain filter of the form's chain */
+const marketFilter = () => (state.chain === 1 ? 'ethereum' : 'polygon');
+
 function setChain(chain) {
     if (state.flow || !NETWORKS[chain] || chain === state.chain) return;
     state.chain = chain;
@@ -954,7 +957,7 @@ function setChain(chain) {
     showError('');
     renderChain();
     // The market and its liquidity book follow the form's chain (not the other way round)
-    SwapMarket.setFilter(chain === 1 ? 'ethereum' : 'polygon');
+    SwapMarket.setFilter(marketFilter());
     renderTokens();
     updateAmountStatus();
     renderQuote();
@@ -2119,6 +2122,7 @@ export const SwapLogic = {
         refreshHistory().catch(e => logger.warn('Swap: history refresh failed', e));
         SwapMarket.setPolUsdSource(polUsdAt);
         SwapMarket.setTokenChip(tokenChip);
+        SwapMarket.setFilter(marketFilter());   // opened on the form's chain
         SwapMarket.show();
         SwapBook.show();
         if (state.liquidity) SwapMarket.setPools(marketPools());

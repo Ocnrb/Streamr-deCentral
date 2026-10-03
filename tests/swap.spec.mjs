@@ -230,6 +230,18 @@ test('the liquidity book shows the v4 pools\' liquidity by price, in place of th
     await expect(page.locator('#swap-book-info')).toBeHidden();
 });
 
+test('the market opens on the swap form\'s chain', async ({ page }) => {
+    const active = (chain) => expect(page.locator(`#swap-trades-filter [data-filter="${chain}"]`)).toHaveClass(/bg-blue-800/);
+    await openSwap(page);
+    await active('polygon');
+    // The form kept on Ethereum: the market opens there too
+    await page.click('#swap-chain [data-chain="1"]');
+    await page.reload();
+    await openSwap(page);
+    await expect(page.locator('#swap-chain [data-chain="1"]')).toHaveClass(/bg-blue-800/);
+    await active('ethereum');
+});
+
 test('hovering a book level highlights the levels from the price to it and sums them in a tooltip', async ({ page }) => {
     await openSwap(page);
     await page.click('[data-market-view="book"]');
