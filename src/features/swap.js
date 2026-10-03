@@ -975,7 +975,7 @@ function renderTab() {
 
 let depthChart = null;
 
-/** The pool's liquidity by price in bars (bids green, asks red, the wallet's ranges blue), the price between them */
+/** The pool's liquidity by price in bars (bids green, asks red), the price between them, the wallet's ranges shaded behind */
 function renderDepth(depth, ranges) {
     const container = $('liquidity-depth');
     if (!container) return;
@@ -985,14 +985,13 @@ function renderDepth(depth, ranges) {
         container.innerHTML = `<div class="flex items-center justify-center h-full text-sm text-gray-300">${Liquidity.loading() ? 'Reading the pool...' : 'The pool could not be read.'}</div>`;
         return;
     }
-    const mine = (l) => ranges.some(r => Math.max(l.lo, r.min) < Math.min(l.hi, r.max));
-    const colors = depth.levels.map(l => (mine(l) ? 'rgba(59, 130, 246, 0.85)' : l.side === 'bid' ? 'rgba(34, 197, 94, 0.45)' : 'rgba(239, 68, 68, 0.45)'));
+    const colors = depth.levels.map(l => (l.side === 'bid' ? 'rgba(34, 197, 94, 0.5)' : 'rgba(239, 68, 68, 0.5)'));
     const data = {
         labels: depth.levels.map(l => formatPrice(Math.sqrt(l.lo * l.hi))),
-        datasets: [{ data: depth.levels.map(l => l.usd), backgroundColor: colors, borderWidth: 0, barPercentage: 1, categoryPercentage: 0.9, levels: depth.levels }]
+        datasets: [{ data: depth.levels.map(l => l.usd), backgroundColor: colors, borderWidth: 0, barPercentage: 1, categoryPercentage: 0.9, levels: depth.levels, ranges }]
     };
     const legend = $('liquidity-depth-legend');
-    if (legend) legend.textContent = `Levels of 2% around ${formatPrice(depth.price)}${ranges.length ? ' · your ranges in blue' : ''}`;
+    if (legend) legend.textContent = `Levels of 2% around ${formatPrice(depth.price)}${ranges.length ? ' · your ranges shaded in blue' : ''}`;
     if (depthChart && container.querySelector('canvas')) {
         depthChart.data = data;
         depthChart.update('none');
@@ -1000,6 +999,39 @@ function renderDepth(depth, ranges) {
     }
     depthChart?.destroy();
     container.innerHTML = '<canvas aria-label="Liquidity of the pool by price" role="img"></canvas>';
+    // The wallet's ranges: a band behind the bars, from the x of each end (between the bars of its levels)
+    const rangeBands = {
+        id: 'liquidityRanges',
+        beforeDatasetsDraw(chart) {
+            const { levels, ranges: shown } = chart.data.datasets[0];
+            const bars = chart.getDatasetMeta(0).data;
+            if (!shown?.length || bars.length !== levels.length) return;
+            const { ctx, chartArea } = chart;
+            const half = bars.length > 1 ? (bars[1].x - bars[0].x) / 2 : 0;
+            // A price's x: inside its level, in proportion of the level's log width
+            const xAt = (price) => {
+                const k = levels.findIndex(l => price >= l.lo && price < l.hi);
+                if (k < 0) return price < levels[0].lo ? chartArea.left : chartArea.right;
+                const f = Math.log(price / levels[k].lo) / Math.log(levels[k].hi / levels[k].lo);
+                return bars[k].x - half + f * 2 * half;
+            };
+            ctx.save();
+            for (const r of shown) {
+                const [x0, x1] = [xAt(r.min), xAt(r.max)];
+                ctx.fillStyle = 'rgba(59, 130, 246, 0.15)';
+                ctx.fillRect(x0, chartArea.top, x1 - x0, chartArea.bottom - chartArea.top);
+                ctx.strokeStyle = 'rgba(96, 165, 250, 0.9)';
+                ctx.lineWidth = 1.5;
+                ctx.beginPath();
+                ctx.moveTo(x0, chartArea.top);
+                ctx.lineTo(x0, chartArea.bottom);
+                ctx.moveTo(x1, chartArea.top);
+                ctx.lineTo(x1, chartArea.bottom);
+                ctx.stroke();
+            }
+            ctx.restore();
+        }
+    };
     // The price: a line between the bids and the asks
     const priceLine = {
         id: 'liquidityPrice',
@@ -1024,7 +1056,7 @@ function renderDepth(depth, ranges) {
     depthChart = new Chart(container.querySelector('canvas').getContext('2d'), {
         type: 'bar',
         data,
-        plugins: [priceLine],
+        plugins: [rangeBands, priceLine],
         options: {
             responsive: true,
             maintainAspectRatio: false,

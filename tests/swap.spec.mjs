@@ -331,11 +331,16 @@ test('the Liquidity tab shows the pool, and the wallet\'s v4 positions with thei
     await expect(page.locator('#liquidity-pool-tags')).toContainText('v4');
     await expect(page.locator('#liquidity-stats')).toContainText('TVL$934.54');
     await expect(page.locator('#liquidity-stats')).toContainText('1 834 684 DATA');
-    // Its liquidity by price in levels of 2%: the position's range (−5.9% to +6.1%) in blue
-    await expect(page.locator('#liquidity-depth-legend')).toContainText('your ranges in blue');
-    const colors = await page.evaluate(() => window.Chart?.getChart(document.querySelector('#liquidity-depth canvas'))?.data.datasets[0].backgroundColor || []);
-    expect(colors).toHaveLength(50);
-    expect(colors.filter(c => c.startsWith('rgba(59, 130, 246')).length).toBe(7);
+    // Its liquidity by price in levels of 2%, bids and asks around the price, the position's range shaded behind
+    await expect(page.locator('#liquidity-depth-legend')).toContainText('your ranges shaded in blue');
+    const dataset = await page.evaluate(() => {
+        const d = window.Chart?.getChart(document.querySelector('#liquidity-depth canvas'))?.data.datasets[0];
+        return d && { colors: d.backgroundColor, ranges: d.ranges };
+    });
+    expect(dataset.colors).toHaveLength(50);
+    expect(dataset.colors.filter(c => c.startsWith('rgba(34, 197, 94')).length).toBe(25);
+    expect(dataset.ranges).toHaveLength(1);
+    expect(dataset.ranges[0].min).toBeCloseTo(0.00023518, 7);
     // The Swap tab: the form, the market and the swaps
     await page.click('#market-tabs [data-market-tab="swap"]');
     await expect(page.locator('#market-swap-grid')).toBeVisible();
