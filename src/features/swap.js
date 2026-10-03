@@ -233,6 +233,7 @@ const state = {
     active: false,
     tab: 'swap',             // the market's tab: 'swap' or 'liquidity'
     depthStep: 1,            // the Liquidity chart's level size (index in DEPTH_STEPS)
+    hoverPosition: null,     // the position hovered in its table or on the chart (token id): its range and row stand out
     address: null,
     chain: 137,              // the chain of the swap (137 Polygon, 1 Ethereum)
     counter: 'USDC',         // the token traded against DATA
@@ -975,6 +976,14 @@ function renderTab() {
 }
 
 let depthChart = null;
+
+/** A position stands out (its row and its range on the chart), or none */
+function hoverPosition(tokenId) {
+    if (tokenId === state.hoverPosition) return;
+    state.hoverPosition = tokenId;
+    document.querySelectorAll('#liquidity-positions tr[data-position]').forEach(row => row.classList.toggle('bg-blue-500/10', row.dataset.position === tokenId));
+    depthChart?.update('none');
+}
 const DEPTH_STEPS = [0.01, 0.02, 0.04, 0.08, 0.16];   // 25 levels each way: x1.28 up to x41
 
 /** The pool's liquidity by price in bars (bids green, asks red), the price between them, the wallet's ranges shaded behind */
@@ -994,8 +1003,6 @@ function renderDepth(depth, ranges) {
         labels: levels.map(l => formatPrice(Math.sqrt(l.lo * l.hi))),
         datasets: [{ data: levels.map(l => l.usd), backgroundColor: colors, borderWidth: 0, barPercentage: 1, categoryPercentage: 0.9, levels, ranges }]
     };
-    const legend = $('liquidity-depth-legend');
-    if (legend) legend.textContent = `Around ${formatPrice(depth.price)}${ranges.length ? ' · your ranges shaded in blue' : ''}`;
     // Wider levels show a wider range of prices
     const zoom = $('liquidity-zoom');
     if (zoom) {
@@ -1029,12 +1036,15 @@ function renderDepth(depth, ranges) {
                 return bars[k].x - half + f * 2 * half;
             };
             ctx.save();
+            chart.$bands = [];
             for (const r of shown) {
                 const [x0, x1] = [xAt(r.min), xAt(r.max)];
-                ctx.fillStyle = 'rgba(59, 130, 246, 0.15)';
+                chart.$bands.push({ tokenId: r.tokenId, x0, x1 });
+                const hovered = r.tokenId === state.hoverPosition;
+                ctx.fillStyle = hovered ? 'rgba(59, 130, 246, 0.35)' : 'rgba(59, 130, 246, 0.15)';
                 ctx.fillRect(x0, chartArea.top, x1 - x0, chartArea.bottom - chartArea.top);
-                ctx.strokeStyle = 'rgba(96, 165, 250, 0.9)';
-                ctx.lineWidth = 1.5;
+                ctx.strokeStyle = hovered ? 'rgba(147, 197, 253, 1)' : 'rgba(96, 165, 250, 0.9)';
+                ctx.lineWidth = hovered ? 2.5 : 1.5;
                 ctx.beginPath();
                 ctx.moveTo(x0, chartArea.top);
                 ctx.lineTo(x0, chartArea.bottom);
@@ -1074,6 +1084,12 @@ function renderDepth(depth, ranges) {
             responsive: true,
             maintainAspectRatio: false,
             animation: false,
+            // Over a range: its position stands out (the narrowest when ranges overlap)
+            onHover: (event, elements, chart) => {
+                const inside = event.type === 'mouseout' ? [] : (chart.$bands || []).filter(b => event.x >= b.x0 && event.x <= b.x1);
+                inside.sort((a, b) => (a.x1 - a.x0) - (b.x1 - b.x0));
+                hoverPosition(inside[0]?.tokenId ?? null);
+            },
             plugins: {
                 legend: { display: false },
                 tooltip: {
@@ -1150,7 +1166,7 @@ function renderPositions() {
             row('Uncollected fees', yours ?? formatUsd(sum('feeValue')))
         ].join('');
     }
-    if (state.tab === 'liquidity') renderDepth(depth, mine.filter(p => !p.closed));
+    if (state.tab === 'liquidity') renderDepth(depth, mine.filter(p => !p.closed).map(p => ({ tokenId: p.tokenId, min: p.min, max: p.max })));
 
     const body = $('liquidity-positions');
     if (body) {
@@ -1163,8 +1179,9 @@ function renderPositions() {
             body.innerHTML = [...positions].sort((a, b) => b.chain - a.chain || Number(b.tokenId) - Number(a.tokenId)).map(p => {
                 const [label, badge] = POSITION_BADGES[p.closed ? 'closed' : p.inRange ? 'in' : 'out'];
                 const fees = `${formatData(p.feeData)} DATA and ${p.feeUsdc.toFixed(2)} USDC`;
+                const hovered = p.tokenId === state.hoverPosition ? ' bg-blue-500/10' : '';
                 return `
-                <tr class="border-b border-[#2a2a2a] last:border-0">
+                <tr data-position="${Utils.escapeHtml(p.tokenId)}" class="border-b border-[#2a2a2a] last:border-0 transition-colors${hovered}">
                     <td class="py-3 pr-3 whitespace-nowrap"><a href="${p.url}" target="_blank" rel="noopener noreferrer" class="text-blue-400 hover:text-blue-300">#${Utils.escapeHtml(p.tokenId)}</a></td>
                     <td class="py-3 pr-3 text-center whitespace-nowrap">${chainChip(p.chain, { named: true })}</td>
                     <td class="py-3 pr-3 text-center whitespace-nowrap text-gray-200">${formatPrice(p.min)} – ${formatPrice(p.max)}</td>
@@ -2296,6 +2313,8 @@ function setupListeners() {
         if (btn) setChain(Number(btn.dataset.chain));
     });
     $('liquidity-refresh')?.addEventListener('click', () => Liquidity.refresh(state.address));
+    $('liquidity-positions')?.addEventListener('mouseover', (e) => hoverPosition(e.target.closest('tr[data-position]')?.dataset.position ?? null));
+    $('liquidity-positions')?.addEventListener('mouseleave', () => hoverPosition(null));
     $('liquidity-zoom')?.addEventListener('click', (e) => {
         const btn = e.target.closest('[data-depth-step]');
         if (!btn) return;

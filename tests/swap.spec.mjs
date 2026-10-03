@@ -332,7 +332,6 @@ test('the Liquidity tab shows the pool, and the wallet\'s v4 positions with thei
     await expect(page.locator('#liquidity-stats')).toContainText('TVL$934.54');
     await expect(page.locator('#liquidity-stats')).toContainText('1 834 684 DATA');
     // Its liquidity by price in levels of 2%, bids and asks around the price, the position's range shaded behind
-    await expect(page.locator('#liquidity-depth-legend')).toContainText('your ranges shaded in blue');
     const dataset = await page.evaluate(() => {
         const d = window.Chart?.getChart(document.querySelector('#liquidity-depth canvas'))?.data.datasets[0];
         return d && { colors: d.backgroundColor, ranges: d.ranges };
@@ -350,6 +349,19 @@ test('the Liquidity tab shows the pool, and the wallet\'s v4 positions with thei
     });
     expect(Number(tooltip.label[0].replace('Total DATA ', '').replace(/\s/g, ''))).toBeCloseTo(tooltip.data, -1);
     expect(tooltip.label[1]).toMatch(/^Average price \$0\.00025\d\d$/);
+    // Hovering the position highlights its range, and hovering its range highlights the position
+    await row.hover();
+    await expect(row).toHaveClass(/bg-blue-500\/10/);
+    await page.mouse.move(0, 0);
+    await expect(row).not.toHaveClass(/bg-blue-500\/10/);
+    const band = await page.evaluate(() => {
+        const canvas = document.querySelector('#liquidity-depth canvas');
+        const [b] = window.Chart.getChart(canvas).$bands;
+        const box = canvas.getBoundingClientRect();
+        return { x: box.left + (b.x0 + b.x1) / 2, y: box.top + box.height / 2 };
+    });
+    await page.mouse.move(band.x, band.y);
+    await expect(row).toHaveClass(/bg-blue-500\/10/);
     // Wider levels: a wider range of prices, still 25 levels each way
     const lowest = () => page.evaluate(() => window.Chart.getChart(document.querySelector('#liquidity-depth canvas')).data.datasets[0].levels[0].lo);
     const before = await lowest();
