@@ -217,6 +217,10 @@ test('the liquidity book shows the v4 pools\' liquidity by price, in place of th
     await page.click('[data-book-step="1"]');
     await expect(mid).toContainText('1%');
     await expect.poll(() => asks.count()).toBeLessThan(narrow);
+    // The widest levels: 64% (all but 0.7% of a full range), the + then disabled
+    for (let i = 0; i < 6; i++) await page.click('[data-book-step="1"]');
+    await expect(mid).toContainText('64%');
+    await expect(page.locator('[data-book-step="1"]')).toBeDisabled();
     // The swap form's chain sets the books' (no v4 pool read on Ethereum here: nothing)
     await page.click('#swap-chain [data-chain="1"]');
     await expect(page.locator('#swap-trades-filter [data-filter="ethereum"]')).toHaveClass(/bg-blue-800/);
@@ -574,6 +578,17 @@ test('a position\'s Manage: remove a share with its fees, and the fees alone', a
     await modal.locator('[data-remove-pct="50"]').click();
     await modal.locator('[data-remove-pct="25"]').click();
     await expect(page.locator('#liquidity-remove-pct')).toHaveText('25%');
+    // The presets below the share, at the same place whatever the share
+    const presetsAt = () => page.evaluate(() => {
+        const pct = document.querySelector('#liquidity-remove-pct').getBoundingClientRect();
+        const presets = document.querySelector('#liquidity-remove-presets').getBoundingClientRect();
+        return { below: presets.top >= pct.bottom, left: Math.round(presets.left), top: Math.round(presets.top) };
+    });
+    const at25 = await presetsAt();
+    await modal.locator('[data-remove-pct="100"]').click();
+    expect(await presetsAt()).toEqual(at25);
+    expect(at25.below).toBe(true);
+    await modal.locator('[data-remove-pct="25"]').click();
     await expect(page.locator('#liquidity-modal-submit')).toHaveText('Remove 25%');
     await expect(page.locator('#liquidity-modal-summary')).toContainText('DATA459 671');   // 1 834 684 / 4 + 1000 of fees
     await page.click('#liquidity-modal-submit');
