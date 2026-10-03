@@ -190,7 +190,7 @@ const polygonRead = (readFn) => Services.readWithFallback(() => readFn(Services.
  * DATA's supply over every chain it is on. Each chain counts its token's total supply, in two parts: what its bridge
  * holds locked on Ethereum (bridged from Ethereum), and the rest (issued on that chain, nothing locked for it).
  * Ethereum counts its supply less what the bridges hold, so no DATA is counted twice. Each chain in its brand's color
- * (as its logo), its parts in two shades; the legend's logos, the gaps and the tooltips tell them apart beyond color.
+ * (as its logo), its parts in close shades; the legend's logos, the gaps and the tooltips tell them apart beyond color.
  */
 const GNOSIS_ICON = '<svg class="w-5 h-5 flex-shrink-0" viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="16" fill="#04795B"/><circle cx="11.5" cy="15" r="3.2" fill="none" stroke="#fff" stroke-width="2"/><circle cx="20.5" cy="15" r="3.2" fill="none" stroke="#fff" stroke-width="2"/><path d="M16 20.5l-2.2 2.8h4.4z" fill="#fff"/></svg>';
 const SUPPLY_CHAINS = [
@@ -261,8 +261,8 @@ async function loadSupply() {
             const old = c.chain === 'Gnosis' ? gnosisXdata : 0;
             const parts = [
                 { label: c.bridge ? `Via ${c.bridge}` : 'Bridged from Ethereum', amount: bridged, color: c.color },
-                { label: `Issued on ${c.chain}`, amount: supply - bridged, color: lighter(c.color, 0.45) },
-                { label: 'XDATA, not migrated', amount: old, color: lighter(c.color, 0.7) }
+                { label: `Issued on ${c.chain}`, amount: supply - bridged, color: lighter(c.color, 0.18) },
+                { label: 'XDATA, not migrated', amount: old, color: lighter(c.color, 0.3) }
             ].filter(part => part.amount >= 1);
             return { ...c, lock, amount: supply + old, parts };
         });
@@ -272,7 +272,7 @@ async function loadSupply() {
         const ethXdata = Math.max(0, xdata.supply - gnosisXdata);
         const ethParts = [
             { label: 'DATA', amount: ethData, color: '#627EEA' },
-            { label: 'XDATA, not migrated', amount: ethXdata, color: lighter('#627EEA', 0.55) }
+            { label: 'XDATA, not migrated', amount: ethXdata, color: lighter('#627EEA', 0.22) }
         ].filter(part => part.amount >= 1);
         const all = [{ chain: 'Ethereum', color: '#627EEA', icon: () => CHAINS[ETH_CHAIN_ID].icon, amount: ethData + ethXdata, parts: ethParts }, ...chains];
         state.supply = {
