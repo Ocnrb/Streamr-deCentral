@@ -542,6 +542,14 @@ test('a position\'s Manage: remove a share with its fees, and the fees alone', a
     await expect(page.locator('#liquidity-modal-summary')).toContainText('Position DATA1 834 684');
     // Remove a quarter: its share of the position, and the fees
     await modal.locator('[data-manage="remove"]').click();
+    // Small screens (320 px): 100% and its presets fit the modal, no sideways scroll
+    await page.setViewportSize({ width: 320, height: 800 });
+    await modal.locator('[data-remove-pct="100"]').click();
+    await expect(page.locator('#liquidity-remove-pct')).toHaveText('100%');
+    const body = modal.locator('.overflow-y-auto');
+    expect(await body.evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
+    await page.setViewportSize({ width: 1280, height: 720 });
+    await modal.locator('[data-remove-pct="50"]').click();
     await modal.locator('[data-remove-pct="25"]').click();
     await expect(page.locator('#liquidity-remove-pct')).toHaveText('25%');
     await expect(page.locator('#liquidity-modal-submit')).toHaveText('Remove 25%');
