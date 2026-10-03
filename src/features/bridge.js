@@ -209,6 +209,12 @@ const SUPPLY_CHAINS = [
         rpcs: ['https://bsc-dataseed.binance.org', 'https://bsc-rpc.publicnode.com'], id: 56, locks: []
     }
 ];
+/**
+ * The old token (XDATA) not yet migrated: its supply (a migration burns it, and the migration contract, its upgrade
+ * agent, gives as much DATA, held for that among Ethereum's DATA). On Gnosis, XDATA bridged over from Ethereum's.
+ */
+const XDATA = { ethereum: '0x0Cf0Ee63788A0849fE5297F3407f701E122cC023', gnosis: '0xE4a2620edE1058D61BEe5F45F6414314fdf10548' };
+const XDATA_ABI = ['function totalSupply() view returns (uint256)', 'function upgradeAgent() view returns (address)'];
 const SUPPLY_TTL_MS = 10 * 60 * 1000;
 const SUPPLY_ABI = ['function totalSupply() view returns (uint256)', 'function balanceOf(address) view returns (uint256)'];
 const chainProviders = new Map();
@@ -235,6 +241,17 @@ async function loadSupply() {
             const data = new ethers.Contract(ETH_DATA, SUPPLY_ABI, p);
             return Promise.all([data.totalSupply(), ...SUPPLY_CHAINS.flatMap(c => c.locks.map(escrow => data.balanceOf(escrow)))]);
         });
+        // XDATA not migrated, and the DATA its migration contract holds for it (none when not read)
+        const xdata = await ethRead(async p => {
+            const old = new ethers.Contract(XDATA.ethereum, XDATA_ABI, p);
+            const [supply, agent] = await Promise.all([old.totalSupply(), old.upgradeAgent().catch(() => ethers.constants.AddressZero)]);
+            const reserved = agent === ethers.constants.AddressZero ? ethers.constants.Zero : await new ethers.Contract(ETH_DATA, SUPPLY_ABI, p).balanceOf(agent);
+            return { supply: toData(supply), reserved: toData(reserved) };
+        }).catch(e => {
+            logger.warn('Bridge: XDATA not read', e);
+            return { supply: 0, reserved: 0 };
+        });
+        const gnosisXdata = await chainRead(SUPPLY_CHAINS.find(c => c.chain === 'Gnosis'), p => new ethers.Contract(XDATA.gnosis, XDATA_ABI, p).totalSupply()).then(toData, () => 0);
         const supplies = await Promise.all(SUPPLY_CHAINS.map(c => chainRead(c, p => new ethers.Contract(c.token, SUPPLY_ABI, p).totalSupply()).then(toData, e => {
             logger.warn(`Bridge: ${c.chain} supply not read`, e);
             return null;
@@ -245,15 +262,23 @@ async function loadSupply() {
             const supply = supplies[i];
             if (supply === null) return { ...c, lock, amount: null, parts: [] };
             const bridged = Math.min(lock, supply);
+            const old = c.chain === 'Gnosis' ? gnosisXdata : 0;
             const parts = [
                 { label: c.bridge ? `Via ${c.bridge}` : 'Bridged from Ethereum', amount: bridged, color: c.color },
-                { label: `Issued on ${c.chain}`, amount: supply - bridged, color: lighter(c.color, 0.45) }
+                { label: `Issued on ${c.chain}`, amount: supply - bridged, color: lighter(c.color, 0.45) },
+                { label: 'XDATA, not migrated', amount: old, color: lighter(c.color, 0.7) }
             ].filter(part => part.amount >= 1);
-            return { ...c, lock, amount: supply, parts };
+            return { ...c, lock, amount: supply + old, parts };
         });
-        // Ethereum: its supply less what the bridges of the chains read hold (an unread chain's stays in Ethereum's)
-        const ethereum = toData(ethTotal) - chains.reduce((sum, c) => sum + (c.amount === null ? 0 : c.lock), 0);
-        const all = [{ chain: 'Ethereum', color: '#627EEA', icon: () => CHAINS[ETH_CHAIN_ID].icon, amount: ethereum, parts: [{ label: 'Ethereum', amount: ethereum, color: '#627EEA' }] }, ...chains];
+        // Ethereum: its supply less what the bridges of the chains read hold (an unread chain's stays in Ethereum's) and
+        // the DATA held for XDATA's migration (counted as the XDATA not migrated, less Gnosis's)
+        const ethData = toData(ethTotal) - chains.reduce((sum, c) => sum + (c.amount === null ? 0 : c.lock), 0) - xdata.reserved;
+        const ethXdata = Math.max(0, xdata.supply - gnosisXdata);
+        const ethParts = [
+            { label: 'DATA', amount: ethData, color: '#627EEA' },
+            { label: 'XDATA, not migrated', amount: ethXdata, color: lighter('#627EEA', 0.55) }
+        ].filter(part => part.amount >= 1);
+        const all = [{ chain: 'Ethereum', color: '#627EEA', icon: () => CHAINS[ETH_CHAIN_ID].icon, amount: ethData + ethXdata, parts: ethParts }, ...chains];
         state.supply = {
             at: Date.now(),
             total: all.reduce((sum, c) => sum + (c.amount || 0), 0),
