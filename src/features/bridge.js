@@ -368,10 +368,11 @@ function renderSupply() {
         <svg viewBox="0 0 240 240" style="transform: translateZ(${z}px); pointer-events: none" aria-hidden="true">
             ${slices.map(s => `<g data-slice="${s.i}" data-dx="${s.dx}" data-dy="${s.dy}"><path d="${s.d}" fill="${top ? s.color : darker(s.color, 0.55)}"/></g>`).join('')}
         </svg>`;
-    // The pointer's layer: the slices at rest, see-through, above the ring (a slice pushed out never slips from under it)
+    // The pointer's layer: the slices at rest, see-through, above the ring (a slice pushed out never slips from under it);
+    // each part's tooltip its chain's total (the parts are in the legend's)
     const hits = `
         <svg viewBox="0 0 240 240" style="transform: translateZ(1px)">
-            ${slices.map(s => `<path data-slice-hit="${s.i}" d="${s.d}" fill="transparent" data-tooltip-content="<span class='font-semibold'>${s.c.chain}</span>${s.c.parts.length > 1 ? `<br>${s.label}` : ''}<br>${whole(s.amount)} DATA<br>${pct(s.amount)}"/>`).join('')}
+            ${slices.map(s => `<path data-slice-hit="${s.i}" d="${s.d}" fill="transparent" data-tooltip-content="<span class='font-semibold'>${s.c.chain}</span><br>${whole(s.c.amount)} DATA<br>${pct(s.c.amount)}"/>`).join('')}
         </svg>`;
     container.innerHTML = `
         <div class="supply-ring-shadow"></div>

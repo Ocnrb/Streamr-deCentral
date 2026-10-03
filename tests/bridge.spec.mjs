@@ -72,7 +72,7 @@ test('the bridge page shows DATA\'s whole supply by chain: each chain\'s supply,
     // The ring: a slice per part, with its chain, part and amount in the tooltip
     const hits = page.locator('#bridge-supply-chart [data-slice-hit]');
     await expect(hits).toHaveCount(6);   // Ethereum's DATA and XDATA, Polygon's two parts, Gnosis's two
-    await expect(hits.nth(3)).toHaveAttribute('data-tooltip-content', /Polygon.*Issued on Polygon.*30 000 000 DATA/);
+    await expect(hits.nth(3)).toHaveAttribute('data-tooltip-content', /^<span class='font-semibold'>Polygon<\/span><br>270 000 000 DATA<br>26\.1%$/);   // the chain's total only
     // Over a slice: its chain stands out, the ring stops floating (the tooltip stays put)
     await hits.nth(2).hover({ force: true });
     await expect(page.locator('#bridge-supply-chart g[data-slice="1"]').last()).toHaveAttribute('style', /translate/);
