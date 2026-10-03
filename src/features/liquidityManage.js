@@ -69,7 +69,8 @@ function inputValue(amount, decimals) {
     return amount.toFixed(Math.min(decimals, amount >= 1 ? 4 : 8)).replace(/\.?0+$/, '');
 }
 
-const formatBalance = (amount) => Utils.formatBigNumber(amount.toFixed(2));
+/** A balance cut (not rounded) to 2 decimals: never shown above what the wallet holds */
+const formatBalance = (amount) => Utils.formatBigNumber((Math.floor(amount * 100) / 100).toFixed(2));
 const formatPriceInput = (price) => (price >= 1 ? price.toFixed(4) : price.toPrecision(5)).replace(/(\.\d*?)0+$/, '$1').replace(/\.$/, '');
 
 function formatTxError(error) {
@@ -635,10 +636,11 @@ function setupListeners() {
             $(`${prefix}-${token}-max`)?.addEventListener('click', () => {
                 const t = target();
                 const chain = prefix === 'liquidity-new' ? state.form.chain : state.modal.chain;
-                const amount = balanceOf(walletOf(chain), token);
-                if (amount === null) return;
+                const wallet = walletOf(chain);
+                if (!wallet) return;
+                // The exact balance, all its decimals (rounded, it could be over the balance)
                 t.last = token;
-                t.amounts[token] = inputValue(Math.floor(amount * 10 ** 6) / 10 ** 6, DECIMALS[token]);
+                t.amounts[token] = ethers.utils.formatUnits(wallet[token].toString(), DECIMALS[token]).replace(/\.0$/, '');
                 const input = $(`${prefix}-${token}`);
                 if (input) input.value = t.amounts[token];
                 render(token);

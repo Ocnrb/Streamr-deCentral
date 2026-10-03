@@ -459,7 +459,7 @@ test('the Liquidity tab shows the pool, and the wallet\'s v4 positions with thei
 
 test('a new position: its range (a strategy, prices or the full range) on the chart, the deposit, then the approval, the signature and the transaction', async ({ page }) => {
     await mockPositions(page);
-    await mockWallet(page, { data: '50000', usdc: '100', usdcToPermit2: '1000' });
+    await mockWallet(page, { data: '50000.123456789', usdc: '100', usdcToPermit2: '1000' });   // decimals MAX must keep exactly
     const sent = await mockSending(page);
     await page.goto('/market/liquidity', { waitUntil: 'domcontentloaded' });
     await connectPrivateKey(page);
@@ -474,10 +474,10 @@ test('a new position: its range (a strategy, prices or the full range) on the ch
     await expect(page.locator('#liquidity-new-min')).toHaveValue(/^0\.0001[23]\d+$/);
     await expect(page.locator('#liquidity-new-min-pct')).toHaveText(/^-[45]\d\.\d\d%$/);
     await expect(page.locator('#liquidity-new-max-pct')).toHaveText(/^\+(9\d|10\d)\.\d\d%$/);
-    await expect(page.locator('#liquidity-new-data-balance')).toHaveText('50 000.00');
-    // MAX: the whole balance, the other token worked out
+    await expect(page.locator('#liquidity-new-data-balance')).toHaveText('50 000.12');
+    // MAX: the whole balance, exactly (not rounded up), the other token worked out
     await page.click('#liquidity-new-data-max');
-    await expect(page.locator('#liquidity-new-data')).toHaveValue('50000');
+    await expect(page.locator('#liquidity-new-data')).toHaveValue('50000.123456789');
     await expect(page.locator('#liquidity-new-submit')).toHaveText('Create position');
     const draft = () => page.evaluate(() => window.Chart.getChart(document.querySelector('#liquidity-depth canvas')).data.datasets[0].ranges.find(r => r.draft));
     expect((await draft()).min).toBeCloseTo(0.000125, 5);
@@ -493,6 +493,9 @@ test('a new position: its range (a strategy, prices or the full range) on the ch
     await page.click('[data-strategy="upper"]');
     await expect(page.locator('#liquidity-new-usdc')).toBeDisabled();
     await expect(page.locator('#liquidity-new-note')).toHaveText('At the current price this range takes DATA only.');
+    await page.click('#liquidity-new-data-max');
+    await expect(page.locator('#liquidity-new-data')).toHaveValue('50000.123456789');
+    await expect(page.locator('#liquidity-new-submit')).toHaveText('Create position');
     expect((await draft()).min).toBeGreaterThan(0.00025);
     // The full range: from 0 to ∞
     await page.click('[data-range-mode="full"]');
