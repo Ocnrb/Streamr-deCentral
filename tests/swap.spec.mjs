@@ -534,7 +534,7 @@ test('a position\'s Manage: remove a share with its fees, and the fees alone', a
     const sent = await mockSending(page);
     await page.goto('/market/liquidity', { waitUntil: 'domcontentloaded' });
     await connectPrivateKey(page);
-    await page.locator('[data-manage-position="7"]').click({ timeout: 30000 });
+    await page.locator('#liquidity-positions [data-manage-position="7"]').click({ timeout: 30000 });
     const modal = page.locator('#liquidityModal');
     await expect(modal).toBeVisible();
     await expect(page.locator('#liquidity-modal-title')).toHaveText('Add liquidity #7');
@@ -557,7 +557,7 @@ test('a position\'s Manage: remove a share with its fees, and the fees alone', a
     await page.click('#liquidity-modal-submit');   // Done
     await expect(modal).toBeHidden();
     // Collect: the fees only (no liquidity out)
-    await page.locator('[data-manage-position="7"]').click();
+    await page.locator('#liquidity-positions [data-manage-position="7"]').click();
     await modal.locator('[data-manage="collect"]').click();
     await expect(page.locator('#liquidity-modal-summary')).toContainText('DATA1 000');
     await page.click('#liquidity-modal-submit');

@@ -964,14 +964,14 @@ const POSITION_STATUS = {
  * and their shares below. In range a green dot on the bar where they meet; out of range a yellow dot at the bar's end
  * on the price's side (left: the price fell below, all DATA; right: it rose above, all USDC).
  */
-function distributionCell(p) {
+function distributionCell(p, { wide = false } = {}) {
     if (p.closed || !(p.value > 0)) return '<div class="text-center text-gray-400">--</div>';
     const share = Math.min(100, Math.max(0, (p.value - p.usdc) / p.value * 100));
     const below = !p.inRange && p.price < p.min;
     const [at, dot] = p.inRange ? [share, 'bg-green-400'] : [below ? 0 : 100, 'bg-amber-300'];
     const pct = (value) => `${value > 0 && value < 1 ? '<1' : value > 99 && value < 100 ? '>99' : Math.round(value)}%`;
     return `
-        <div class="w-28 mx-auto">
+        <div class="${wide ? 'w-full' : 'w-28 mx-auto'}">
             <div class="relative h-1.5">
                 <div class="flex h-full rounded-full overflow-hidden bg-[#2C2C2C] gap-px">
                     ${share > 0 ? `<div class="bg-orange-500" style="width: ${share.toFixed(1)}%"></div>` : ''}
@@ -1240,32 +1240,66 @@ function renderPositions() {
     if (state.tab === 'liquidity') renderDepth(depth, depthRanges());
 
     const body = $('liquidity-positions');
+    const cards = $('liquidity-position-cards');
     if (body) {
         const empty = (text) => `<tr><td colspan="9" class="py-4 text-sm text-gray-300">${text}</td></tr>`;
         const errors = Liquidity.errors();
-        if (!state.address) body.innerHTML = empty('Connect a wallet to see your liquidity positions.');
-        else if (positions === null) body.innerHTML = empty('Reading your positions...');
-        else if (!positions.length) body.innerHTML = empty(errors.length ? `Your positions on ${errors.join(' and ')} could not be read. Try again in a moment.` : 'No positions in the DATA/USDC pools on Uniswap v4.');
-        else {
-            body.innerHTML = [...positions].sort((a, b) => b.chain - a.chain || Number(b.tokenId) - Number(a.tokenId)).map(p => {
+        const message = !state.address ? 'Connect a wallet to see your liquidity positions.'
+            : positions === null ? 'Reading your positions...'
+            : !positions.length ? (errors.length ? `Your positions on ${errors.join(' and ')} could not be read. Try again in a moment.` : 'No positions in the DATA/USDC pools on Uniswap v4.')
+            : null;
+        if (message) {
+            body.innerHTML = empty(message);
+            if (cards) cards.innerHTML = `<p class="py-1 text-sm text-gray-300">${message}</p>`;
+        } else {
+            const sorted = [...positions].sort((a, b) => b.chain - a.chain || Number(b.tokenId) - Number(a.tokenId));
+            const view = (p) => {
                 const [label, dot] = POSITION_STATUS[p.closed ? 'closed' : p.inRange ? 'in' : 'out'];
-                const fees = `${formatData(p.feeData)} DATA and ${p.feeUsdc.toFixed(2)} USDC`;
+                return {
+                    fees: `${formatData(p.feeData)} DATA and ${p.feeUsdc.toFixed(2)} USDC`,
+                    link: `<a href="${p.url}" target="_blank" rel="noopener noreferrer" class="text-blue-400 hover:text-blue-300">#${Utils.escapeHtml(p.tokenId)}</a>`,
+                    range: `<span class="inline-flex items-center gap-2 text-gray-200"><span class="w-2 h-2 rounded-full flex-shrink-0 ${dot}" aria-hidden="true"></span><span class="sr-only">${label}</span>${formatPrice(p.min)} – ${formatPrice(p.max)}</span>`,
+                    manage: `<button type="button" data-manage-position="${Utils.escapeHtml(p.tokenId)}" data-chain="${p.chain}" class="px-3 py-1 rounded-lg bg-[#2C2C2C] hover:bg-[#3A3A3A] text-xs font-semibold text-white transition-colors">Manage</button>`
+                };
+            };
+            body.innerHTML = sorted.map(p => {
+                const v = view(p);
                 const hovered = p.tokenId === state.hoverPosition ? ' bg-white/5' : '';
                 return `
                 <tr data-position="${Utils.escapeHtml(p.tokenId)}" class="border-b border-[#2a2a2a] last:border-0 transition-colors${hovered}">
-                    <td class="py-3 pr-3 whitespace-nowrap"><a href="${p.url}" target="_blank" rel="noopener noreferrer" class="text-blue-400 hover:text-blue-300">#${Utils.escapeHtml(p.tokenId)}</a></td>
+                    <td class="py-3 pr-3 whitespace-nowrap">${v.link}</td>
                     <td class="py-3 pr-3 text-center whitespace-nowrap">${chainChip(p.chain, { named: true })}</td>
-                    <td class="py-3 pr-3 whitespace-nowrap">
-                        <span class="inline-flex items-center gap-2 text-gray-200"><span class="w-2 h-2 rounded-full flex-shrink-0 ${dot}" aria-hidden="true"></span><span class="sr-only">${label}</span>${formatPrice(p.min)} – ${formatPrice(p.max)}</span>
-                    </td>
+                    <td class="py-3 pr-3 whitespace-nowrap">${v.range}</td>
                     <td class="py-3 pr-3">${distributionCell(p)}</td>
                     <td class="py-3 pr-3 text-right whitespace-nowrap text-gray-200">${formatData(p.data)}</td>
                     <td class="py-3 pr-3 text-right whitespace-nowrap text-gray-200">${Utils.formatBigNumber(p.usdc.toFixed(2))}</td>
                     <td class="py-3 pr-3 text-right whitespace-nowrap text-white font-medium">${formatUsd(p.value)}</td>
-                    <td class="py-3 pr-3 text-right whitespace-nowrap text-gray-200" data-tooltip-content="${fees}">${formatUsd(p.feeValue)}</td>
-                    <td class="py-3 text-right"><button type="button" data-manage-position="${Utils.escapeHtml(p.tokenId)}" data-chain="${p.chain}" class="px-3 py-1 rounded-lg bg-[#2C2C2C] hover:bg-[#3A3A3A] text-xs font-semibold text-white transition-colors">Manage</button></td>
+                    <td class="py-3 pr-3 text-right whitespace-nowrap text-gray-200" data-tooltip-content="${v.fees}">${formatUsd(p.feeValue)}</td>
+                    <td class="py-3 text-right">${v.manage}</td>
                 </tr>`;
             }).join('');
+            // Small screens: a card per position (the table needs scrolling there)
+            if (cards) {
+                const cell = (label, value, tip = '') => `<div><dt class="text-xs text-gray-300">${label}</dt><dd class="mt-0.5 text-white font-medium"${tip ? ` data-tooltip-content="${tip}"` : ''}>${value}</dd></div>`;
+                cards.innerHTML = sorted.map(p => {
+                    const v = view(p);
+                    return `
+                    <article class="p-3 bg-[#121212] border border-[#333] rounded-lg space-y-3">
+                        <div class="flex items-center justify-between gap-3">
+                            <span class="flex items-center gap-2">${v.link}${chainChip(p.chain, { named: true })}</span>
+                            ${v.manage}
+                        </div>
+                        <div class="text-sm">${v.range}</div>
+                        ${distributionCell(p, { wide: true })}
+                        <dl class="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+                            ${cell('DATA', formatData(p.data))}
+                            ${cell('USDC', Utils.formatBigNumber(p.usdc.toFixed(2)))}
+                            ${cell('Value', formatUsd(p.value))}
+                            ${cell('Uncollected fees', formatUsd(p.feeValue), v.fees)}
+                        </dl>
+                    </article>`;
+                }).join('');
+            }
         }
     }
 }
@@ -2400,7 +2434,7 @@ function setupListeners() {
     const statsCard = $('liquidity-overview')?.closest('section');
     if (statsCard && window.ResizeObserver) new ResizeObserver(lockDepthHeight).observe(statsCard);
     window.addEventListener('resize', lockDepthHeight);
-    $('liquidity-positions')?.addEventListener('click', (e) => {
+    $('market-positions-section')?.addEventListener('click', (e) => {
         const btn = e.target.closest('button[data-manage-position]');
         if (btn) LiquidityManage.openManage(btn.dataset.managePosition, Number(btn.dataset.chain));
     });
