@@ -224,7 +224,7 @@
                 </div>
             </section>
 
-            <div class="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_22rem] gap-5">
+            <div class="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(22rem,min(26%,30rem))] xl:grid-cols-[minmax(0,1fr)_minmax(24rem,min(26%,30rem))] gap-5">
                 <!-- The pool's liquidity by price, the wallet's ranges marked -->
                 <section class="detail-section p-4 sm:p-5 flex flex-col">
                     <div class="flex flex-wrap items-baseline justify-between gap-2">
@@ -234,13 +234,79 @@
                     <div id="liquidity-depth" class="relative flex-1 min-h-64 sm:min-h-80 mt-3"></div>
                 </section>
                 <!-- The pool's numbers and the wallet's liquidity in it -->
-                <section class="detail-section p-4 sm:p-5 space-y-4">
-                    <dl id="liquidity-stats" class="space-y-3 text-sm"></dl>
-                    <div class="border-t border-[#2a2a2a] pt-4">
-                        <h3 class="text-sm font-semibold text-white mb-2">Your liquidity</h3>
-                        <dl id="liquidity-summary" class="space-y-2 text-sm"></dl>
+                <section class="detail-section p-4 sm:p-5">
+                    <div id="liquidity-overview" class="space-y-4">
+                        <dl id="liquidity-stats" class="space-y-3 text-sm"></dl>
+                        <div class="border-t border-[#2a2a2a] pt-4">
+                            <h3 class="text-sm font-semibold text-white mb-2">Your liquidity</h3>
+                            <dl id="liquidity-summary" class="space-y-2 text-sm"></dl>
+                        </div>
+                        <button id="liquidity-new-open" type="button" class="w-full bg-blue-800 hover:bg-blue-700 text-white font-semibold py-2.5 rounded-lg transition-colors">New position</button>
                     </div>
-                    <a id="liquidity-pool-link" href="https://app.uniswap.org" target="_blank" rel="noopener noreferrer" class="block text-center bg-blue-800 hover:bg-blue-700 text-white font-semibold py-2.5 rounded-lg transition-colors">New position ↗</a>
+                    <!-- New position: its range (shown on the chart) and the tokens to deposit -->
+                    <div id="liquidity-new" class="hidden space-y-3">
+                        <div class="flex items-center justify-between gap-3">
+                            <div class="flex items-center gap-1.5">
+                                <h3 class="text-base font-semibold text-white">New position</h3>
+                                <button type="button" class="inline-flex text-gray-300 hover:text-white cursor-help" aria-label="Risks and disclaimer"
+                                    data-tooltip-content="<span class='font-semibold'>Risks</span><br>Providing liquidity is not risk free. When the price moves, the pool sells the token that rises and buys the one that falls, so your position can end up worth less than holding the tokens (impermanent loss). Out of its range a position holds one token only and earns no fees.<br><br><span class='font-semibold'>Disclaimer</span><br>We offer a convenient front end for the DATA/USDC pools on Uniswap v4. Your transactions go straight to Uniswap's contracts. We do not take any fees. We are not responsible for any loss of funds.">
+                                    <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+                                </button>
+                            </div>
+                            <button id="liquidity-new-close" type="button" aria-label="Close" class="p-1 text-gray-400 hover:text-white hover:bg-[#333] rounded-lg transition-colors"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg></button>
+                        </div>
+                        <div id="liquidity-new-mode" class="grid grid-cols-2 gap-1 p-1 bg-[#2C2C2C] rounded-lg" role="group" aria-label="Range">
+                            <button type="button" data-range-mode="full" class="py-1.5 rounded-md text-sm font-semibold text-gray-300 hover:text-white transition-colors">Full range</button>
+                            <button type="button" data-range-mode="custom" class="py-1.5 rounded-md text-sm font-semibold text-gray-300 hover:text-white transition-colors">Custom range</button>
+                        </div>
+                        <div id="liquidity-new-strategies" class="grid grid-cols-2 gap-2"></div>
+                        <div class="grid grid-cols-2 gap-2">
+                            <div class="bg-[#121212] border border-[#333] rounded-lg p-2.5">
+                                <div class="text-xs text-gray-300">Min price</div>
+                                <input id="liquidity-new-min" type="text" inputmode="decimal" autocomplete="off" aria-label="Min price" class="w-full bg-transparent text-base font-semibold text-white outline-none disabled:text-gray-300">
+                                <div class="flex items-center justify-between gap-1">
+                                    <span id="liquidity-new-min-pct" class="text-xs text-gray-400"></span>
+                                    <span class="flex gap-1"><button type="button" data-nudge="min:-1" aria-label="Lower min price" class="w-6 h-6 rounded-full bg-[#2C2C2C] hover:bg-[#3A3A3A] text-gray-200 disabled:opacity-40">−</button><button type="button" data-nudge="min:1" aria-label="Raise min price" class="w-6 h-6 rounded-full bg-[#2C2C2C] hover:bg-[#3A3A3A] text-gray-200 disabled:opacity-40">+</button></span>
+                                </div>
+                            </div>
+                            <div class="bg-[#121212] border border-[#333] rounded-lg p-2.5">
+                                <div class="text-xs text-gray-300">Max price</div>
+                                <input id="liquidity-new-max" type="text" inputmode="decimal" autocomplete="off" aria-label="Max price" class="w-full bg-transparent text-base font-semibold text-white outline-none disabled:text-gray-300">
+                                <div class="flex items-center justify-between gap-1">
+                                    <span id="liquidity-new-max-pct" class="text-xs text-gray-400"></span>
+                                    <span class="flex gap-1"><button type="button" data-nudge="max:-1" aria-label="Lower max price" class="w-6 h-6 rounded-full bg-[#2C2C2C] hover:bg-[#3A3A3A] text-gray-200 disabled:opacity-40">−</button><button type="button" data-nudge="max:1" aria-label="Raise max price" class="w-6 h-6 rounded-full bg-[#2C2C2C] hover:bg-[#3A3A3A] text-gray-200 disabled:opacity-40">+</button></span>
+                                </div>
+                            </div>
+                        </div>
+                        <h4 class="text-sm font-semibold text-white pt-1">Deposit</h4>
+                        <div class="p-3 bg-[#121212] border border-[#333] rounded-lg space-y-2 focus-within:border-blue-500 transition-colors">
+                                <div class="flex items-center justify-between gap-3 text-xs text-gray-300">
+                                    <span>Deposit</span>
+                                    <span class="text-right">Balance <span id="liquidity-new-data-balance">--</span></span>
+                                </div>
+                                <div class="flex items-center gap-2.5">
+                                    <span data-token-chip="DATA" class="flex items-center gap-1.5 flex-shrink-0 text-sm font-semibold text-white"></span>
+                                    <input id="liquidity-new-data" type="text" inputmode="decimal" autocomplete="off" spellcheck="false" placeholder="0" aria-label="DATA amount" class="flex-1 min-w-0 bg-transparent text-right text-xl font-semibold text-white placeholder:text-gray-600 focus:outline-none disabled:opacity-50">
+                                    <button id="liquidity-new-data-max" type="button" class="flex-shrink-0 px-2 py-1 text-xs font-bold rounded-md bg-[#2C2C2C] hover:bg-[#3C3C3C] text-gray-300 hover:text-white transition-colors disabled:opacity-40">MAX</button>
+                                </div>
+                            </div>
+                        <div class="p-3 bg-[#121212] border border-[#333] rounded-lg space-y-2 focus-within:border-blue-500 transition-colors">
+                                <div class="flex items-center justify-between gap-3 text-xs text-gray-300">
+                                    <span>Deposit</span>
+                                    <span class="text-right">Balance <span id="liquidity-new-usdc-balance">--</span></span>
+                                </div>
+                                <div class="flex items-center gap-2.5">
+                                    <span data-token-chip="USDC" class="flex items-center gap-1.5 flex-shrink-0 text-sm font-semibold text-white"></span>
+                                    <input id="liquidity-new-usdc" type="text" inputmode="decimal" autocomplete="off" spellcheck="false" placeholder="0" aria-label="USDC amount" class="flex-1 min-w-0 bg-transparent text-right text-xl font-semibold text-white placeholder:text-gray-600 focus:outline-none disabled:opacity-50">
+                                    <button id="liquidity-new-usdc-max" type="button" class="flex-shrink-0 px-2 py-1 text-xs font-bold rounded-md bg-[#2C2C2C] hover:bg-[#3C3C3C] text-gray-300 hover:text-white transition-colors disabled:opacity-40">MAX</button>
+                                </div>
+                            </div>
+                        <p id="liquidity-new-note" class="hidden text-xs text-gray-300"></p>
+                        <ol id="liquidity-new-steps" class="hidden space-y-1.5 text-sm px-3 py-2.5 bg-[#121212] border border-[#333] rounded-lg"></ol>
+                        <p id="liquidity-new-error" class="hidden text-sm text-red-400"></p>
+                        <p id="liquidity-new-success" class="hidden text-sm text-green-400"></p>
+                        <button id="liquidity-new-submit" type="button" class="w-full bg-blue-800 hover:bg-blue-700 text-white font-semibold py-2.5 rounded-lg transition-colors disabled:bg-[#2C2C2C] disabled:text-gray-400 disabled:cursor-not-allowed">Enter an amount</button>
+                    </div>
                 </section>
             </div>
 
@@ -260,7 +326,8 @@
                                 <th class="text-right font-medium py-2 pr-3">DATA</th>
                                 <th class="text-right font-medium py-2 pr-3">USDC</th>
                                 <th class="text-right font-medium py-2 pr-3">Value</th>
-                                <th class="text-right font-medium py-2">Uncollected fees</th>
+                                <th class="text-right font-medium py-2 pr-3">Uncollected fees</th>
+                                <th class="py-2"><span class="sr-only">Manage</span></th>
                             </tr>
                         </thead>
                         <tbody id="liquidity-positions"></tbody>
@@ -300,6 +367,73 @@
             </div>
         </section>
 
+    </div>
+</div>
+
+<!-- Market, Liquidity tab: a position's Add / Remove / Collect (modal) -->
+<div id="liquidityModal" class="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-3 sm:p-4 z-50 hidden">
+    <div class="bg-[#1E1E1E] rounded-xl max-w-md w-full text-gray-300 border border-[#333333] shadow-2xl max-h-[92vh] flex flex-col" role="dialog" aria-modal="true" aria-labelledby="liquidity-modal-title">
+        <div class="flex items-center justify-between gap-3 px-5 py-4 border-b border-[#333] flex-shrink-0">
+            <div class="min-w-0">
+                <div class="flex items-center gap-1.5">
+                    <h2 id="liquidity-modal-title" class="text-lg font-bold text-white">Position</h2>
+                    <button type="button" class="inline-flex text-gray-300 hover:text-white cursor-help" aria-label="Risks and disclaimer"
+                                    data-tooltip-content="<span class='font-semibold'>Risks</span><br>Providing liquidity is not risk free. When the price moves, the pool sells the token that rises and buys the one that falls, so your position can end up worth less than holding the tokens (impermanent loss). Out of its range a position holds one token only and earns no fees.<br><br><span class='font-semibold'>Disclaimer</span><br>We offer a convenient front end for the DATA/USDC pools on Uniswap v4. Your transactions go straight to Uniswap's contracts. We do not take any fees. We are not responsible for any loss of funds.">
+                                    <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+                                </button>
+                </div>
+                <div id="liquidity-modal-tags" class="mt-1 flex flex-wrap items-center gap-1.5 text-xs"></div>
+            </div>
+            <button id="liquidity-modal-close" type="button" aria-label="Close" class="p-1.5 text-gray-400 hover:text-white hover:bg-[#333] rounded-lg transition-colors"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg></button>
+        </div>
+        <nav id="liquidity-modal-tabs" class="flex gap-5 px-5 border-b border-[#333] flex-shrink-0" aria-label="Manage">
+            <button type="button" data-manage="add" class="py-2.5 text-sm font-semibold border-b-2 -mb-px transition-colors">Add</button>
+            <button type="button" data-manage="remove" class="py-2.5 text-sm font-semibold border-b-2 -mb-px transition-colors">Remove</button>
+            <button type="button" data-manage="collect" class="py-2.5 text-sm font-semibold border-b-2 -mb-px transition-colors">Collect fees</button>
+        </nav>
+        <div class="px-5 py-4 overflow-y-auto space-y-3">
+            <div id="liquidity-add" class="space-y-2">
+                <div class="p-3 bg-[#121212] border border-[#333] rounded-lg space-y-2 focus-within:border-blue-500 transition-colors">
+                                <div class="flex items-center justify-between gap-3 text-xs text-gray-300">
+                                    <span>Deposit</span>
+                                    <span class="text-right">Balance <span id="liquidity-add-data-balance">--</span></span>
+                                </div>
+                                <div class="flex items-center gap-2.5">
+                                    <span data-token-chip="DATA" class="flex items-center gap-1.5 flex-shrink-0 text-sm font-semibold text-white"></span>
+                                    <input id="liquidity-add-data" type="text" inputmode="decimal" autocomplete="off" spellcheck="false" placeholder="0" aria-label="DATA amount" class="flex-1 min-w-0 bg-transparent text-right text-xl font-semibold text-white placeholder:text-gray-600 focus:outline-none disabled:opacity-50">
+                                    <button id="liquidity-add-data-max" type="button" class="flex-shrink-0 px-2 py-1 text-xs font-bold rounded-md bg-[#2C2C2C] hover:bg-[#3C3C3C] text-gray-300 hover:text-white transition-colors disabled:opacity-40">MAX</button>
+                                </div>
+                            </div>
+                <div class="p-3 bg-[#121212] border border-[#333] rounded-lg space-y-2 focus-within:border-blue-500 transition-colors">
+                                <div class="flex items-center justify-between gap-3 text-xs text-gray-300">
+                                    <span>Deposit</span>
+                                    <span class="text-right">Balance <span id="liquidity-add-usdc-balance">--</span></span>
+                                </div>
+                                <div class="flex items-center gap-2.5">
+                                    <span data-token-chip="USDC" class="flex items-center gap-1.5 flex-shrink-0 text-sm font-semibold text-white"></span>
+                                    <input id="liquidity-add-usdc" type="text" inputmode="decimal" autocomplete="off" spellcheck="false" placeholder="0" aria-label="USDC amount" class="flex-1 min-w-0 bg-transparent text-right text-xl font-semibold text-white placeholder:text-gray-600 focus:outline-none disabled:opacity-50">
+                                    <button id="liquidity-add-usdc-max" type="button" class="flex-shrink-0 px-2 py-1 text-xs font-bold rounded-md bg-[#2C2C2C] hover:bg-[#3C3C3C] text-gray-300 hover:text-white transition-colors disabled:opacity-40">MAX</button>
+                                </div>
+                            </div>
+            </div>
+            <div id="liquidity-remove" class="space-y-3">
+                <div class="flex items-end justify-between gap-3">
+                    <span id="liquidity-remove-pct" class="text-4xl font-semibold text-white tabular-nums">50%</span>
+                    <span id="liquidity-remove-presets" class="flex gap-1.5">
+                        <button type="button" data-remove-pct="25" class="px-2.5 py-1 rounded-lg bg-[#2C2C2C] hover:bg-[#3A3A3A] text-xs font-semibold text-gray-200">25%</button>
+                        <button type="button" data-remove-pct="50" class="px-2.5 py-1 rounded-lg bg-[#2C2C2C] hover:bg-[#3A3A3A] text-xs font-semibold text-gray-200">50%</button>
+                        <button type="button" data-remove-pct="75" class="px-2.5 py-1 rounded-lg bg-[#2C2C2C] hover:bg-[#3A3A3A] text-xs font-semibold text-gray-200">75%</button>
+                        <button type="button" data-remove-pct="100" class="px-2.5 py-1 rounded-lg bg-[#2C2C2C] hover:bg-[#3A3A3A] text-xs font-semibold text-gray-200">Max</button>
+                    </span>
+                </div>
+                <input id="liquidity-remove-range" type="range" min="1" max="100" value="50" aria-label="Share to remove" class="w-full accent-blue-500">
+            </div>
+            <dl id="liquidity-modal-summary" class="space-y-2 text-sm"></dl>
+            <ol id="liquidity-modal-steps" class="hidden space-y-1.5 text-sm px-3 py-2.5 bg-[#121212] border border-[#333] rounded-lg"></ol>
+            <p id="liquidity-modal-error" class="hidden text-sm text-red-400"></p>
+            <p id="liquidity-modal-success" class="hidden text-sm text-green-400"></p>
+            <button id="liquidity-modal-submit" type="button" class="w-full bg-blue-800 hover:bg-blue-700 text-white font-semibold py-2.5 rounded-lg transition-colors disabled:bg-[#2C2C2C] disabled:text-gray-400 disabled:cursor-not-allowed">Enter an amount</button>
+        </div>
     </div>
 </div>
 
