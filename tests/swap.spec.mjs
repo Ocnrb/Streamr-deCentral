@@ -433,6 +433,15 @@ test('the Liquidity tab shows the pool, and the wallet\'s v4 positions with thei
     shares.inside.forEach(x => expect(x).toBeCloseTo(1, 2));
     shares.outside.forEach(x => expect(x).toBe(0));
     expect(shares.label[2]).toBe('Your share 100%');
+    // A level the range only enters: its white part over the range's prices, not the whole bar
+    const edge = await page.evaluate(() => {
+        const d = window.Chart.getChart(document.querySelector('#liquidity-depth canvas')).data.datasets[0];
+        const k = d.levels.findIndex(l => l.lo < d.ranges[0].min && l.hi > d.ranges[0].min);
+        return k < 0 ? null : { level: d.levels[k], parts: d.shareParts[k] };
+    });
+    expect(edge.parts).toHaveLength(1);
+    expect(edge.parts[0].lo).toBeCloseTo(edge.level.lo < 0 ? 0 : Math.max(edge.level.lo, 0.00023518), 7);
+    expect(edge.parts[0].hi).toBe(edge.level.hi);
     // A bar's tooltip sums the levels from the price to it (as the Depth): the second ask holds the first two
     const tooltip = await page.evaluate(() => {
         const chart = window.Chart.getChart(document.querySelector('#liquidity-depth canvas'));
