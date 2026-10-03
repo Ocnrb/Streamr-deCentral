@@ -222,6 +222,31 @@ test('the liquidity book shows the v4 pools\' liquidity by price, in place of th
     await expect(page.locator('#swap-book-view')).toBeHidden();
 });
 
+test('hovering a book level highlights the levels from the price to it and sums them in a tooltip', async ({ page }) => {
+    await openSwap(page);
+    await page.click('[data-market-view="book"]');
+    const bids = page.locator('#swap-book-bids > div');
+    await expect(bids.first()).toBeVisible({ timeout: 30000 });
+    const rows = await bids.evaluateAll(list => list.map(row => [...row.querySelectorAll('span')].map(span => span.textContent)));
+    await bids.nth(2).hover();
+    // The three nearest bids, and only them
+    await expect(page.locator('#swap-book-bids > div.bg-white\\/\\[0\\.06\\]')).toHaveCount(3);
+    const tooltip = page.locator('#custom-tooltip');
+    await expect(tooltip).toBeVisible();
+    const text = (await tooltip.innerText()).replace(/\u00A0/g, ' ');
+    expect(text).toContain(`Sell down to ${rows[2][0]}`);
+    // The DATA of the three levels (each row rounded) and their USD (the third row's running total)
+    const data = rows.slice(0, 3).reduce((sum, row) => sum + Number(row[1].replace(/ /g, '')), 0);
+    const [, summed, usd] = text.match(/([\d ]+) DATA for (\$[\d .]+)/);
+    expect(Math.abs(Number(summed.replace(/ /g, '')) - data)).toBeLessThanOrEqual(2);
+    expect(usd.trim()).toBe(rows[2][2]);
+    expect(text).toContain('−1.5% from $0.0002500');
+    expect(text).toContain('Less the 0.3% pool fee');
+    // Leaving the book: nothing highlighted
+    await page.mouse.move(0, 0);
+    await expect(page.locator('#swap-book-bids > div.bg-white\\/\\[0\\.06\\]')).toHaveCount(0);
+});
+
 test('the swap form switches to Ethereum: its tokens and DEXes, kept for the next visit', async ({ page }) => {
     await openSwap(page);
     const options = () => page.locator('#swap-from-token select option').allTextContents();

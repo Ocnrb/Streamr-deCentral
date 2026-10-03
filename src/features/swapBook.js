@@ -265,20 +265,40 @@ function schedule() {
     }, REFRESH_MS);
 }
 
-function levelRows(levels, side, max) {
+/**
+ * A side's rows, the nearest level first. Each row's tooltip sums the levels from the price up to it: the DATA and USD
+ * of a swap that moves the price that far, its average price and the price move (before the pool fee)
+ */
+function levelRows(levels, side, max, book) {
     let total = 0;
-    return levels.map(level => {
+    let data = 0;
+    return levels.map((level, k) => {
         total += level.usd;
+        data += level.data;
         if (level.data < 1) return '';   // no liquidity at these prices
         const width = max > 0 ? Math.min(100, (total / max) * 100) : 0;
+        const move = (level.price / book.price - 1) * 100;
+        const tooltip = [
+            `<span class='font-semibold'>${side === 'ask' ? 'Buy up to' : 'Sell down to'} ${formatPrice(level.price)}</span>`,
+            `${formatData(data)} DATA for ${formatUsd(total)}`,
+            `Average price ${formatPrice(total / data)}`,
+            `Price ${move > 0 ? '+' : '−'}${Math.abs(move).toFixed(1)}% from ${formatPrice(book.price)}`,
+            `${side === 'ask' ? 'Plus' : 'Less'} the ${book.fee} pool fee`
+        ].join('<br>');
         return `
-            <div class="relative grid grid-cols-3 gap-2 px-1 py-1 text-sm">
+            <div data-book-k="${k}" data-tooltip-content="${Utils.escapeHtml(tooltip)}" class="relative grid grid-cols-3 gap-2 px-1 py-1 text-sm cursor-default transition-colors">
                 <div class="absolute inset-y-0 right-0 ${side === 'ask' ? 'bg-red-500/10' : 'bg-green-500/10'}" style="width: ${width.toFixed(1)}%"></div>
                 <span class="relative ${side === 'ask' ? 'text-red-400' : 'text-green-400'} font-medium">${formatPrice(level.price)}</span>
                 <span class="relative text-right text-gray-200">${formatData(level.data)}</span>
                 <span class="relative text-right text-gray-300">${formatUsd(total)}</span>
             </div>`;
     });
+}
+
+/** The rows from the price to the hovered one (all of a swap that far), or none */
+function highlightRows(container, row) {
+    const k = row ? Number(row.dataset.bookK) : -1;
+    container.querySelectorAll('[data-book-k]').forEach(r => r.classList.toggle('bg-white/[0.06]', Number(r.dataset.bookK) <= k));
 }
 
 const ZOOM_BUTTON = 'inline-flex items-center justify-center w-5 h-5 rounded text-gray-400 hover:text-white hover:bg-white/5 disabled:opacity-30 disabled:hover:bg-transparent transition-colors';
@@ -298,11 +318,13 @@ function render() {
         return;
     }
     const book = buildBook(models);
+    const fees = [...new Set(models.map(m => m.pool.fee / 10000))].sort((a, b) => a - b);
+    book.fee = fees.length === 1 ? `${fees[0]}%` : `${fees[0]}–${fees[fees.length - 1]}%`;
     const sum = (levels) => levels.reduce((total, level) => total + level.usd, 0);
     const max = Math.max(sum(book.asks), sum(book.bids));
     // Asks above the price, the nearest at the bottom; bids below it, the nearest at the top
-    asksEl.innerHTML = levelRows(book.asks, 'ask', max).reverse().join('');
-    bidsEl.innerHTML = levelRows(book.bids, 'bid', max).join('');
+    asksEl.innerHTML = levelRows(book.asks, 'ask', max, book).reverse().join('');
+    bidsEl.innerHTML = levelRows(book.bids, 'bid', max, book).join('');
     asksEl.scrollTop = asksEl.scrollHeight;
     bidsEl.scrollTop = 0;
     const names = models.map(m => `${m.pool.label} · DATA/${m.pool.counterSymbol === 'WPOL' ? 'POL' : m.pool.counterSymbol} · ${CHAIN_NAMES[m.chain]}`).join('<br>');
@@ -354,6 +376,12 @@ export const SwapBook = {
                 if (!btn) return;
                 state.step = Math.min(STEPS.length - 1, Math.max(0, state.step + Number(btn.dataset.bookStep)));
                 render();
+            });
+            // Hovering a level highlights the levels from the price to it
+            ['swap-book-asks', 'swap-book-bids'].forEach(id => {
+                const container = $(id);
+                container?.addEventListener('mouseover', (e) => highlightRows(container, e.target.closest('[data-book-k]')));
+                container?.addEventListener('mouseleave', () => highlightRows(container, null));
             });
             // The chain filter re-draws the book; a new pool is read
             let pools = 0;
