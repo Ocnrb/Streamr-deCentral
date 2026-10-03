@@ -264,6 +264,124 @@ test('hovering a book level highlights the levels from the price to it and sums 
     await expect(page.locator('#swap-book-bids > div.bg-white\\/\\[0\\.06\\]')).toHaveCount(0);
 });
 
+test('the market\'s old address opens it, on its Swap tab', async ({ page }) => {
+    await openSwap(page);
+    await expect(page).toHaveURL(/\/market$/);
+    await expect(page.locator('#market-tabs [data-market-tab="swap"]')).toHaveAttribute('aria-current', 'page');
+    await expect(page.locator('#market-liquidity-view')).toBeHidden();
+    // As a guest, the Liquidity tab asks for a wallet
+    await page.click('#market-tabs [data-market-tab="liquidity"]');
+    await expect(page).toHaveURL(/\/market\/liquidity$/);
+    await expect(page.locator('#market-swap-grid')).toBeHidden();
+    await expect(page.locator('#market-liquidity-view')).toBeVisible();
+    await expect(page.locator('#swap-market-views')).toBeHidden();
+    await expect(page.locator('#liquidity-positions')).toHaveText('Connect a wallet to see your liquidity positions.');
+});
+
+test('the Liquidity tab shows the pool, and the wallet\'s v4 positions with their fees and ranges', async ({ page }) => {
+    const me = '0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266';
+    const POSITIONS = '0x1ec2ebf4f37e7363fdfe3551602425af0b3ceef9';
+    const PM = new ethers.utils.Interface([
+        'function ownerOf(uint256 id) view returns (address)',
+        'function getPoolAndPositionInfo(uint256 tokenId) view returns ((address currency0, address currency1, uint24 fee, int24 tickSpacing, address hooks) poolKey, uint256 info)',
+        'function getPositionLiquidity(uint256 tokenId) view returns (uint128)'
+    ]);
+    // Position #7: the mocked pool's whole liquidity (600 ticks each side of the price), 1000 DATA and 2 USDC of fees to collect
+    const info = ethers.BigNumber.from(BASE + 600).toTwos(24).shl(32).or(ethers.BigNumber.from(BASE - 600).toTwos(24).shl(8));
+    const growth = (amount) => word(ethers.BigNumber.from(amount).shl(128).div(LIQUIDITY));
+    POOL_STORAGE.set(word(STATE_SLOT.add(1)), growth(ethers.utils.parseEther('1000')));
+    POOL_STORAGE.set(word(STATE_SLOT.add(2)), growth(2000000));
+    await page.route(url => url.hostname === 'api.etherscan.io' && url.search.includes('action=tokennfttx'), (route) => {
+        const polygon = route.request().url().includes('chainid=137&');
+        return route.fulfill({ json: { status: '1', message: 'OK', result: polygon ? [{ tokenID: '7', from: ethers.constants.AddressZero, to: me }] : [] } });
+    });
+    await page.route('**/*', (route) => {
+        const body = route.request().postDataJSON?.();
+        const call = body?.method === 'eth_call' ? body.params[0] : null;
+        if (call?.to?.toLowerCase() !== '0xca11bde05977b3631167028862be2a173976ca11' || !call.data.startsWith(MULTICALL.getSighash('aggregate3'))) return route.fallback();
+        const [calls] = MULTICALL.decodeFunctionData('aggregate3', call.data);
+        if (!calls.some(c => c.target.toLowerCase() === POSITIONS)) return route.fallback();
+        const result = MULTICALL.encodeFunctionResult('aggregate3', [calls.map(c => {
+            const fn = PM.parseTransaction({ data: c.callData }).name;
+            const answer = fn === 'ownerOf' ? [me]
+                : fn === 'getPositionLiquidity' ? [LIQUIDITY]
+                : [['0x3a9a81d576d83ff21f26f325066054540720fc34', '0x3c499c542cef5e3811e1192ce70d8cc03d5c3359', 3000, 60, ethers.constants.AddressZero], info];
+            return { success: true, returnData: PM.encodeFunctionResult(fn, answer) };
+        })]);
+        return route.fulfill({ json: { jsonrpc: '2.0', id: body.id, result } });
+    });
+    await page.goto('/market/liquidity', { waitUntil: 'domcontentloaded' });
+    await page.click('#privateKeyBtn');
+    await page.fill('#privateKeyInput', '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80');
+    await page.click('#pkModalConnect');
+    const row = page.locator('#liquidity-positions tr').first();
+    await expect(row).toContainText('#7', { timeout: 30000 });
+    await expect(row).toContainText('Polygon');
+    await expect(row).toContainText('In range');
+    await expect(row).toContainText('$0.0002352 – $0.0002652');
+    await expect(row).toContainText('1 834 684');
+    await expect(row).toContainText('$934.54');
+    await expect(row).toContainText('$2.25');
+    const summary = page.locator('#liquidity-summary');
+    await expect(summary).toContainText('Positions1');
+    await expect(summary).toContainText('Uncollected fees$2.25');
+    await expect(page.locator('#liquidity-pool-link')).toHaveAttribute('href', /app\.uniswap\.org\/explore\/pools\/polygon\/0x/);
+    // The pool: its tags, and its value (the mocked pool holds that position only)
+    await expect(page.locator('#liquidity-pool-tags')).toContainText('Polygon');
+    await expect(page.locator('#liquidity-pool-tags')).toContainText('v4');
+    await expect(page.locator('#liquidity-stats')).toContainText('TVL$934.54');
+    await expect(page.locator('#liquidity-stats')).toContainText('1 834 684 DATA');
+    // Its liquidity by price in levels of 2%, bids and asks around the price, the position's range shaded behind
+    const dataset = await page.evaluate(() => {
+        const d = window.Chart?.getChart(document.querySelector('#liquidity-depth canvas'))?.data.datasets[0];
+        return d && { colors: d.backgroundColor, ranges: d.ranges };
+    });
+    expect(dataset.colors).toHaveLength(50);
+    expect(dataset.colors.filter(c => c.startsWith('rgba(59, 130, 246')).length).toBe(25);
+    expect(dataset.ranges).toHaveLength(1);
+    expect(dataset.ranges[0].min).toBeCloseTo(0.00023518, 7);
+    // A bar's tooltip sums the levels from the price to it (as the Depth): the second ask holds the first two
+    const tooltip = await page.evaluate(() => {
+        const chart = window.Chart.getChart(document.querySelector('#liquidity-depth canvas'));
+        const d = chart.data.datasets[0];
+        const k = d.levels.findIndex(l => l.side === 'ask') + 1;
+        return { label: chart.options.plugins.tooltip.callbacks.label({ dataset: d, dataIndex: k }), data: d.levels[k - 1].data + d.levels[k].data };
+    });
+    expect(Number(tooltip.label[0].replace('Total DATA ', '').replace(/\s/g, ''))).toBeCloseTo(tooltip.data, -1);
+    expect(tooltip.label[1]).toMatch(/^Average price \$0\.00025\d\d$/);
+    // Below the price the pool holds USDC: the bids' tooltip counts it
+    const bid = await page.evaluate(() => {
+        const chart = window.Chart.getChart(document.querySelector('#liquidity-depth canvas'));
+        const d = chart.data.datasets[0];
+        const k = d.levels.findIndex(l => l.side === 'ask') - 1;
+        return { label: chart.options.plugins.tooltip.callbacks.label({ dataset: d, dataIndex: k }), usdc: d.levels[k].counter };
+    });
+    expect(Number(bid.label[0].replace('Total USDC ', '').replace(/\s/g, ''))).toBeCloseTo(bid.usdc, 2);
+    // Hovering the position highlights its range, and hovering its range highlights the position
+    await row.hover();
+    await expect(row).toHaveClass(/bg-white\/5/);
+    await page.mouse.move(0, 0);
+    await expect(row).not.toHaveClass(/bg-white\/5/);
+    const band = await page.evaluate(() => {
+        const canvas = document.querySelector('#liquidity-depth canvas');
+        const [b] = window.Chart.getChart(canvas).$bands;
+        const box = canvas.getBoundingClientRect();
+        return { x: box.left + (b.x0 + b.x1) / 2, y: box.top + box.height / 2 };
+    });
+    await page.mouse.move(band.x, band.y);
+    await expect(row).toHaveClass(/bg-white\/5/);
+    // Wider levels: a wider range of prices, still 25 levels each way
+    const lowest = () => page.evaluate(() => window.Chart.getChart(document.querySelector('#liquidity-depth canvas')).data.datasets[0].levels[0].lo);
+    const before = await lowest();
+    await page.click('#liquidity-zoom [data-depth-step="1"]');
+    await expect(page.locator('#liquidity-zoom')).toContainText('4%');
+    expect(await lowest()).toBeLessThan(before * 0.7);
+    // The Swap tab: the form, the market and the swaps
+    await page.click('#market-tabs [data-market-tab="swap"]');
+    await expect(page.locator('#market-swap-grid')).toBeVisible();
+    await expect(page.locator('#market-liquidity-view')).toBeHidden();
+});
+
 test('the swap form switches to Ethereum: its tokens and DEXes, kept for the next visit', async ({ page }) => {
     await openSwap(page);
     const options = () => page.locator('#swap-from-token select option').allTextContents();

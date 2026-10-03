@@ -16,9 +16,11 @@ import * as UI from '../ui/ui.js';
 import * as Services from '../core/services.js';
 import { DATA_TOKEN_ADDRESS_POLYGON, DATA_TOKEN_ADDRESS_ETHEREUM, POLYGONSCAN_NETWORK, getEtherscanApiKey } from '../core/constants.js';
 import { getEthereumSigner, restorePolygon } from '../core/ethWallet.js';
-import { SwapMarket, getEthProvider, chainChip } from './swapMarket.js';
-import { SwapBook } from './swapBook.js';
+import { SwapMarket, getEthProvider, chainChip, formatPrice, formatUsd, formatData } from './swapMarket.js';
+import { SwapBook, poolLevels, ZOOM_BUTTON } from './swapBook.js';
+import { Liquidity, LIQUIDITY_POOLS } from './liquidity.js';
 import { ethers } from 'ethers';
+import Chart from 'chart.js/auto';
 
 const { logger } = Utils;
 
@@ -229,6 +231,9 @@ const POLYGON = NETWORKS[137];
 
 const state = {
     active: false,
+    tab: 'swap',             // the market's tab: 'swap' or 'liquidity'
+    depthStep: 1,            // the Liquidity chart's level size (index in DEPTH_STEPS)
+    hoverPosition: null,     // the position hovered in its table or on the chart (token id): its range and row stand out
     address: null,
     chain: 137,              // the chain of the swap (137 Polygon, 1 Ethereum)
     counter: 'USDC',         // the token traded against DATA
@@ -926,7 +931,7 @@ function renderBalances() {
 
 /** The chain selector, the description of its DEXes, and the DATA pools list of the chain */
 function renderChain() {
-    document.querySelectorAll('#swap-chain button').forEach(btn => {
+    document.querySelectorAll('#swap-chain button, #liquidity-chain button').forEach(btn => {
         const active = Number(btn.dataset.chain) === state.chain;
         btn.classList.toggle('bg-blue-800', active);
         btn.classList.toggle('text-white', active);
@@ -938,9 +943,264 @@ function renderChain() {
         el.classList.toggle('flex', shown);
     });
     renderLiquidity();
+    renderPositions();
 }
 
 /** Swaps on another chain: the same counter where it has one (POL and ETH stand for each other), else USDC */
+// ============================================
+// Liquidity tab
+// ============================================
+
+const POSITION_BADGES = {
+    in: ['In range', 'bg-green-500/15 text-green-400'],
+    out: ['Out of range', 'bg-amber-500/15 text-amber-300'],
+    closed: ['Closed', 'bg-gray-500/15 text-gray-300']
+};
+
+/** The tab's card and list shown, its link underlined */
+function renderTab() {
+    const liquidity = state.tab === 'liquidity';
+    $('market-swap-grid')?.classList.toggle('hidden', liquidity);
+    $('market-swaps-section')?.classList.toggle('hidden', liquidity);
+    $('market-liquidity-view')?.classList.toggle('hidden', !liquidity);
+    document.querySelectorAll('#market-tabs [data-market-tab]').forEach(link => {
+        const active = link.dataset.marketTab === state.tab;
+        link.classList.toggle('text-white', active);
+        link.classList.toggle('border-blue-500', active);
+        link.classList.toggle('text-gray-400', !active);
+        link.classList.toggle('border-transparent', !active);
+        if (active) link.setAttribute('aria-current', 'page');
+        else link.removeAttribute('aria-current');
+    });
+    renderPositions();
+}
+
+let depthChart = null;
+
+/** A position stands out (its row and its range on the chart), or none */
+function hoverPosition(tokenId) {
+    if (tokenId === state.hoverPosition) return;
+    state.hoverPosition = tokenId;
+    document.querySelectorAll('#liquidity-positions tr[data-position]').forEach(row => row.classList.toggle('bg-white/5', row.dataset.position === tokenId));
+    depthChart?.update('none');
+}
+const DEPTH_STEPS = [0.01, 0.02, 0.04, 0.08, 0.16];   // 25 levels each way: x1.28 up to x41
+
+/** The pool's liquidity by price in bars (USDC blue, DATA orange), the price between them, the wallet's ranges shaded behind */
+function renderDepth(depth, ranges) {
+    const container = $('liquidity-depth');
+    if (!container) return;
+    if (!depth) {
+        depthChart?.destroy();
+        depthChart = null;
+        container.innerHTML = `<div class="flex items-center justify-center h-full text-sm text-gray-300">${Liquidity.loading() ? 'Reading the pool...' : 'The pool could not be read.'}</div>`;
+        return;
+    }
+    const step = DEPTH_STEPS[state.depthStep];
+    const levels = poolLevels(depth, step);
+    // The token the pool holds there, in the colors of its balances: USDC below the price, DATA above
+    const colors = levels.map(l => (l.side === 'bid' ? 'rgba(59, 130, 246, 0.6)' : 'rgba(249, 115, 22, 0.6)'));
+    const data = {
+        labels: levels.map(l => formatPrice(Math.sqrt(l.lo * l.hi))),
+        datasets: [{ data: levels.map(l => l.usd), backgroundColor: colors, borderWidth: 0, barPercentage: 1, categoryPercentage: 0.9, levels, ranges }]
+    };
+    // Wider levels show a wider range of prices
+    const zoom = $('liquidity-zoom');
+    if (zoom) {
+        zoom.innerHTML = `
+            <span class="mr-1 text-gray-400">Levels</span>
+            <button type="button" data-depth-step="-1" class="${ZOOM_BUTTON}" aria-label="Narrower levels" ${state.depthStep === 0 ? 'disabled' : ''}><svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="M5 12h14"/></svg></button>
+            <span class="w-8 text-center tabular-nums">${step * 100}%</span>
+            <button type="button" data-depth-step="1" class="${ZOOM_BUTTON}" aria-label="Wider levels" ${state.depthStep === DEPTH_STEPS.length - 1 ? 'disabled' : ''}><svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="M5 12h14"/><path d="M12 5v14"/></svg></button>`;
+    }
+    if (depthChart && container.querySelector('canvas')) {
+        depthChart.data = data;
+        depthChart.update('none');
+        return;
+    }
+    depthChart?.destroy();
+    container.innerHTML = '<canvas aria-label="Liquidity of the pool by price" role="img"></canvas>';
+    // The wallet's ranges: a band behind the bars, from the x of each end (between the bars of its levels)
+    const rangeBands = {
+        id: 'liquidityRanges',
+        beforeDatasetsDraw(chart) {
+            const { levels, ranges: shown } = chart.data.datasets[0];
+            const bars = chart.getDatasetMeta(0).data;
+            if (!shown?.length || bars.length !== levels.length) return;
+            const { ctx, chartArea } = chart;
+            const half = bars.length > 1 ? (bars[1].x - bars[0].x) / 2 : 0;
+            // A price's x: inside its level, in proportion of the level's log width
+            const xAt = (price) => {
+                const k = levels.findIndex(l => price >= l.lo && price < l.hi);
+                if (k < 0) return price < levels[0].lo ? chartArea.left : chartArea.right;
+                const f = Math.log(price / levels[k].lo) / Math.log(levels[k].hi / levels[k].lo);
+                return bars[k].x - half + f * 2 * half;
+            };
+            ctx.save();
+            chart.$bands = [];
+            for (const r of shown) {
+                const [x0, x1] = [xAt(r.min), xAt(r.max)];
+                chart.$bands.push({ tokenId: r.tokenId, x0, x1 });
+                const hovered = r.tokenId === state.hoverPosition;
+                ctx.fillStyle = hovered ? 'rgba(255, 255, 255, 0.16)' : 'rgba(255, 255, 255, 0.07)';
+                ctx.fillRect(x0, chartArea.top, x1 - x0, chartArea.bottom - chartArea.top);
+                ctx.strokeStyle = hovered ? 'rgba(255, 255, 255, 1)' : 'rgba(255, 255, 255, 0.6)';
+                ctx.lineWidth = hovered ? 2.5 : 1.5;
+                ctx.beginPath();
+                ctx.moveTo(x0, chartArea.top);
+                ctx.lineTo(x0, chartArea.bottom);
+                ctx.moveTo(x1, chartArea.top);
+                ctx.lineTo(x1, chartArea.bottom);
+                ctx.stroke();
+            }
+            ctx.restore();
+        }
+    };
+    // The price: a line between the bids and the asks
+    const priceLine = {
+        id: 'liquidityPrice',
+        afterDatasetsDraw(chart) {
+            const bars = chart.getDatasetMeta(0).data;
+            const levels = chart.data.datasets[0].levels;
+            const k = levels.findIndex(l => l.side === 'ask');
+            if (k < 1 || !bars[k]) return;
+            const x = (bars[k - 1].x + bars[k].x) / 2;
+            const { ctx, chartArea } = chart;
+            ctx.save();
+            ctx.strokeStyle = '#e5e7eb';
+            ctx.lineWidth = 1;
+            ctx.setLineDash([4, 4]);
+            ctx.beginPath();
+            ctx.moveTo(x, chartArea.top);
+            ctx.lineTo(x, chartArea.bottom);
+            ctx.stroke();
+            ctx.restore();
+        }
+    };
+    depthChart = new Chart(container.querySelector('canvas').getContext('2d'), {
+        type: 'bar',
+        data,
+        plugins: [rangeBands, priceLine],
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            animation: false,
+            // Over a range: its position stands out (the narrowest when ranges overlap)
+            onHover: (event, elements, chart) => {
+                const inside = event.type === 'mouseout' ? [] : (chart.$bands || []).filter(b => event.x >= b.x0 && event.x <= b.x1);
+                inside.sort((a, b) => (a.x1 - a.x0) - (b.x1 - b.x0));
+                hoverPosition(inside[0]?.tokenId ?? null);
+            },
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    displayColors: false,
+                    // As the Depth's: from the price to this level, the DATA of a swap that far and its average price
+                    callbacks: {
+                        title: (items) => {
+                            const l = items[0].dataset.levels[items[0].dataIndex];
+                            return `${formatPrice(l.lo)} – ${formatPrice(l.hi)}`;
+                        },
+                        label: (item) => {
+                            const levels = item.dataset.levels;
+                            const l = levels[item.dataIndex];
+                            const path = levels.filter(x => x.side === l.side && (l.side === 'ask' ? x.hi <= l.hi : x.lo >= l.lo));
+                            const data = path.reduce((sum, x) => sum + x.data, 0);
+                            const usd = path.reduce((sum, x) => sum + x.usd, 0);
+                            // The token the pool holds there: USDC below the price, DATA above
+                            const total = l.side === 'bid'
+                                ? `Total USDC ${Utils.formatBigNumber(path.reduce((sum, x) => sum + x.counter, 0).toFixed(2))}`
+                                : `Total DATA ${formatData(data)}`;
+                            return [total, `Average price ${formatPrice(data > 0 ? usd / data : l.lo)}`];
+                        }
+                    }
+                }
+            },
+            scales: {
+                x: { grid: { display: false }, ticks: { color: '#9ca3af', maxRotation: 0, autoSkip: true, maxTicksLimit: 6 } },
+                y: { grid: { color: 'rgba(255, 255, 255, 0.05)' }, ticks: { color: '#9ca3af', callback: (v) => formatUsd(v) } }
+            }
+        }
+    });
+}
+
+/** The Liquidity tab: the chain's pool (tags, numbers, liquidity by price), the wallet's liquidity and its positions */
+function renderPositions() {
+    const pool = LIQUIDITY_POOLS[state.chain];
+    const link = $('liquidity-pool-link');
+    if (link) link.href = pool.url;
+    const logos = $('liquidity-pool-logos');
+    if (logos && !logos.innerHTML) logos.innerHTML = [ICONS.DATA, ICONS.USDC].map(icon => icon.replace('w-7 h-7', 'w-10 h-10 ring-2 ring-[#1E1E1E] rounded-full')).join('');
+    const tags = $('liquidity-pool-tags');
+    if (tags) {
+        const tag = (text) => `<span class="px-1.5 py-0.5 rounded bg-[#2C2C2C] text-gray-200 font-medium">${text}</span>`;
+        tags.innerHTML = `${chainChip(pool.chain, { named: true })}${tag('v4')}${tag('0.3%')}<a href="${pool.url}" target="_blank" rel="noopener noreferrer" class="font-mono text-gray-300 hover:text-white" data-tooltip-content="${pool.id}">${pool.id.slice(0, 6)}…${pool.id.slice(-4)}</a>`;
+    }
+    const positions = Liquidity.positions();
+    const mine = (positions || []).filter(p => p.chain === state.chain);
+    const sum = (key) => mine.reduce((total, p) => total + p[key], 0);
+    const depth = Liquidity.depth(state.chain);
+    const row = (label, value) => `<div class="flex justify-between gap-3"><dt class="text-gray-300">${label}</dt><dd class="text-white font-medium text-right">${value}</dd></div>`;
+
+    const stats = $('liquidity-stats');
+    if (stats) {
+        const volume = SwapMarket.poolVolume(state.chain, pool.id);
+        const fees = volume ? volume.volume * 0.003 : null;
+        const share = depth && depth.tvl > 0 ? (depth.data * depth.price) / depth.tvl * 100 : 50;
+        const balances = depth ? `
+            <div>
+                <div class="flex justify-between gap-3 text-gray-300"><span>Pool balances</span></div>
+                <div class="mt-1 flex justify-between gap-3 text-white font-medium"><span>${formatData(depth.data)} DATA</span><span>${Utils.formatBigNumber(depth.usdc.toFixed(0))} USDC</span></div>
+                <div class="mt-1.5 flex h-1.5 rounded-full overflow-hidden bg-[#2C2C2C]"><div class="bg-orange-500" style="width: ${share.toFixed(1)}%"></div><div class="flex-1 bg-blue-500"></div></div>
+            </div>` : '';
+        stats.innerHTML = [
+            row('Price', depth ? formatPrice(depth.price) : '--'),
+            row('TVL', depth ? formatUsd(depth.tvl) : '--'),
+            balances,
+            row('24H volume', volume ? formatUsd(volume.volume) : '--'),
+            row('24H fees', fees !== null ? formatUsd(fees) : '--'),
+            row('APR (24H fees)', fees !== null && depth?.tvl ? `${(fees * 365 / depth.tvl * 100).toFixed(1)}%` : '--')
+        ].join('');
+    }
+    const summary = $('liquidity-summary');
+    if (summary) {
+        const yours = !state.address ? 'Connect a wallet' : positions === null ? '...' : null;
+        summary.innerHTML = [
+            row('Positions', yours ?? String(mine.length)),
+            row('Liquidity', yours ?? formatUsd(sum('value'))),
+            row('Uncollected fees', yours ?? formatUsd(sum('feeValue')))
+        ].join('');
+    }
+    if (state.tab === 'liquidity') renderDepth(depth, mine.filter(p => !p.closed).map(p => ({ tokenId: p.tokenId, min: p.min, max: p.max })));
+
+    const body = $('liquidity-positions');
+    if (body) {
+        const empty = (text) => `<tr><td colspan="8" class="py-4 text-sm text-gray-300">${text}</td></tr>`;
+        const errors = Liquidity.errors();
+        if (!state.address) body.innerHTML = empty('Connect a wallet to see your liquidity positions.');
+        else if (positions === null) body.innerHTML = empty('Reading your positions...');
+        else if (!positions.length) body.innerHTML = empty(errors.length ? `Your positions on ${errors.join(' and ')} could not be read. Try again in a moment.` : 'No positions in the DATA/USDC pools on Uniswap v4.');
+        else {
+            body.innerHTML = [...positions].sort((a, b) => b.chain - a.chain || Number(b.tokenId) - Number(a.tokenId)).map(p => {
+                const [label, badge] = POSITION_BADGES[p.closed ? 'closed' : p.inRange ? 'in' : 'out'];
+                const fees = `${formatData(p.feeData)} DATA and ${p.feeUsdc.toFixed(2)} USDC`;
+                const hovered = p.tokenId === state.hoverPosition ? ' bg-white/5' : '';
+                return `
+                <tr data-position="${Utils.escapeHtml(p.tokenId)}" class="border-b border-[#2a2a2a] last:border-0 transition-colors${hovered}">
+                    <td class="py-3 pr-3 whitespace-nowrap"><a href="${p.url}" target="_blank" rel="noopener noreferrer" class="text-blue-400 hover:text-blue-300">#${Utils.escapeHtml(p.tokenId)}</a></td>
+                    <td class="py-3 pr-3 text-center whitespace-nowrap">${chainChip(p.chain, { named: true })}</td>
+                    <td class="py-3 pr-3 text-center whitespace-nowrap text-gray-200">${formatPrice(p.min)} – ${formatPrice(p.max)}</td>
+                    <td class="py-3 pr-3 text-center"><span class="px-2 py-0.5 rounded-full text-[11px] font-semibold whitespace-nowrap ${badge}">${label}</span></td>
+                    <td class="py-3 pr-3 text-right whitespace-nowrap text-gray-200">${formatData(p.data)}</td>
+                    <td class="py-3 pr-3 text-right whitespace-nowrap text-gray-200">${Utils.formatBigNumber(p.usdc.toFixed(2))}</td>
+                    <td class="py-3 pr-3 text-right whitespace-nowrap text-white font-medium">${formatUsd(p.value)}</td>
+                    <td class="py-3 text-right whitespace-nowrap text-gray-200" data-tooltip-content="${fees}">${formatUsd(p.feeValue)}</td>
+                </tr>`;
+            }).join('');
+        }
+    }
+}
+
 /** The market's chain filter of the form's chain */
 const marketFilter = () => (state.chain === 1 ? 'ethereum' : 'polygon');
 
@@ -2053,6 +2313,21 @@ function setupListeners() {
         renderQuote();
         updateQuote();
     });
+    $('liquidity-chain')?.addEventListener('click', (e) => {
+        const btn = e.target.closest('button[data-chain]');
+        if (btn) setChain(Number(btn.dataset.chain));
+    });
+    $('liquidity-refresh')?.addEventListener('click', () => Liquidity.refresh(state.address));
+    $('liquidity-positions')?.addEventListener('mouseover', (e) => hoverPosition(e.target.closest('tr[data-position]')?.dataset.position ?? null));
+    $('liquidity-positions')?.addEventListener('mouseleave', () => hoverPosition(null));
+    $('liquidity-zoom')?.addEventListener('click', (e) => {
+        const btn = e.target.closest('[data-depth-step]');
+        if (!btn) return;
+        state.depthStep = Math.min(DEPTH_STEPS.length - 1, Math.max(0, state.depthStep + Number(btn.dataset.depthStep)));
+        renderPositions();
+    });
+    Liquidity.onChange(renderPositions);
+    SwapMarket.onChange(() => { if (state.tab === 'liquidity') renderPositions(); });
     $('swap-chain')?.addEventListener('click', (e) => {
         const btn = e.target.closest('button[data-chain]');
         if (btn) setChain(Number(btn.dataset.chain));
@@ -2085,7 +2360,7 @@ function setupListeners() {
         if (e.key === 'Escape' && !$('swapPoolsModal')?.classList.contains('hidden')) closePoolsModal();
     });
     window.addEventListener('app:routechange', (e) => {
-        if (!e.detail?.path?.startsWith('/swap')) {
+        if (!/^\/(swap|market)(\/|$)/.test(e.detail?.path || '')) {
             closePoolsModal();
             SwapLogic.stop();
         }
@@ -2093,9 +2368,11 @@ function setupListeners() {
 }
 
 export const SwapLogic = {
-    async show() {
+    /** Opens the market on its Swap or Liquidity tab */
+    async show(tab = 'swap') {
         setupListeners();
         state.active = true;
+        state.tab = tab === 'liquidity' ? 'liquidity' : 'swap';
         try {
             const saved = Number(localStorage.getItem(SLIPPAGE_KEY));
             if ([0.5, 1, 3].includes(saved)) state.slippage = saved;
@@ -2132,6 +2409,8 @@ export const SwapLogic = {
             showError('');
         }
         renderChain();
+        renderTab();
+        if (state.tab === 'liquidity') Liquidity.refresh(state.address);
         renderTokens();
         renderSlippage();
         renderQuote();

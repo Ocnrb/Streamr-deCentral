@@ -1082,6 +1082,7 @@ async function refresh() {
         state.failures = 0;
         if (!state.active) return;
         // Stats and chart every time (the 24h window and the "now" point move on); the list only with new trades
+        notifyChange();   // the Liquidity tab's volume
         renderStats();
         renderChart();
         if (added || !wasLoaded) renderTrades();
@@ -1177,7 +1178,15 @@ export const SwapMarket = {
     /** The chain filter: 'all', 'polygon' or 'ethereum' */
     filter: () => state.filter,
     setFilter,
-    /** Calls `fn` when a pool is added or the chain filter changes */
+    /** A v4 pool's trades of the last `ms` (24 hours): their USD volume and count, null until the trades are read */
+    poolVolume(chain, id, ms = 86400000) {
+        const pool = state.pools.find(p => p.kind === 'v4' && p.chain === chain && p.id?.toLowerCase() === id.toLowerCase());
+        if (!pool || !state.loaded) return null;
+        const since = Date.now() - ms;
+        const trades = state.trades.filter(t => t.pool === pool.key && t.time >= since && !t.outlier);
+        return { volume: trades.reduce((sum, t) => sum + (t.usd || 0), 0), count: trades.length };
+    },
+    /** Calls `fn` when a pool is added, the chain filter changes or new trades are read */
     onChange(fn) {
         changeListeners.add(fn);
     },
