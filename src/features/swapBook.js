@@ -22,8 +22,8 @@ const POOL_MANAGERS = { 137: '0x67366782805870060151383f4bbff9dab53e5cd6', 1: '0
 const FEEDS = { pol: '0xAB594600376Ec9fD91F8e885dADF0CE036862dE0', eth: '0x5f4ec3df9cbd43714fe2740f5e3616155c5b8419' };   // Chainlink POL/USD (Polygon), ETH/USD (Ethereum)
 const POOLS_SLOT = 6n;                     // the PoolManager's pools mapping
 const LEVELS = 20;                         // levels on each side
-const STEPS = [0.005, 0.01, 0.02, 0.04, 0.08];   // level sizes (the + shows more depth); 20 levels of 8%: about x4.7
-const RANGE_TICKS = Math.ceil(Math.log(6) / Math.log(1.0001));   // ticks read each side of a pool's price (x6)
+const STEPS = [0.005, 0.01, 0.02, 0.04, 0.08, 0.16];   // level sizes (the + shows more depth); 20 levels of 16%: about x19.5
+const RANGE_TICKS = Math.ceil(Math.log(20) / Math.log(1.0001));   // ticks read each side of a pool's price (x20: the widest levels)
 const MAX_TICK = 887272;                   // Uniswap's price range: every tick (the Liquidity tab's pool)
 const REFRESH_MS = 30 * 1000;
 const VIEW_KEY = 'swapMarketView';
@@ -220,7 +220,7 @@ function sweep(m, edges, side) {
 }
 
 /**
- * The tokens a pool holds: its liquidity walked from the price to the ends of the ticks read (x6 each way), then on to
+ * The tokens a pool holds: its liquidity walked from the price to the ends of the ticks read (x20 each way), then on to
  * zero and infinity at the liquidity there (the positions still open that far are taken as full range)
  */
 function holdings(m) {
