@@ -217,9 +217,9 @@ test('the liquidity book shows the v4 pools\' liquidity by price, in place of th
     await page.click('[data-book-step="1"]');
     await expect(mid).toContainText('1%');
     await expect.poll(() => asks.count()).toBeLessThan(narrow);
-    // The widest levels: 16%, the + then disabled
-    for (let i = 0; i < 4; i++) await page.click('[data-book-step="1"]');
-    await expect(mid).toContainText('16%');
+    // The widest levels: 64% (all but 0.7% of a full range), the + then disabled
+    for (let i = 0; i < 6; i++) await page.click('[data-book-step="1"]');
+    await expect(mid).toContainText('64%');
     await expect(page.locator('[data-book-step="1"]')).toBeDisabled();
     // The swap form's chain sets the books' (no v4 pool read on Ethereum here: nothing)
     await page.click('#swap-chain [data-chain="1"]');

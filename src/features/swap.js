@@ -1034,7 +1034,7 @@ function levelShares(levels, ranges) {
 }
 
 const CHART_FONT = { family: "'Inter', sans-serif", size: 11 };   // as the app's other charts
-const DEPTH_STEPS = [0.01, 0.02, 0.04, 0.08, 0.16];   // 25 levels each way: x1.28 up to x41
+const DEPTH_STEPS = [0.01, 0.02, 0.04, 0.08, 0.16, 0.32, 0.64];   // 25 levels each way: x1.28 up to x236 000 (all but 0.2% of a full range)
 
 /** The pool's liquidity by price in bars (USDC blue, DATA orange), the price between them, the wallet's ranges shaded behind */
 function renderDepth(depth, ranges) {

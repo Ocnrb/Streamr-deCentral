@@ -103,10 +103,12 @@ const $ = (id) => document.getElementById(id);
 // Formatting
 // ============================================
 
+const SIGNIFICANT_4 = new Intl.NumberFormat('en-US', { minimumSignificantDigits: 4, maximumSignificantDigits: 4, useGrouping: false });
+
 export function formatPrice(value) {
     if (!(value > 0)) return '--';
-    // Always 4 significant digits (0.0003750, not 0.000375): the prices line up in the trades list
-    return `$${value >= 1 ? value.toFixed(2) : value.toPrecision(4)}`;
+    // Always 4 significant digits (0.0003750, not 0.000375): the prices line up in the trades list; never an exponent
+    return `$${value >= 1 ? value.toFixed(2) : SIGNIFICANT_4.format(value)}`;
 }
 
 export function formatUsd(value) {
