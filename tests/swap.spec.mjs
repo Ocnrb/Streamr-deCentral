@@ -474,7 +474,11 @@ test('a new position: its range (a strategy, prices or the full range) on the ch
     await expect(page.locator('#liquidity-new-min')).toHaveValue(/^0\.0001[23]\d+$/);
     await expect(page.locator('#liquidity-new-min-pct')).toHaveText(/^-[45]\d\.\d\d%$/);
     await expect(page.locator('#liquidity-new-max-pct')).toHaveText(/^\+(9\d|10\d)\.\d\d%$/);
-    await expect(page.locator('#liquidity-new-data-balance')).toHaveText('50 000.00 DATA');
+    await expect(page.locator('#liquidity-new-data-balance')).toHaveText('50 000.00');
+    // MAX: the whole balance, the other token worked out
+    await page.click('#liquidity-new-data-max');
+    await expect(page.locator('#liquidity-new-data')).toHaveValue('50000');
+    await expect(page.locator('#liquidity-new-submit')).toHaveText('Create position');
     const draft = () => page.evaluate(() => window.Chart.getChart(document.querySelector('#liquidity-depth canvas')).data.datasets[0].ranges.find(r => r.draft));
     expect((await draft()).min).toBeCloseTo(0.000125, 5);
     // The deposit: DATA typed, its USDC worked out at the pool's price

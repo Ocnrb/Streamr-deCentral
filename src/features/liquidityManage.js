@@ -69,7 +69,7 @@ function inputValue(amount, decimals) {
     return amount.toFixed(Math.min(decimals, amount >= 1 ? 4 : 8)).replace(/\.?0+$/, '');
 }
 
-const formatBalance = (amount, token) => `${Utils.formatBigNumber(amount.toFixed(2))} ${SYMBOLS[token]}`;
+const formatBalance = (amount) => Utils.formatBigNumber(amount.toFixed(2));
 const formatPriceInput = (price) => (price >= 1 ? price.toFixed(4) : price.toPrecision(5)).replace(/(\.\d*?)0+$/, '$1').replace(/\.$/, '');
 
 function formatTxError(error) {
@@ -318,12 +318,11 @@ function renderDeposit(prefix, pool, quote, wallet, focused) {
         input.disabled = !quote.holds[token];
         if (!quote.holds[token]) input.value = '';
         else if (token !== quote.token && document.activeElement !== input && focused !== token) input.value = inputValue(quote[token], DECIMALS[token]);
+        const amount = balanceOf(wallet, token);
         const balance = $(`${prefix}-${token}-balance`);
-        if (balance) {
-            const amount = balanceOf(wallet, token);
-            balance.textContent = amount === null ? '' : formatBalance(amount, token);
-            balance.disabled = amount === null || !quote.holds[token];
-        }
+        if (balance) balance.textContent = amount === null ? '--' : formatBalance(amount);
+        const max = $(`${prefix}-${token}-max`);
+        if (max) max.disabled = amount === null || !(amount > 0) || !quote.holds[token];
     }
 }
 
@@ -332,7 +331,8 @@ function depositLabel(quote, wallet, action) {
     if (!address()) return ['Connect a wallet', false];
     if (!(quote.L > 0)) return ['Enter an amount', false];
     for (const token of ['data', 'usdc']) {
-        if (wallet && quote[token] > balanceOf(wallet, token)) return [`Insufficient ${SYMBOLS[token]}`, false];
+        // A hair of margin: MAX's amount comes back from L a rounding error over (the transaction takes a hair less)
+        if (wallet && quote[token] > balanceOf(wallet, token) * (1 + 1e-9)) return [`Insufficient ${SYMBOLS[token]}`, false];
     }
     return [action, true];
 }
@@ -379,7 +379,7 @@ function renderForm(focused = null) {
     const wallet = walletOf(f.chain);
     const quote = slot && ticks ? quoteDeposit(pool, slot, ticks, f) : { data: 0, usdc: 0, L: 0, holds: { data: true, usdc: true }, token: f.last };
     renderDeposit('liquidity-new', pool, quote, wallet, focused);
-    ['data', 'usdc'].forEach(token => { const input = $(`liquidity-new-${token}`); if (input && locked) input.disabled = true; });
+    if (locked) ['data', 'usdc'].forEach(token => ['', '-max'].forEach(suffix => { const el = $(`liquidity-new-${token}${suffix}`); if (el) el.disabled = true; }));
     const note = $('liquidity-new-note');
     if (note) {
         const one = quote.holds.data !== quote.holds.usdc ? (quote.holds.data ? 'DATA' : 'USDC') : null;
@@ -481,7 +481,7 @@ function renderModal(focused = null) {
     } else if (m.mode === 'add') {
         const quote = slot ? quoteDeposit(pool, slot, [p.lower, p.upper], m) : { data: 0, usdc: 0, L: 0, holds: { data: true, usdc: true }, token: m.last };
         renderDeposit('liquidity-add', pool, quote, wallet, focused);
-        ['data', 'usdc'].forEach(token => { const input = $(`liquidity-add-${token}`); if (input && locked) input.disabled = true; });
+        if (locked) ['data', 'usdc'].forEach(token => ['', '-max'].forEach(suffix => { const el = $(`liquidity-add-${token}${suffix}`); if (el) el.disabled = true; }));
         m.quote = quote;
         if (summary) summary.innerHTML = [row('Position DATA', formatData(p.data)), row('Position USDC', Utils.formatBigNumber(p.usdc.toFixed(2)))].join('');
         [label, ok] = !slot ? ['Reading the pool...', false] : depositLabel(quote, wallet, 'Add liquidity');
@@ -632,7 +632,7 @@ function setupListeners() {
                 t.amounts[token] = e.target.value;
                 render(token);
             });
-            $(`${prefix}-${token}-balance`)?.addEventListener('click', () => {
+            $(`${prefix}-${token}-max`)?.addEventListener('click', () => {
                 const t = target();
                 const chain = prefix === 'liquidity-new' ? state.form.chain : state.modal.chain;
                 const amount = balanceOf(walletOf(chain), token);
