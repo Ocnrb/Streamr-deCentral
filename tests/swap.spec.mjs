@@ -349,6 +349,14 @@ test('the Liquidity tab shows the pool, and the wallet\'s v4 positions with thei
     });
     expect(Number(tooltip.label[0].replace('Total DATA ', '').replace(/\s/g, ''))).toBeCloseTo(tooltip.data, -1);
     expect(tooltip.label[1]).toMatch(/^Average price \$0\.00025\d\d$/);
+    // Below the price the pool holds USDC: the bids' tooltip counts it
+    const bid = await page.evaluate(() => {
+        const chart = window.Chart.getChart(document.querySelector('#liquidity-depth canvas'));
+        const d = chart.data.datasets[0];
+        const k = d.levels.findIndex(l => l.side === 'ask') - 1;
+        return { label: chart.options.plugins.tooltip.callbacks.label({ dataset: d, dataIndex: k }), usdc: d.levels[k].counter };
+    });
+    expect(Number(bid.label[0].replace('Total USDC ', '').replace(/\s/g, ''))).toBeCloseTo(bid.usdc, 2);
     // Hovering the position highlights its range, and hovering its range highlights the position
     await row.hover();
     await expect(row).toHaveClass(/bg-blue-500\/10/);

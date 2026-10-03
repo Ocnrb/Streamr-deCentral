@@ -198,7 +198,7 @@ function sweep(m, edges, side) {
         const target = sqrtAtUsd(m, edge);
         let t0 = 0;
         let t1 = 0;
-        if (!(up ? target > pos : target < pos)) return { data: 0, usd: 0 };
+        if (!(up ? target > pos : target < pos)) return { data: 0, counter: 0, usd: 0 };
         while (pos !== target) {
             const next = j < ticks.length ? sqrtAt(ticks[j].tick) : null;
             const crosses = next !== null && (up ? next < target : next > target);
@@ -215,7 +215,7 @@ function sweep(m, edges, side) {
         }
         const data = (m.pool.dataIs0 ? t0 : t1) / 1e18;
         const counter = (m.pool.dataIs0 ? t1 / 10 ** m.dec1 : t0 / 10 ** m.dec0);
-        return { data, usd: counter * m.usd };
+        return { data, counter, usd: counter * m.usd };
     });
 }
 

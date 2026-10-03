@@ -1106,7 +1106,11 @@ function renderDepth(depth, ranges) {
                             const path = levels.filter(x => x.side === l.side && (l.side === 'ask' ? x.hi <= l.hi : x.lo >= l.lo));
                             const data = path.reduce((sum, x) => sum + x.data, 0);
                             const usd = path.reduce((sum, x) => sum + x.usd, 0);
-                            return [`Total DATA ${formatData(data)}`, `Average price ${formatPrice(data > 0 ? usd / data : l.lo)}`];
+                            // The token the pool holds there: USDC below the price, DATA above
+                            const total = l.side === 'bid'
+                                ? `Total USDC ${Utils.formatBigNumber(path.reduce((sum, x) => sum + x.counter, 0).toFixed(2))}`
+                                : `Total DATA ${formatData(data)}`;
+                            return [total, `Average price ${formatPrice(data > 0 ? usd / data : l.lo)}`];
                         }
                     }
                 }
