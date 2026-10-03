@@ -2,7 +2,7 @@
 import { test, expect } from '@playwright/test';
 import { mockNetwork, openApp } from './support/network.mjs';
 
-const ROUTES = ['/', '/operators', '/streams', '/delegators', '/governance', '/visual', '/race', '/subgraph', '/swap', '/bridge', '/stream/streamr.eth%2Fdemo'];
+const ROUTES = ['/', '/operators', '/streams', '/delegators', '/governance', '/visual', '/race', '/subgraph', '/swap', '/market', '/market/liquidity', '/bridge', '/stream/streamr.eth%2Fdemo'];
 
 test.beforeEach(async ({ page }) => {
     await mockNetwork(page.context());

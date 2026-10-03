@@ -237,8 +237,8 @@ export function setupRouter() {
     router.addRoute('/governance', () => showGovernance());
     router.addRoute('/governance/flag/:id', (params) => showGovernance(params.id));
 
-    // Swap: DATA against POL / USDC on Polygon (stops itself when the route changes)
-    router.addRoute('/swap', async () => {
+    // Market: the DATA market, its Swap and Liquidity tabs (stops itself when the route changes)
+    const showMarket = async (tab) => {
         stopOtherPages();
 
         UI.displayView('swap');
@@ -247,11 +247,18 @@ export function setupRouter() {
 
         try {
             const { SwapLogic } = await import('../features/swap.js');
-            SwapLogic.show();
+            SwapLogic.show(tab);
         } catch (error) {
             console.error('Failed to load swap module:', error);
-            UI.showToast({ type: 'error', title: 'Failed to load Swap', message: error.message, duration: 5000 });
+            UI.showToast({ type: 'error', title: 'Failed to load Market', message: error.message, duration: 5000 });
         }
+    };
+    router.addRoute('/market', () => showMarket('swap'));
+    router.addRoute('/market/liquidity', () => showMarket('liquidity'));
+    // The page's former address: links kept elsewhere still open it
+    router.addRoute('/swap', () => {
+        window.history.replaceState(window.history.state, '', '/market');
+        return showMarket('swap');
     });
 
     // Bridge: DATA between Ethereum and Polygon (stops itself when the route changes)

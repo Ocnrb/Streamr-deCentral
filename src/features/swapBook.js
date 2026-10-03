@@ -43,7 +43,8 @@ const state = {
     active: false,
     loading: false,
     timer: null,
-    listening: false
+    listening: false,
+    ranges: []            // the wallet's positions, marked on the levels (Liquidity tab)
 };
 
 // ============================================
@@ -269,10 +270,14 @@ function schedule() {
  * A side's rows, the nearest level first. Each row's tooltip sums the levels from the price up to it: the DATA and USD
  * of a swap that moves the price that far and its average price (before the pool fee)
  */
-function levelRows(levels, side, max) {
+function levelRows(levels, side, max, book, ranges) {
     let total = 0;
     let data = 0;
     return levels.map((level, k) => {
+        // The level's prices, from the one nearer the price to its own: marked when a position of the wallet covers them
+        const near = k ? levels[k - 1].price : book.price;
+        const [lo, hi] = side === 'ask' ? [near, level.price] : [level.price, near];
+        const mine = ranges.some(r => Math.max(lo, r.min) < Math.min(hi, r.max));
         total += level.usd;
         data += level.data;
         if (level.data < 1) return '';   // no liquidity at these prices
@@ -282,7 +287,7 @@ function levelRows(levels, side, max) {
             `Average price ${formatPrice(total / data)}`
         ].join('<br>');
         return `
-            <div data-book-k="${k}" data-tooltip-content="${Utils.escapeHtml(tooltip)}" class="relative grid grid-cols-3 gap-2 px-1 py-1 text-sm cursor-default transition-colors">
+            <div data-book-k="${k}" data-tooltip-content="${Utils.escapeHtml(tooltip)}" class="relative grid grid-cols-3 gap-2 px-1 py-1 text-sm cursor-default transition-colors${mine ? ' shadow-[inset_3px_0_0_#3b82f6]' : ''}"${mine ? ' data-book-mine' : ''}>
                 <div class="absolute inset-y-0 right-0 ${side === 'ask' ? 'bg-red-500/10' : 'bg-green-500/10'}" style="width: ${width.toFixed(1)}%"></div>
                 <span class="relative ${side === 'ask' ? 'text-red-400' : 'text-green-400'} font-medium">${formatPrice(level.price)}</span>
                 <span class="relative text-right text-gray-200">${formatData(level.data)}</span>
@@ -317,8 +322,10 @@ function render() {
     const sum = (levels) => levels.reduce((total, level) => total + level.usd, 0);
     const max = Math.max(sum(book.asks), sum(book.bids));
     // Asks above the price, the nearest at the bottom; bids below it, the nearest at the top
-    asksEl.innerHTML = levelRows(book.asks, 'ask', max).reverse().join('');
-    bidsEl.innerHTML = levelRows(book.bids, 'bid', max).join('');
+    const chains = new Set(models.map(m => m.chain));
+    const ranges = state.ranges.filter(r => chains.has(r.chain));
+    asksEl.innerHTML = levelRows(book.asks, 'ask', max, book, ranges).reverse().join('');
+    bidsEl.innerHTML = levelRows(book.bids, 'bid', max, book, ranges).join('');
     asksEl.scrollTop = asksEl.scrollHeight;
     bidsEl.scrollTop = 0;
     const names = models.map(m => `${m.pool.label} · DATA/${m.pool.counterSymbol === 'WPOL' ? 'POL' : m.pool.counterSymbol} · ${CHAIN_NAMES[m.chain]}`).join('<br>');
@@ -360,6 +367,13 @@ function setView(view) {
 }
 
 export const SwapBook = {
+    /** The wallet's position ranges ({ chain, min, max } in USD per DATA), marked on the levels they cover */
+    setRanges(ranges) {
+        const same = JSON.stringify(ranges) === JSON.stringify(state.ranges);
+        state.ranges = ranges;
+        if (!same && state.active && state.view === 'book') render();
+    },
+
     show() {
         state.active = true;
         if (!state.listening) {

@@ -16,8 +16,9 @@ import * as UI from '../ui/ui.js';
 import * as Services from '../core/services.js';
 import { DATA_TOKEN_ADDRESS_POLYGON, DATA_TOKEN_ADDRESS_ETHEREUM, POLYGONSCAN_NETWORK, getEtherscanApiKey } from '../core/constants.js';
 import { getEthereumSigner, restorePolygon } from '../core/ethWallet.js';
-import { SwapMarket, getEthProvider, chainChip } from './swapMarket.js';
+import { SwapMarket, getEthProvider, chainChip, formatPrice, formatUsd, formatData } from './swapMarket.js';
 import { SwapBook } from './swapBook.js';
+import { Liquidity, LIQUIDITY_POOLS } from './liquidity.js';
 import { ethers } from 'ethers';
 
 const { logger } = Utils;
@@ -229,6 +230,7 @@ const POLYGON = NETWORKS[137];
 
 const state = {
     active: false,
+    tab: 'swap',             // the market's tab: 'swap' or 'liquidity'
     address: null,
     chain: 137,              // the chain of the swap (137 Polygon, 1 Ethereum)
     counter: 'USDC',         // the token traded against DATA
@@ -926,7 +928,7 @@ function renderBalances() {
 
 /** The chain selector, the description of its DEXes, and the DATA pools list of the chain */
 function renderChain() {
-    document.querySelectorAll('#swap-chain button').forEach(btn => {
+    document.querySelectorAll('#swap-chain button, #liquidity-chain button').forEach(btn => {
         const active = Number(btn.dataset.chain) === state.chain;
         btn.classList.toggle('bg-blue-800', active);
         btn.classList.toggle('text-white', active);
@@ -938,9 +940,89 @@ function renderChain() {
         el.classList.toggle('flex', shown);
     });
     renderLiquidity();
+    renderPositions();
 }
 
 /** Swaps on another chain: the same counter where it has one (POL and ETH stand for each other), else USDC */
+// ============================================
+// Liquidity tab
+// ============================================
+
+const POSITION_BADGES = {
+    in: ['In range', 'bg-green-500/15 text-green-400'],
+    out: ['Out of range', 'bg-amber-500/15 text-amber-300'],
+    closed: ['Closed', 'bg-gray-500/15 text-gray-300']
+};
+
+/** The tab's card and list shown, its link underlined */
+function renderTab() {
+    const liquidity = state.tab === 'liquidity';
+    $('market-swap-card')?.classList.toggle('hidden', liquidity);
+    $('market-swaps-section')?.classList.toggle('hidden', liquidity);
+    $('market-liquidity-card')?.classList.toggle('hidden', !liquidity);
+    $('market-positions-section')?.classList.toggle('hidden', !liquidity);
+    document.querySelectorAll('#market-tabs [data-market-tab]').forEach(link => {
+        const active = link.dataset.marketTab === state.tab;
+        link.classList.toggle('text-white', active);
+        link.classList.toggle('border-blue-500', active);
+        link.classList.toggle('text-gray-400', !active);
+        link.classList.toggle('border-transparent', !active);
+        if (active) link.setAttribute('aria-current', 'page');
+        else link.removeAttribute('aria-current');
+    });
+    renderPositions();
+}
+
+/** The Liquidity card (the chain's pool and the wallet's liquidity in it), the positions list and their ranges on the books */
+function renderPositions() {
+    const pool = LIQUIDITY_POOLS[state.chain];
+    const link = $('liquidity-pool-link');
+    if (link) link.href = pool.url;
+    const positions = Liquidity.positions();
+    const mine = (positions || []).filter(p => p.chain === state.chain);
+    const sum = (key) => mine.reduce((total, p) => total + p[key], 0);
+    const price = Liquidity.price(state.chain);
+    const row = (label, value) => `<div class="flex justify-between gap-3"><dt class="text-gray-300">${label}</dt><dd class="text-white font-medium text-right">${value}</dd></div>`;
+    const summary = $('liquidity-summary');
+    if (summary) {
+        const yours = !state.address ? 'Connect a wallet' : positions === null ? '...' : null;
+        summary.innerHTML = [
+            row('Pool price', price ? formatPrice(price) : '--'),
+            row('Your positions', yours ?? String(mine.length)),
+            row('Your liquidity', yours ?? formatUsd(sum('value'))),
+            row('Uncollected fees', yours ?? formatUsd(sum('feeValue')))
+        ].join('');
+    }
+
+    const body = $('liquidity-positions');
+    if (body) {
+        const empty = (text) => `<tr><td colspan="8" class="py-4 text-sm text-gray-300">${text}</td></tr>`;
+        const errors = Liquidity.errors();
+        if (!state.address) body.innerHTML = empty('Connect a wallet to see your liquidity positions.');
+        else if (positions === null) body.innerHTML = empty('Reading your positions...');
+        else if (!positions.length) body.innerHTML = empty(errors.length ? `Your positions on ${errors.join(' and ')} could not be read. Try again in a moment.` : 'No positions in the DATA/USDC pools on Uniswap v4.');
+        else {
+            body.innerHTML = [...positions].sort((a, b) => b.chain - a.chain || Number(b.tokenId) - Number(a.tokenId)).map(p => {
+                const [label, badge] = POSITION_BADGES[p.closed ? 'closed' : p.inRange ? 'in' : 'out'];
+                const fees = `${formatData(p.feeData)} DATA and ${p.feeUsdc.toFixed(2)} USDC`;
+                return `
+                <tr class="border-b border-[#2a2a2a] last:border-0">
+                    <td class="py-3 pr-3 whitespace-nowrap"><a href="${p.url}" target="_blank" rel="noopener noreferrer" class="text-blue-400 hover:text-blue-300">#${Utils.escapeHtml(p.tokenId)}</a></td>
+                    <td class="py-3 pr-3 text-center whitespace-nowrap">${chainChip(p.chain, { named: true })}</td>
+                    <td class="py-3 pr-3 text-center whitespace-nowrap text-gray-200">${formatPrice(p.min)} – ${formatPrice(p.max)}</td>
+                    <td class="py-3 pr-3 text-center"><span class="px-2 py-0.5 rounded-full text-[11px] font-semibold whitespace-nowrap ${badge}">${label}</span></td>
+                    <td class="py-3 pr-3 text-right whitespace-nowrap text-gray-200">${formatData(p.data)}</td>
+                    <td class="py-3 pr-3 text-right whitespace-nowrap text-gray-200">${Utils.formatBigNumber(p.usdc.toFixed(2))}</td>
+                    <td class="py-3 pr-3 text-right whitespace-nowrap text-white font-medium">${formatUsd(p.value)}</td>
+                    <td class="py-3 text-right whitespace-nowrap text-gray-200" data-tooltip-content="${fees}">${formatUsd(p.feeValue)}</td>
+                </tr>`;
+            }).join('');
+        }
+    }
+    // The ranges on the books, in the Liquidity tab
+    SwapBook.setRanges(state.tab === 'liquidity' ? (positions || []).filter(p => !p.closed).map(p => ({ chain: p.chain, min: p.min, max: p.max })) : []);
+}
+
 /** The market's chain filter of the form's chain */
 const marketFilter = () => (state.chain === 1 ? 'ethereum' : 'polygon');
 
@@ -2053,6 +2135,12 @@ function setupListeners() {
         renderQuote();
         updateQuote();
     });
+    $('liquidity-chain')?.addEventListener('click', (e) => {
+        const btn = e.target.closest('button[data-chain]');
+        if (btn) setChain(Number(btn.dataset.chain));
+    });
+    $('liquidity-refresh')?.addEventListener('click', () => Liquidity.refresh(state.address));
+    Liquidity.onChange(renderPositions);
     $('swap-chain')?.addEventListener('click', (e) => {
         const btn = e.target.closest('button[data-chain]');
         if (btn) setChain(Number(btn.dataset.chain));
@@ -2085,7 +2173,7 @@ function setupListeners() {
         if (e.key === 'Escape' && !$('swapPoolsModal')?.classList.contains('hidden')) closePoolsModal();
     });
     window.addEventListener('app:routechange', (e) => {
-        if (!e.detail?.path?.startsWith('/swap')) {
+        if (!/^\/(swap|market)(\/|$)/.test(e.detail?.path || '')) {
             closePoolsModal();
             SwapLogic.stop();
         }
@@ -2093,9 +2181,11 @@ function setupListeners() {
 }
 
 export const SwapLogic = {
-    async show() {
+    /** Opens the market on its Swap or Liquidity tab */
+    async show(tab = 'swap') {
         setupListeners();
         state.active = true;
+        state.tab = tab === 'liquidity' ? 'liquidity' : 'swap';
         try {
             const saved = Number(localStorage.getItem(SLIPPAGE_KEY));
             if ([0.5, 1, 3].includes(saved)) state.slippage = saved;
@@ -2132,6 +2222,8 @@ export const SwapLogic = {
             showError('');
         }
         renderChain();
+        renderTab();
+        if (state.tab === 'liquidity') Liquidity.refresh(state.address);
         renderTokens();
         renderSlippage();
         renderQuote();

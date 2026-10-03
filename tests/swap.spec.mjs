@@ -264,6 +264,79 @@ test('hovering a book level highlights the levels from the price to it and sums 
     await expect(page.locator('#swap-book-bids > div.bg-white\\/\\[0\\.06\\]')).toHaveCount(0);
 });
 
+test('the market\'s old address opens it, on its Swap tab', async ({ page }) => {
+    await openSwap(page);
+    await expect(page).toHaveURL(/\/market$/);
+    await expect(page.locator('#market-tabs [data-market-tab="swap"]')).toHaveAttribute('aria-current', 'page');
+    await expect(page.locator('#market-liquidity-card')).toBeHidden();
+    // As a guest, the Liquidity tab asks for a wallet
+    await page.click('#market-tabs [data-market-tab="liquidity"]');
+    await expect(page).toHaveURL(/\/market\/liquidity$/);
+    await expect(page.locator('#market-swap-card')).toBeHidden();
+    await expect(page.locator('#market-liquidity-card')).toBeVisible();
+    await expect(page.locator('#liquidity-positions')).toHaveText('Connect a wallet to see your liquidity positions.');
+});
+
+test('the Liquidity tab shows the wallet\'s v4 positions, their fees and their ranges on the books', async ({ page }) => {
+    const me = '0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266';
+    const POSITIONS = '0x1ec2ebf4f37e7363fdfe3551602425af0b3ceef9';
+    const PM = new ethers.utils.Interface([
+        'function ownerOf(uint256 id) view returns (address)',
+        'function getPoolAndPositionInfo(uint256 tokenId) view returns ((address currency0, address currency1, uint24 fee, int24 tickSpacing, address hooks) poolKey, uint256 info)',
+        'function getPositionLiquidity(uint256 tokenId) view returns (uint128)'
+    ]);
+    // Position #7: the mocked pool's whole liquidity (600 ticks each side of the price), 1000 DATA and 2 USDC of fees to collect
+    const info = ethers.BigNumber.from(BASE + 600).toTwos(24).shl(32).or(ethers.BigNumber.from(BASE - 600).toTwos(24).shl(8));
+    const growth = (amount) => word(ethers.BigNumber.from(amount).shl(128).div(LIQUIDITY));
+    POOL_STORAGE.set(word(STATE_SLOT.add(1)), growth(ethers.utils.parseEther('1000')));
+    POOL_STORAGE.set(word(STATE_SLOT.add(2)), growth(2000000));
+    await page.route(url => url.hostname === 'api.etherscan.io' && url.search.includes('action=tokennfttx'), (route) => {
+        const polygon = route.request().url().includes('chainid=137&');
+        return route.fulfill({ json: { status: '1', message: 'OK', result: polygon ? [{ tokenID: '7', from: ethers.constants.AddressZero, to: me }] : [] } });
+    });
+    await page.route('**/*', (route) => {
+        const body = route.request().postDataJSON?.();
+        const call = body?.method === 'eth_call' ? body.params[0] : null;
+        if (call?.to?.toLowerCase() !== '0xca11bde05977b3631167028862be2a173976ca11' || !call.data.startsWith(MULTICALL.getSighash('aggregate3'))) return route.fallback();
+        const [calls] = MULTICALL.decodeFunctionData('aggregate3', call.data);
+        if (!calls.some(c => c.target.toLowerCase() === POSITIONS)) return route.fallback();
+        const result = MULTICALL.encodeFunctionResult('aggregate3', [calls.map(c => {
+            const fn = PM.parseTransaction({ data: c.callData }).name;
+            const answer = fn === 'ownerOf' ? [me]
+                : fn === 'getPositionLiquidity' ? [LIQUIDITY]
+                : [['0x3a9a81d576d83ff21f26f325066054540720fc34', '0x3c499c542cef5e3811e1192ce70d8cc03d5c3359', 3000, 60, ethers.constants.AddressZero], info];
+            return { success: true, returnData: PM.encodeFunctionResult(fn, answer) };
+        })]);
+        return route.fulfill({ json: { jsonrpc: '2.0', id: body.id, result } });
+    });
+    await page.goto('/market/liquidity', { waitUntil: 'domcontentloaded' });
+    await page.click('#privateKeyBtn');
+    await page.fill('#privateKeyInput', '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80');
+    await page.click('#pkModalConnect');
+    const row = page.locator('#liquidity-positions tr').first();
+    await expect(row).toContainText('#7', { timeout: 30000 });
+    await expect(row).toContainText('Polygon');
+    await expect(row).toContainText('In range');
+    await expect(row).toContainText('$0.0002352 – $0.0002652');
+    await expect(row).toContainText('1 834 684');
+    await expect(row).toContainText('$934.54');
+    await expect(row).toContainText('$2.25');
+    const summary = page.locator('#liquidity-summary');
+    await expect(summary).toContainText('Your positions1');
+    await expect(summary).toContainText('Uncollected fees$2.25');
+    await expect(page.locator('#liquidity-pool-link')).toHaveAttribute('href', /app\.uniswap\.org\/explore\/pools\/polygon\/0x/);
+    // The position covers all the pool's liquidity: every level of the books is marked
+    await page.click('[data-market-view="book"]');
+    const levels = page.locator('#swap-book-asks > div, #swap-book-bids > div');
+    await expect(levels.first()).toBeVisible({ timeout: 30000 });
+    await expect(page.locator('[data-book-mine]')).toHaveCount(await levels.count());
+    // The Swap tab: the form and the swaps, no marks
+    await page.click('#market-tabs [data-market-tab="swap"]');
+    await expect(page.locator('#market-swap-card')).toBeVisible();
+    await expect(page.locator('#market-positions-section')).toBeHidden();
+    await expect(page.locator('[data-book-mine]')).toHaveCount(0);
+});
+
 test('the swap form switches to Ethereum: its tokens and DEXes, kept for the next visit', async ({ page }) => {
     await openSwap(page);
     const options = () => page.locator('#swap-from-token select option').allTextContents();
