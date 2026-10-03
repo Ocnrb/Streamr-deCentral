@@ -1033,6 +1033,7 @@ function levelShares(levels, ranges) {
     });
 }
 
+const CHART_FONT = { family: "'Inter', sans-serif", size: 11 };   // as the app's other charts
 const DEPTH_STEPS = [0.01, 0.02, 0.04, 0.08, 0.16];   // 25 levels each way: x1.28 up to x41
 
 /** The pool's liquidity by price in bars (USDC blue, DATA orange), the price between them, the wallet's ranges shaded behind */
@@ -1171,8 +1172,18 @@ function renderDepth(depth, ranges) {
             },
             plugins: {
                 legend: { display: false },
+                // As the app's other charts
                 tooltip: {
+                    backgroundColor: 'rgba(30, 30, 30, 0.9)',
+                    titleColor: '#ffffff',
+                    bodyColor: '#d1d5db',
+                    borderColor: '#333333',
+                    borderWidth: 1,
+                    padding: 10,
+                    cornerRadius: 8,
                     displayColors: false,
+                    titleFont: { ...CHART_FONT, size: 12, weight: '600' },
+                    bodyFont: { ...CHART_FONT, size: 13 },
                     // As the Depth's: from the price to this level, the DATA of a swap that far and its average price
                     callbacks: {
                         title: (items) => {
@@ -1197,8 +1208,8 @@ function renderDepth(depth, ranges) {
                 }
             },
             scales: {
-                x: { grid: { display: false }, ticks: { color: '#9ca3af', maxRotation: 0, autoSkip: true, maxTicksLimit: 6 } },
-                y: { grid: { color: 'rgba(255, 255, 255, 0.05)' }, ticks: { color: '#9ca3af', callback: (v) => formatUsd(v) } }
+                x: { grid: { display: false }, ticks: { color: '#9ca3af', font: CHART_FONT, maxRotation: 0, autoSkip: true, maxTicksLimit: 6 } },
+                y: { grid: { color: 'rgba(255, 255, 255, 0.05)' }, ticks: { color: '#9ca3af', font: CHART_FONT, callback: (v) => formatUsd(v) } }
             }
         }
     });
