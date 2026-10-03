@@ -1144,6 +1144,22 @@ function renderDepth(depth, ranges) {
     });
 }
 
+/**
+ * Side by side: the chart as tall as the pool's numbers, kept so while the new position's form (taller, growing with
+ * its steps) takes their place; stacked: its own height
+ */
+function lockDepthHeight() {
+    const chart = $('liquidity-depth')?.closest('section');
+    const overview = $('liquidity-overview');
+    const card = overview?.closest('section');
+    if (!chart || !card) return;
+    if (!window.matchMedia('(min-width: 1024px)').matches) {
+        chart.style.height = '';
+        return;
+    }
+    if (!overview.classList.contains('hidden') && card.offsetHeight > 0) chart.style.height = `${card.offsetHeight}px`;
+}
+
 /** A new range: the chart's levels widened or narrowed to show it whole (25 levels each way reach x(1 + step)^25) */
 let shownDraft = null;
 function fitDraft() {
@@ -2373,6 +2389,9 @@ function setupListeners() {
         renderPositions();
     });
     Liquidity.onChange(renderPositions);
+    const statsCard = $('liquidity-overview')?.closest('section');
+    if (statsCard && window.ResizeObserver) new ResizeObserver(lockDepthHeight).observe(statsCard);
+    window.addEventListener('resize', lockDepthHeight);
     $('liquidity-positions')?.addEventListener('click', (e) => {
         const btn = e.target.closest('button[data-manage-position]');
         if (btn) LiquidityManage.openManage(btn.dataset.managePosition, Number(btn.dataset.chain));
