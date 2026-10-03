@@ -278,15 +278,20 @@ test('the market\'s old address opens it, on its Swap tab', async ({ page }) => 
     await expect(page.locator('#liquidity-positions')).toHaveText('Connect a wallet to see your liquidity positions.');
 });
 
-test('the Liquidity tab shows the pool, and the wallet\'s v4 positions with their fees and ranges', async ({ page }) => {
-    const me = '0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266';
-    const POSITIONS = '0x1ec2ebf4f37e7363fdfe3551602425af0b3ceef9';
+const ME = '0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266';   // the private key below
+const POSITIONS = '0x1ec2ebf4f37e7363fdfe3551602425af0b3ceef9';
+const DATA_TOKEN = '0x3a9a81d576d83ff21f26f325066054540720fc34';
+const USDC_TOKEN = '0x3c499c542cef5e3811e1192ce70d8cc03d5c3359';
+const PERMIT2 = '0x000000000022d473030f116ddee9f6b43ac78ba3';
+
+/** The wallet's position #7 in the Polygon pool: the mocked pool's whole liquidity, 1000 DATA and 2 USDC of fees to collect */
+async function mockPositions(page) {
+    const me = ME;
     const PM = new ethers.utils.Interface([
         'function ownerOf(uint256 id) view returns (address)',
         'function getPoolAndPositionInfo(uint256 tokenId) view returns ((address currency0, address currency1, uint24 fee, int24 tickSpacing, address hooks) poolKey, uint256 info)',
         'function getPositionLiquidity(uint256 tokenId) view returns (uint128)'
     ]);
-    // Position #7: the mocked pool's whole liquidity (600 ticks each side of the price), 1000 DATA and 2 USDC of fees to collect
     const info = ethers.BigNumber.from(BASE + 600).toTwos(24).shl(32).or(ethers.BigNumber.from(BASE - 600).toTwos(24).shl(8));
     const growth = (amount) => word(ethers.BigNumber.from(amount).shl(128).div(LIQUIDITY));
     POOL_STORAGE.set(word(STATE_SLOT.add(1)), growth(ethers.utils.parseEther('1000')));
@@ -310,10 +315,80 @@ test('the Liquidity tab shows the pool, and the wallet\'s v4 positions with thei
         })]);
         return route.fulfill({ json: { jsonrpc: '2.0', id: body.id, result } });
     });
-    await page.goto('/market/liquidity', { waitUntil: 'domcontentloaded' });
+}
+
+/** The wallet's DATA and USDC, their allowances to Permit2 and Permit2's to the PositionManager */
+async function mockWallet(page, { data = '50000', usdc = '100', dataToPermit2 = '0', usdcToPermit2 = '0' } = {}) {
+    const ERC20 = new ethers.utils.Interface(['function balanceOf(address) view returns (uint256)', 'function allowance(address, address) view returns (uint256)']);
+    const P2 = new ethers.utils.Interface(['function allowance(address, address, address) view returns (uint160 amount, uint48 expiration, uint48 nonce)']);
+    const amounts = { [DATA_TOKEN]: { balance: ethers.utils.parseUnits(data, 18), toPermit2: ethers.utils.parseUnits(dataToPermit2, 18) }, [USDC_TOKEN]: { balance: ethers.utils.parseUnits(usdc, 6), toPermit2: ethers.utils.parseUnits(usdcToPermit2, 6) } };
+    await page.route('**/*', (route) => {
+        const body = route.request().postDataJSON?.();
+        const call = body?.method === 'eth_call' ? body.params[0] : null;
+        if (call?.to?.toLowerCase() !== '0xca11bde05977b3631167028862be2a173976ca11' || !call.data.startsWith(MULTICALL.getSighash('aggregate3'))) return route.fallback();
+        const [calls] = MULTICALL.decodeFunctionData('aggregate3', call.data);
+        if (!calls.some(c => c.target.toLowerCase() === PERMIT2)) return route.fallback();
+        const result = MULTICALL.encodeFunctionResult('aggregate3', [calls.map(c => {
+            const target = c.target.toLowerCase();
+            if (target === PERMIT2) return { success: true, returnData: P2.encodeFunctionResult('allowance', [0, 0, 0]) };
+            const fn = ERC20.parseTransaction({ data: c.callData }).name;
+            return { success: true, returnData: ERC20.encodeFunctionResult(fn, [fn === 'balanceOf' ? amounts[target].balance : amounts[target].toPermit2]) };
+        })]);
+        return route.fulfill({ json: { jsonrpc: '2.0', id: body.id, result } });
+    });
+}
+
+/** Transactions sent: mined at once, each returned decoded ({ to, data }) */
+async function mockSending(page) {
+    const sent = [];
+    await page.route('**/*', (route) => {
+        const body = route.request().postDataJSON?.();
+        const answer = (result) => route.fulfill({ json: { jsonrpc: '2.0', id: body.id, result } });
+        switch (body?.method) {
+            case 'eth_getTransactionCount': return answer('0x' + sent.length.toString(16));
+            case 'eth_estimateGas': return answer('0x30000');
+            case 'eth_gasPrice': case 'eth_maxPriorityFeePerGas': return answer('0x6fc23ac00');
+            case 'eth_getBlockByNumber':
+                if (body.params[0] !== 'latest') return route.fallback();
+                return answer({ number: '0x100', hash: ethers.utils.hexZeroPad('0x100', 32), parentHash: ethers.constants.HashZero, nonce: '0x0000000000000000', timestamp: '0x' + Math.floor(Date.now() / 1000).toString(16), difficulty: '0x1', gasLimit: '0x1c9c380', gasUsed: '0x0', miner: ethers.constants.AddressZero, extraData: '0x', transactions: [], baseFeePerGas: '0x6fc23ac00' });
+            case 'eth_sendRawTransaction': {
+                const tx = ethers.utils.parseTransaction(body.params[0]);
+                sent.push({ to: tx.to.toLowerCase(), data: tx.data, hash: tx.hash });
+                return answer(tx.hash);
+            }
+            case 'eth_getTransactionReceipt': {
+                const tx = sent.find(t => t.hash === body.params[0]);
+                if (!tx) return route.fallback();
+                return answer({ transactionHash: tx.hash, transactionIndex: '0x0', blockHash: ethers.utils.hexZeroPad('0x1', 32), blockNumber: '0x1', from: ME, to: tx.to, contractAddress: null, cumulativeGasUsed: '0x1', gasUsed: '0x1', effectiveGasPrice: '0x1', logs: [], logsBloom: '0x' + '0'.repeat(512), status: '0x1', type: '0x2' });
+            }
+            default: return route.fallback();
+        }
+    });
+    return sent;
+}
+
+async function connectPrivateKey(page) {
     await page.click('#privateKeyBtn');
     await page.fill('#privateKeyInput', '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80');
     await page.click('#pkModalConnect');
+}
+
+const PM_IFACE = new ethers.utils.Interface([
+    'function modifyLiquidities(bytes unlockData, uint256 deadline)',
+    'function multicall(bytes[] data) returns (bytes[] results)',
+    'function permitBatch(address owner, ((address token, uint160 amount, uint48 expiration, uint48 nonce)[] details, address spender, uint256 sigDeadline) _permitBatch, bytes signature) returns (bytes err)'
+]);
+/** A PositionManager transaction's actions and their parameters */
+function decodeModify(data) {
+    const [unlock] = PM_IFACE.decodeFunctionData('modifyLiquidities', data);
+    const [actions, params] = ethers.utils.defaultAbiCoder.decode(['bytes', 'bytes[]'], unlock);
+    return { actions, params };
+}
+
+test('the Liquidity tab shows the pool, and the wallet\'s v4 positions with their fees and ranges', async ({ page }) => {
+    await mockPositions(page);
+    await page.goto('/market/liquidity', { waitUntil: 'domcontentloaded' });
+    await connectPrivateKey(page);
     const row = page.locator('#liquidity-positions tr').first();
     await expect(row).toContainText('#7', { timeout: 30000 });
     await expect(row).toContainText('Polygon');
@@ -325,7 +400,7 @@ test('the Liquidity tab shows the pool, and the wallet\'s v4 positions with thei
     const summary = page.locator('#liquidity-summary');
     await expect(summary).toContainText('Positions1');
     await expect(summary).toContainText('Uncollected fees$2.25');
-    await expect(page.locator('#liquidity-pool-link')).toHaveAttribute('href', /app\.uniswap\.org\/explore\/pools\/polygon\/0x/);
+    await expect(page.locator('#liquidity-pool-tags a')).toHaveAttribute('href', /app\.uniswap\.org\/explore\/pools\/polygon\/0x/);
     // The pool: its tags, and its value (the mocked pool holds that position only)
     await expect(page.locator('#liquidity-pool-tags')).toContainText('Polygon');
     await expect(page.locator('#liquidity-pool-tags')).toContainText('v4');
@@ -380,6 +455,104 @@ test('the Liquidity tab shows the pool, and the wallet\'s v4 positions with thei
     await page.click('#market-tabs [data-market-tab="swap"]');
     await expect(page.locator('#market-swap-grid')).toBeVisible();
     await expect(page.locator('#market-liquidity-view')).toBeHidden();
+});
+
+test('a new position: its range (a strategy, prices or the full range) on the chart, the deposit, then the approval, the signature and the transaction', async ({ page }) => {
+    await mockPositions(page);
+    await mockWallet(page, { data: '50000', usdc: '100', usdcToPermit2: '1000' });
+    const sent = await mockSending(page);
+    await page.goto('/market/liquidity', { waitUntil: 'domcontentloaded' });
+    await connectPrivateKey(page);
+    await expect(page.locator('#liquidity-positions tr').first()).toContainText('#7', { timeout: 30000 });
+    await page.click('#liquidity-new-open');
+    const form = page.locator('#liquidity-new');
+    await expect(form).toBeVisible();
+    await expect(page.locator('#liquidity-overview')).toBeHidden();
+    // Wide by default: half to twice the price, drawn dashed on the chart
+    await expect(form.locator('[data-strategy]')).toHaveCount(4);
+    await expect(form.locator('[data-strategy="wide"]')).toHaveClass(/border-blue-500/);
+    await expect(page.locator('#liquidity-new-min')).toHaveValue(/^0\.0001[23]\d+$/);
+    await expect(page.locator('#liquidity-new-min-pct')).toHaveText(/^-[45]\d\.\d\d%$/);
+    await expect(page.locator('#liquidity-new-max-pct')).toHaveText(/^\+(9\d|10\d)\.\d\d%$/);
+    await expect(page.locator('#liquidity-new-data-balance')).toHaveText('50 000.00 DATA');
+    const draft = () => page.evaluate(() => window.Chart.getChart(document.querySelector('#liquidity-depth canvas')).data.datasets[0].ranges.find(r => r.draft));
+    expect((await draft()).min).toBeCloseTo(0.000125, 5);
+    // The deposit: DATA typed, its USDC worked out at the pool's price
+    await page.fill('#liquidity-new-data', '1000');
+    await expect(page.locator('#liquidity-new-usdc')).toHaveValue(/^0\.\d+$/);
+    await expect(page.locator('#liquidity-new-submit')).toHaveText('Create position');
+    await page.fill('#liquidity-new-data', '60000');
+    await expect(page.locator('#liquidity-new-submit')).toHaveText('Insufficient DATA');
+    // A price nudged: the strategy no longer marked; one-sided upper: DATA only
+    await page.click('[data-nudge="max:1"]');
+    await expect(form.locator('[data-strategy="wide"]')).not.toHaveClass(/border-blue-500/);
+    await page.click('[data-strategy="upper"]');
+    await expect(page.locator('#liquidity-new-usdc')).toBeDisabled();
+    await expect(page.locator('#liquidity-new-note')).toHaveText('At the current price this range takes DATA only.');
+    expect((await draft()).min).toBeGreaterThan(0.00025);
+    // The full range: from 0 to ∞
+    await page.click('[data-range-mode="full"]');
+    await expect(page.locator('#liquidity-new-min')).toHaveValue('0');
+    await expect(page.locator('#liquidity-new-max')).toHaveValue('∞');
+    await expect(form.locator('#liquidity-new-strategies')).toBeHidden();
+    await page.click('[data-range-mode="custom"]');
+    await page.fill('#liquidity-new-data', '1000');
+    // DATA has no allowance to Permit2 yet, USDC has: approve DATA, sign Permit2, create
+    await page.click('#liquidity-new-submit');
+    await expect(page.locator('#liquidity-new-success')).toContainText('Position created with 1000 DATA', { timeout: 30000 });
+    await expect(page.locator('#liquidity-new-steps li')).toHaveCount(3);
+    await expect(page.locator('#liquidity-new-submit')).toHaveText('New position');
+    expect(sent.map(t => t.to)).toEqual([DATA_TOKEN, POSITIONS]);
+    const approve = new ethers.utils.Interface(['function approve(address, uint256)']).decodeFunctionData('approve', sent[0].data);
+    expect(approve[0].toLowerCase()).toBe(PERMIT2);
+    expect(approve[1].gt(ethers.utils.parseEther('1000'))).toBe(true);   // with the slippage margin
+    const [calls] = PM_IFACE.decodeFunctionData('multicall', sent[1].data);
+    const permit = PM_IFACE.decodeFunctionData('permitBatch', calls[0]);
+    expect(permit.owner.toLowerCase()).toBe(ME);
+    expect(permit._permitBatch.spender.toLowerCase()).toBe(POSITIONS);
+    const { actions, params } = decodeModify(calls[1]);
+    expect(actions).toBe('0x020d');   // MINT_POSITION, SETTLE_PAIR
+    const mint = ethers.utils.defaultAbiCoder.decode(['tuple(address,address,uint24,int24,address)', 'int24', 'int24', 'uint256', 'uint128', 'uint128', 'address', 'bytes'], params[0]);
+    expect(mint[1]).toBeGreaterThan(TICK);   // DATA only: above the price
+    expect(mint[6].toLowerCase()).toBe(ME);
+});
+
+test('a position\'s Manage: remove a share with its fees, and the fees alone', async ({ page }) => {
+    await mockPositions(page);
+    await mockWallet(page);
+    const sent = await mockSending(page);
+    await page.goto('/market/liquidity', { waitUntil: 'domcontentloaded' });
+    await connectPrivateKey(page);
+    await page.locator('[data-manage-position="7"]').click({ timeout: 30000 });
+    const modal = page.locator('#liquidityModal');
+    await expect(modal).toBeVisible();
+    await expect(page.locator('#liquidity-modal-title')).toHaveText('Add liquidity #7');
+    await expect(page.locator('#liquidity-modal-summary')).toContainText('Position DATA1 834 684');
+    // Remove a quarter: its share of the position, and the fees
+    await modal.locator('[data-manage="remove"]').click();
+    await modal.locator('[data-remove-pct="25"]').click();
+    await expect(page.locator('#liquidity-remove-pct')).toHaveText('25%');
+    await expect(page.locator('#liquidity-modal-submit')).toHaveText('Remove 25%');
+    await expect(page.locator('#liquidity-modal-summary')).toContainText('DATA459 671');   // 1 834 684 / 4 + 1000 of fees
+    await page.click('#liquidity-modal-submit');
+    await expect(page.locator('#liquidity-modal-success')).toHaveText('Removed 25% of #7, with its fees.', { timeout: 30000 });
+    expect(sent).toHaveLength(1);
+    const { actions, params } = decodeModify(sent[0].data);
+    expect(actions).toBe('0x0111');   // DECREASE_LIQUIDITY, TAKE_PAIR
+    const decrease = ethers.utils.defaultAbiCoder.decode(['uint256', 'uint256', 'uint128', 'uint128', 'bytes'], params[0]);
+    expect(decrease[0].toNumber()).toBe(7);
+    expect(decrease[1].eq(LIQUIDITY.div(4))).toBe(true);
+    expect(decrease[2].gt(0)).toBe(true);   // the least DATA out
+    await page.click('#liquidity-modal-submit');   // Done
+    await expect(modal).toBeHidden();
+    // Collect: the fees only (no liquidity out)
+    await page.locator('[data-manage-position="7"]').click();
+    await modal.locator('[data-manage="collect"]').click();
+    await expect(page.locator('#liquidity-modal-summary')).toContainText('DATA1 000');
+    await page.click('#liquidity-modal-submit');
+    await expect(page.locator('#liquidity-modal-success')).toHaveText('Collected the fees of #7.', { timeout: 30000 });
+    const collect = ethers.utils.defaultAbiCoder.decode(['uint256', 'uint256', 'uint128', 'uint128', 'bytes'], decodeModify(sent[1].data).params[0]);
+    expect(collect[1].isZero()).toBe(true);
 });
 
 test('the swap form switches to Ethereum: its tokens and DEXes, kept for the next visit', async ({ page }) => {
