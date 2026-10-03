@@ -265,20 +265,36 @@ function schedule() {
     }, REFRESH_MS);
 }
 
+/**
+ * A side's rows, the nearest level first. Each row's tooltip sums the levels from the price up to it: the DATA and USD
+ * of a swap that moves the price that far and its average price (before the pool fee)
+ */
 function levelRows(levels, side, max) {
     let total = 0;
-    return levels.map(level => {
+    let data = 0;
+    return levels.map((level, k) => {
         total += level.usd;
+        data += level.data;
         if (level.data < 1) return '';   // no liquidity at these prices
         const width = max > 0 ? Math.min(100, (total / max) * 100) : 0;
+        const tooltip = [
+            `Total DATA ${formatData(data)}`,
+            `Average price ${formatPrice(total / data)}`
+        ].join('<br>');
         return `
-            <div class="relative grid grid-cols-3 gap-2 px-1 py-1 text-sm">
+            <div data-book-k="${k}" data-tooltip-content="${Utils.escapeHtml(tooltip)}" class="relative grid grid-cols-3 gap-2 px-1 py-1 text-sm cursor-default transition-colors">
                 <div class="absolute inset-y-0 right-0 ${side === 'ask' ? 'bg-red-500/10' : 'bg-green-500/10'}" style="width: ${width.toFixed(1)}%"></div>
                 <span class="relative ${side === 'ask' ? 'text-red-400' : 'text-green-400'} font-medium">${formatPrice(level.price)}</span>
                 <span class="relative text-right text-gray-200">${formatData(level.data)}</span>
                 <span class="relative text-right text-gray-300">${formatUsd(total)}</span>
             </div>`;
     });
+}
+
+/** The rows from the price to the hovered one (all of a swap that far), or none */
+function highlightRows(container, row) {
+    const k = row ? Number(row.dataset.bookK) : -1;
+    container.querySelectorAll('[data-book-k]').forEach(r => r.classList.toggle('bg-white/[0.06]', Number(r.dataset.bookK) <= k));
 }
 
 const ZOOM_BUTTON = 'inline-flex items-center justify-center w-5 h-5 rounded text-gray-400 hover:text-white hover:bg-white/5 disabled:opacity-30 disabled:hover:bg-transparent transition-colors';
@@ -332,6 +348,9 @@ function setView(view) {
         btn.classList.toggle('hover:text-gray-300', !selected);
     });
     $('swap-trades-view')?.classList.toggle('hidden', book);
+    const info = $('swap-book-info');   // its tooltip explains the books
+    info?.classList.toggle('hidden', !book);
+    info?.classList.toggle('flex', book);
     $('swap-book-view')?.classList.toggle('hidden', !book);
     if (book) {
         render();
@@ -354,6 +373,12 @@ export const SwapBook = {
                 if (!btn) return;
                 state.step = Math.min(STEPS.length - 1, Math.max(0, state.step + Number(btn.dataset.bookStep)));
                 render();
+            });
+            // Hovering a level highlights the levels from the price to it
+            ['swap-book-asks', 'swap-book-bids'].forEach(id => {
+                const container = $(id);
+                container?.addEventListener('mouseover', (e) => highlightRows(container, e.target.closest('[data-book-k]')));
+                container?.addEventListener('mouseleave', () => highlightRows(container, null));
             });
             // The chain filter re-draws the book; a new pool is read
             let pools = 0;

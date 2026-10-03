@@ -919,7 +919,10 @@ function chartPoints() {
         const opening = priceAt(tradeStart);
         if (opening) points.push({ x: tradeStart, y: opening });
         for (const trade of priceTrades()) {
-            if (trade.time >= tradeStart) points.push({ x: trade.time, y: trade.price });
+            if (trade.time < tradeStart) continue;
+            // Trades of the same second: the price after the last of them (a step of no width would draw a needle)
+            if (points[points.length - 1]?.x === trade.time) points.pop();
+            points.push({ x: trade.time, y: trade.price });
         }
     } else if (!points.length && start !== -Infinity) {
         const opening = priceAt(start);
@@ -989,7 +992,7 @@ function renderChart() {
         pointHoverBackgroundColor: '#3b82f6',
         pointHoverBorderColor: '#121212',
         pointHoverBorderWidth: 2,
-        stepped: stepped ? 'after' : false,
+        stepped: stepped ? 'before' : false,   // each price holds from its trade until the next one
         tension: 0,
         fill: true
     };
@@ -1139,12 +1142,7 @@ function setupListeners() {
     $('swap-trades-more')?.addEventListener('click', loadMore);
     $('swap-trades-filter')?.addEventListener('click', (e) => {
         const btn = e.target.closest('button[data-filter]');
-        if (!btn || btn.dataset.filter === state.filter) return;
-        state.filter = btn.dataset.filter;
-        state.shown = TRADES_PAGE;
-        renderFilter();
-        renderTrades();
-        notifyChange();
+        if (btn) setFilter(btn.dataset.filter);
     });
     $('swap-chart-range')?.addEventListener('click', (e) => {
         const btn = e.target.closest('button[data-range]');
@@ -1155,6 +1153,16 @@ function setupListeners() {
         renderChart();
     });
     Services.onHistoricalDataLoaded(setHistory);
+}
+
+/** Shows the trades and the liquidity book of 'all', 'polygon' or 'ethereum' */
+function setFilter(filter) {
+    if (filter === state.filter) return;
+    state.filter = filter;
+    state.shown = TRADES_PAGE;
+    renderFilter();
+    renderTrades();
+    notifyChange();
 }
 
 // The liquidity book follows the pools and the chain filter
@@ -1168,6 +1176,7 @@ export const SwapMarket = {
     pools: () => state.pools,
     /** The chain filter: 'all', 'polygon' or 'ethereum' */
     filter: () => state.filter,
+    setFilter,
     /** Calls `fn` when a pool is added or the chain filter changes */
     onChange(fn) {
         changeListeners.add(fn);

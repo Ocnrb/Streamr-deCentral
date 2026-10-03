@@ -107,6 +107,21 @@ test('the trades cover the whole 7 days, at the measured block time of the chain
     expect(to - from).toBe(7 * 86400 / 1.5);
 });
 
+test('the trade chart holds each price from its trade until the next one', async ({ page }) => {
+    await openSwap(page);
+    await expect(page.locator('#swap-trades tr')).toHaveCount(4, { timeout: 30000 });
+    await page.click('#swap-chart-range [data-range="7D"]');
+    const chart = () => page.evaluate(() => {
+        const dataset = window.Chart?.getChart(document.querySelector('#swap-chart canvas'))?.data.datasets[0];
+        return dataset && { stepped: dataset.stepped, xs: dataset.data.map(p => p.x) };
+    });
+    await expect.poll(async () => (await chart())?.xs.length || 0, { timeout: 30000 }).toBeGreaterThan(2);
+    const { stepped, xs } = await chart();
+    // 'before': flat at the old price up to the trade, then the step (not the new price drawn from the trade before)
+    expect(stepped).toBe('before');
+    expect(new Set(xs).size).toBe(xs.length);
+});
+
 test('the all-time volume values the days the DEX subgraph has no USD for at the day\'s DATA price', async ({ page }) => {
     // The main pool's days: 1000 recent ones of $1 (a full page), then an old one without USD: 1 000 000 DATA
     const today = Math.floor(Date.now() / 86400000) * 86400;
@@ -173,9 +188,12 @@ test('the all-time volume counts the emptied pools, and prices their old days fr
 
 test('the liquidity book shows the v4 pools\' liquidity by price, in place of the trades', async ({ page }) => {
     await openSwap(page);
+    // The info icon is the books' only
+    await expect(page.locator('#swap-book-info')).toBeHidden();
     await page.click('[data-market-view="book"]');
     await expect(page.locator('#swap-trades-view')).toBeHidden();
     await expect(page.locator('#swap-trades-filter')).toBeVisible();
+    await expect(page.locator('#swap-book-info')).toBeVisible();
     // The position's 600 ticks each side of the price: up to 6.2%, 12 or 13 levels of 0.5% each way (where the price sits in its tick)
     const asks = page.locator('#swap-book-asks > div');
     const bids = page.locator('#swap-book-bids > div');
@@ -198,13 +216,52 @@ test('the liquidity book shows the v4 pools\' liquidity by price, in place of th
     await page.click('[data-book-step="1"]');
     await expect(mid).toContainText('1%');
     await expect.poll(() => asks.count()).toBeLessThan(narrow);
-    // On Ethereum (no v4 pool read here): nothing
-    await page.click('#swap-trades-filter [data-filter="ethereum"]');
+    // The swap form's chain sets the books' (no v4 pool read on Ethereum here: nothing)
+    await page.click('#swap-chain [data-chain="1"]');
+    await expect(page.locator('#swap-trades-filter [data-filter="ethereum"]')).toHaveClass(/bg-blue-800/);
     await expect(mid).toContainText('No pool liquidity read on this chain.');
+    // Not the other way round
+    await page.click('#swap-trades-filter [data-filter="polygon"]');
+    await expect(page.locator('#swap-chain [data-chain="1"]')).toHaveClass(/bg-blue-800/);
     // Back to the trades
     await page.click('[data-market-view="trades"]');
     await expect(page.locator('#swap-trades-view')).toBeVisible();
     await expect(page.locator('#swap-book-view')).toBeHidden();
+    await expect(page.locator('#swap-book-info')).toBeHidden();
+});
+
+test('the market opens on the swap form\'s chain', async ({ page }) => {
+    const active = (chain) => expect(page.locator(`#swap-trades-filter [data-filter="${chain}"]`)).toHaveClass(/bg-blue-800/);
+    await openSwap(page);
+    await active('polygon');
+    // The form kept on Ethereum: the market opens there too
+    await page.click('#swap-chain [data-chain="1"]');
+    await page.reload();
+    await openSwap(page);
+    await expect(page.locator('#swap-chain [data-chain="1"]')).toHaveClass(/bg-blue-800/);
+    await active('ethereum');
+});
+
+test('hovering a book level highlights the levels from the price to it and sums them in a tooltip', async ({ page }) => {
+    await openSwap(page);
+    await page.click('[data-market-view="book"]');
+    const bids = page.locator('#swap-book-bids > div');
+    await expect(bids.first()).toBeVisible({ timeout: 30000 });
+    const rows = await bids.evaluateAll(list => list.map(row => [...row.querySelectorAll('span')].map(span => span.textContent)));
+    await bids.nth(2).hover();
+    // The three nearest bids, and only them
+    await expect(page.locator('#swap-book-bids > div.bg-white\\/\\[0\\.06\\]')).toHaveCount(3);
+    const tooltip = page.locator('#custom-tooltip');
+    await expect(tooltip).toBeVisible();
+    const text = (await tooltip.innerText()).replace(/\u00A0/g, ' ');
+    // The DATA of the three levels (each row rounded), and their average price
+    const data = rows.slice(0, 3).reduce((sum, row) => sum + Number(row[1].replace(/ /g, '')), 0);
+    const [, summed] = text.match(/Total DATA ([\d ]+)/);
+    expect(Math.abs(Number(summed.replace(/ /g, '')) - data)).toBeLessThanOrEqual(2);
+    expect(text).toMatch(/^Total DATA [\d ]+\nAverage price \$0\.000248\d$/);
+    // Leaving the book: nothing highlighted
+    await page.mouse.move(0, 0);
+    await expect(page.locator('#swap-book-bids > div.bg-white\\/\\[0\\.06\\]')).toHaveCount(0);
 });
 
 test('the swap form switches to Ethereum: its tokens and DEXes, kept for the next visit', async ({ page }) => {
