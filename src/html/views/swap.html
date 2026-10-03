@@ -229,7 +229,10 @@
                 <section class="detail-section p-4 sm:p-5 flex flex-col">
                     <div class="flex flex-wrap items-baseline justify-between gap-2">
                         <h3 class="text-base font-semibold text-white">Liquidity</h3>
-                        <p id="liquidity-depth-legend" class="text-xs text-gray-300"></p>
+                        <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
+                            <p id="liquidity-depth-legend" class="text-xs text-gray-300"></p>
+                            <span id="liquidity-zoom" class="inline-flex items-center gap-1 text-xs text-gray-300"></span>
+                        </div>
                     </div>
                     <div id="liquidity-depth" class="relative h-64 sm:h-80 mt-3"></div>
                 </section>

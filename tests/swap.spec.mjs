@@ -350,6 +350,12 @@ test('the Liquidity tab shows the pool, and the wallet\'s v4 positions with thei
     });
     expect(Number(tooltip.label[0].replace('Total DATA ', '').replace(/\s/g, ''))).toBeCloseTo(tooltip.data, -1);
     expect(tooltip.label[1]).toMatch(/^Average price \$0\.00025\d\d$/);
+    // Wider levels: a wider range of prices, still 25 levels each way
+    const lowest = () => page.evaluate(() => window.Chart.getChart(document.querySelector('#liquidity-depth canvas')).data.datasets[0].levels[0].lo);
+    const before = await lowest();
+    await page.click('#liquidity-zoom [data-depth-step="1"]');
+    await expect(page.locator('#liquidity-zoom')).toContainText('4%');
+    expect(await lowest()).toBeLessThan(before * 0.7);
     // The Swap tab: the form, the market and the swaps
     await page.click('#market-tabs [data-market-tab="swap"]');
     await expect(page.locator('#market-swap-grid')).toBeVisible();

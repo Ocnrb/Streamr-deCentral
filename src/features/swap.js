@@ -17,7 +17,7 @@ import * as Services from '../core/services.js';
 import { DATA_TOKEN_ADDRESS_POLYGON, DATA_TOKEN_ADDRESS_ETHEREUM, POLYGONSCAN_NETWORK, getEtherscanApiKey } from '../core/constants.js';
 import { getEthereumSigner, restorePolygon } from '../core/ethWallet.js';
 import { SwapMarket, getEthProvider, chainChip, formatPrice, formatUsd, formatData } from './swapMarket.js';
-import { SwapBook } from './swapBook.js';
+import { SwapBook, poolLevels, ZOOM_BUTTON } from './swapBook.js';
 import { Liquidity, LIQUIDITY_POOLS } from './liquidity.js';
 import { ethers } from 'ethers';
 import Chart from 'chart.js/auto';
@@ -232,6 +232,7 @@ const POLYGON = NETWORKS[137];
 const state = {
     active: false,
     tab: 'swap',             // the market's tab: 'swap' or 'liquidity'
+    depthStep: 1,            // the Liquidity chart's level size (index in DEPTH_STEPS)
     address: null,
     chain: 137,              // the chain of the swap (137 Polygon, 1 Ethereum)
     counter: 'USDC',         // the token traded against DATA
@@ -974,6 +975,7 @@ function renderTab() {
 }
 
 let depthChart = null;
+const DEPTH_STEPS = [0.01, 0.02, 0.04, 0.08, 0.16];   // 25 levels each way: x1.28 up to x41
 
 /** The pool's liquidity by price in bars (bids green, asks red), the price between them, the wallet's ranges shaded behind */
 function renderDepth(depth, ranges) {
@@ -985,13 +987,24 @@ function renderDepth(depth, ranges) {
         container.innerHTML = `<div class="flex items-center justify-center h-full text-sm text-gray-300">${Liquidity.loading() ? 'Reading the pool...' : 'The pool could not be read.'}</div>`;
         return;
     }
-    const colors = depth.levels.map(l => (l.side === 'bid' ? 'rgba(34, 197, 94, 0.5)' : 'rgba(239, 68, 68, 0.5)'));
+    const step = DEPTH_STEPS[state.depthStep];
+    const levels = poolLevels(depth, step);
+    const colors = levels.map(l => (l.side === 'bid' ? 'rgba(34, 197, 94, 0.5)' : 'rgba(239, 68, 68, 0.5)'));
     const data = {
-        labels: depth.levels.map(l => formatPrice(Math.sqrt(l.lo * l.hi))),
-        datasets: [{ data: depth.levels.map(l => l.usd), backgroundColor: colors, borderWidth: 0, barPercentage: 1, categoryPercentage: 0.9, levels: depth.levels, ranges }]
+        labels: levels.map(l => formatPrice(Math.sqrt(l.lo * l.hi))),
+        datasets: [{ data: levels.map(l => l.usd), backgroundColor: colors, borderWidth: 0, barPercentage: 1, categoryPercentage: 0.9, levels, ranges }]
     };
     const legend = $('liquidity-depth-legend');
-    if (legend) legend.textContent = `Levels of 2% around ${formatPrice(depth.price)}${ranges.length ? ' · your ranges shaded in blue' : ''}`;
+    if (legend) legend.textContent = `Around ${formatPrice(depth.price)}${ranges.length ? ' · your ranges shaded in blue' : ''}`;
+    // Wider levels show a wider range of prices
+    const zoom = $('liquidity-zoom');
+    if (zoom) {
+        zoom.innerHTML = `
+            <span class="mr-1 text-gray-400">Levels</span>
+            <button type="button" data-depth-step="-1" class="${ZOOM_BUTTON}" aria-label="Narrower levels" ${state.depthStep === 0 ? 'disabled' : ''}><svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="M5 12h14"/></svg></button>
+            <span class="w-8 text-center tabular-nums">${step * 100}%</span>
+            <button type="button" data-depth-step="1" class="${ZOOM_BUTTON}" aria-label="Wider levels" ${state.depthStep === DEPTH_STEPS.length - 1 ? 'disabled' : ''}><svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="M5 12h14"/><path d="M12 5v14"/></svg></button>`;
+    }
     if (depthChart && container.querySelector('canvas')) {
         depthChart.data = data;
         depthChart.update('none');
@@ -2283,6 +2296,12 @@ function setupListeners() {
         if (btn) setChain(Number(btn.dataset.chain));
     });
     $('liquidity-refresh')?.addEventListener('click', () => Liquidity.refresh(state.address));
+    $('liquidity-zoom')?.addEventListener('click', (e) => {
+        const btn = e.target.closest('[data-depth-step]');
+        if (!btn) return;
+        state.depthStep = Math.min(DEPTH_STEPS.length - 1, Math.max(0, state.depthStep + Number(btn.dataset.depthStep)));
+        renderPositions();
+    });
     Liquidity.onChange(renderPositions);
     SwapMarket.onChange(() => { if (state.tab === 'liquidity') renderPositions(); });
     $('swap-chain')?.addEventListener('click', (e) => {
