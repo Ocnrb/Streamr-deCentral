@@ -19,6 +19,7 @@ import { getEthereumSigner, restorePolygon } from '../core/ethWallet.js';
 import { SwapMarket, getEthProvider, chainChip, formatPrice, formatUsd, formatData } from './swapMarket.js';
 import { SwapBook, poolLevels, ZOOM_BUTTON } from './swapBook.js';
 import { Liquidity, LIQUIDITY_POOLS } from './liquidity.js';
+import { LiquidityManage } from './liquidityManage.js';
 import { ethers } from 'ethers';
 import Chart from 'chart.js/auto';
 
@@ -951,11 +952,36 @@ function renderChain() {
 // Liquidity tab
 // ============================================
 
-const POSITION_BADGES = {
-    in: ['In range', 'bg-green-500/15 text-green-400'],
-    out: ['Out of range', 'bg-amber-500/15 text-amber-300'],
-    closed: ['Closed', 'bg-gray-500/15 text-gray-300']
+/** A position's status: its label and the color of its dot */
+const POSITION_STATUS = {
+    in: ['In range', 'bg-green-400'],
+    out: ['Out of range', 'bg-amber-300'],
+    closed: ['Closed', 'bg-gray-400']
 };
+
+/**
+ * A position's tokens as a bar: DATA (orange) on the left, USDC (blue) on the right, each by its share of the value,
+ * and their shares below. In range a green dot on the bar where they meet; out of range a yellow dot at the bar's end
+ * on the price's side (left: the price fell below, all DATA; right: it rose above, all USDC).
+ */
+function distributionCell(p, { wide = false } = {}) {
+    if (p.closed || !(p.value > 0)) return '<div class="text-center text-gray-400">--</div>';
+    const share = Math.min(100, Math.max(0, (p.value - p.usdc) / p.value * 100));
+    const below = !p.inRange && p.price < p.min;
+    const [at, dot] = p.inRange ? [share, 'bg-green-400'] : [below ? 0 : 100, 'bg-amber-300'];
+    const pct = (value) => `${value > 0 && value < 1 ? '<1' : value > 99 && value < 100 ? '>99' : Math.round(value)}%`;
+    return `
+        <div class="${wide ? 'w-full' : 'w-28 mx-auto'}">
+            <div class="relative h-1.5">
+                <div class="flex h-full rounded-full overflow-hidden bg-[#2C2C2C] gap-px">
+                    ${share > 0 ? `<div class="bg-orange-500" style="width: ${share.toFixed(1)}%"></div>` : ''}
+                    ${share < 100 ? '<div class="flex-1 bg-blue-500"></div>' : ''}
+                </div>
+                <span class="absolute top-1/2 w-2.5 h-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full ${dot} ring-2 ring-[#1E1E1E]" style="left: ${at.toFixed(1)}%"></span>
+            </div>
+            <div class="mt-1.5 flex justify-between text-[11px] text-gray-300 tabular-nums whitespace-nowrap"><span>DATA ${pct(share)}</span><span>${pct(100 - share)} USDC</span></div>
+        </div>`;
+}
 
 /** The tab's card and list shown, its link underlined */
 function renderTab() {
@@ -1019,7 +1045,8 @@ function renderDepth(depth, ranges) {
         return;
     }
     depthChart?.destroy();
-    container.innerHTML = '<canvas aria-label="Liquidity of the pool by price" role="img"></canvas>';
+    // Absolute: the card sets the chart's height, not the other way round (it shrinks with the window)
+    container.innerHTML = '<canvas class="absolute inset-0" aria-label="Liquidity of the pool by price" role="img"></canvas>';
     // The wallet's ranges: a band behind the bars, from the x of each end (between the bars of its levels)
     const rangeBands = {
         id: 'liquidityRanges',
@@ -1040,12 +1067,14 @@ function renderDepth(depth, ranges) {
             chart.$bands = [];
             for (const r of shown) {
                 const [x0, x1] = [xAt(r.min), xAt(r.max)];
-                chart.$bands.push({ tokenId: r.tokenId, x0, x1 });
-                const hovered = r.tokenId === state.hoverPosition;
-                ctx.fillStyle = hovered ? 'rgba(255, 255, 255, 0.16)' : 'rgba(255, 255, 255, 0.07)';
+                if (!r.draft) chart.$bands.push({ tokenId: r.tokenId, x0, x1 });
+                // The new position's range: dashed edges
+                const strong = r.draft || r.tokenId === state.hoverPosition;
+                ctx.fillStyle = strong ? 'rgba(255, 255, 255, 0.16)' : 'rgba(255, 255, 255, 0.07)';
                 ctx.fillRect(x0, chartArea.top, x1 - x0, chartArea.bottom - chartArea.top);
-                ctx.strokeStyle = hovered ? 'rgba(255, 255, 255, 1)' : 'rgba(255, 255, 255, 0.6)';
-                ctx.lineWidth = hovered ? 2.5 : 1.5;
+                ctx.strokeStyle = strong ? 'rgba(255, 255, 255, 1)' : 'rgba(255, 255, 255, 0.6)';
+                ctx.lineWidth = strong ? 2 : 1.5;
+                ctx.setLineDash(r.draft ? [6, 4] : []);
                 ctx.beginPath();
                 ctx.moveTo(x0, chartArea.top);
                 ctx.lineTo(x0, chartArea.bottom);
@@ -1124,11 +1153,48 @@ function renderDepth(depth, ranges) {
     });
 }
 
+/**
+ * Side by side: the chart as tall as the pool's numbers, kept so while the new position's form (taller, growing with
+ * its steps) takes their place; stacked: its own height
+ */
+function lockDepthHeight() {
+    const chart = $('liquidity-depth')?.closest('section');
+    const overview = $('liquidity-overview');
+    const card = overview?.closest('section');
+    if (!chart || !card) return;
+    if (!window.matchMedia('(min-width: 1024px)').matches) {
+        chart.style.height = '';
+        return;
+    }
+    if (!overview.classList.contains('hidden') && card.offsetHeight > 0) chart.style.height = `${card.offsetHeight}px`;
+}
+
+/** A new range: the chart's levels widened or narrowed to show it whole (25 levels each way reach x(1 + step)^25) */
+let shownDraft = null;
+function fitDraft() {
+    const draft = LiquidityManage.draft(state.chain);
+    const key = draft ? `${state.chain}:${draft.min}:${draft.max}` : null;
+    const price = Liquidity.depth(state.chain)?.price;
+    if (!draft || key === shownDraft || !price) {
+        shownDraft = key;
+        return;
+    }
+    shownDraft = key;
+    const reach = Math.max(price / Math.max(draft.min, Number.MIN_VALUE), draft.max / price) * 1.05;
+    const fits = DEPTH_STEPS.findIndex(step => (1 + step) ** 25 >= reach);
+    state.depthStep = fits < 0 ? DEPTH_STEPS.length - 1 : fits;
+}
+
+/** The ranges on the chain's chart: the wallet's open positions, and the new position's while it is being made */
+function depthRanges() {
+    const ranges = (Liquidity.positions() || []).filter(p => p.chain === state.chain && !p.closed).map(p => ({ tokenId: p.tokenId, min: p.min, max: p.max }));
+    const draft = LiquidityManage.draft(state.chain);
+    return draft ? [...ranges, { tokenId: 'new', draft: true, ...draft }] : ranges;
+}
+
 /** The Liquidity tab: the chain's pool (tags, numbers, liquidity by price), the wallet's liquidity and its positions */
 function renderPositions() {
     const pool = LIQUIDITY_POOLS[state.chain];
-    const link = $('liquidity-pool-link');
-    if (link) link.href = pool.url;
     const logos = $('liquidity-pool-logos');
     if (logos && !logos.innerHTML) logos.innerHTML = [ICONS.DATA, ICONS.USDC].map(icon => icon.replace('w-7 h-7', 'w-10 h-10 ring-2 ring-[#1E1E1E] rounded-full')).join('');
     const tags = $('liquidity-pool-tags');
@@ -1171,32 +1237,69 @@ function renderPositions() {
             row('Uncollected fees', yours ?? formatUsd(sum('feeValue')))
         ].join('');
     }
-    if (state.tab === 'liquidity') renderDepth(depth, mine.filter(p => !p.closed).map(p => ({ tokenId: p.tokenId, min: p.min, max: p.max })));
+    if (state.tab === 'liquidity') renderDepth(depth, depthRanges());
 
     const body = $('liquidity-positions');
+    const cards = $('liquidity-position-cards');
     if (body) {
-        const empty = (text) => `<tr><td colspan="8" class="py-4 text-sm text-gray-300">${text}</td></tr>`;
+        const empty = (text) => `<tr><td colspan="9" class="py-4 text-sm text-gray-300">${text}</td></tr>`;
         const errors = Liquidity.errors();
-        if (!state.address) body.innerHTML = empty('Connect a wallet to see your liquidity positions.');
-        else if (positions === null) body.innerHTML = empty('Reading your positions...');
-        else if (!positions.length) body.innerHTML = empty(errors.length ? `Your positions on ${errors.join(' and ')} could not be read. Try again in a moment.` : 'No positions in the DATA/USDC pools on Uniswap v4.');
-        else {
-            body.innerHTML = [...positions].sort((a, b) => b.chain - a.chain || Number(b.tokenId) - Number(a.tokenId)).map(p => {
-                const [label, badge] = POSITION_BADGES[p.closed ? 'closed' : p.inRange ? 'in' : 'out'];
-                const fees = `${formatData(p.feeData)} DATA and ${p.feeUsdc.toFixed(2)} USDC`;
+        const message = !state.address ? 'Connect a wallet to see your liquidity positions.'
+            : positions === null ? 'Reading your positions...'
+            : !positions.length ? (errors.length ? `Your positions on ${errors.join(' and ')} could not be read. Try again in a moment.` : 'No positions in the DATA/USDC pools on Uniswap v4.')
+            : null;
+        if (message) {
+            body.innerHTML = empty(message);
+            if (cards) cards.innerHTML = `<p class="py-1 text-sm text-gray-300">${message}</p>`;
+        } else {
+            const sorted = [...positions].sort((a, b) => b.chain - a.chain || Number(b.tokenId) - Number(a.tokenId));
+            const view = (p) => {
+                const [label, dot] = POSITION_STATUS[p.closed ? 'closed' : p.inRange ? 'in' : 'out'];
+                return {
+                    fees: `${formatData(p.feeData)} DATA and ${p.feeUsdc.toFixed(2)} USDC`,
+                    link: `<a href="${p.url}" target="_blank" rel="noopener noreferrer" class="text-blue-400 hover:text-blue-300">#${Utils.escapeHtml(p.tokenId)}</a>`,
+                    range: `<span class="inline-flex items-center gap-2 text-gray-200"><span class="w-2 h-2 rounded-full flex-shrink-0 ${dot}" aria-hidden="true"></span><span class="sr-only">${label}</span>${formatPrice(p.min)} – ${formatPrice(p.max)}</span>`,
+                    manage: `<button type="button" data-manage-position="${Utils.escapeHtml(p.tokenId)}" data-chain="${p.chain}" class="px-3 py-1 rounded-lg bg-[#2C2C2C] hover:bg-[#3A3A3A] text-xs font-semibold text-white transition-colors">Manage</button>`
+                };
+            };
+            body.innerHTML = sorted.map(p => {
+                const v = view(p);
                 const hovered = p.tokenId === state.hoverPosition ? ' bg-white/5' : '';
                 return `
                 <tr data-position="${Utils.escapeHtml(p.tokenId)}" class="border-b border-[#2a2a2a] last:border-0 transition-colors${hovered}">
-                    <td class="py-3 pr-3 whitespace-nowrap"><a href="${p.url}" target="_blank" rel="noopener noreferrer" class="text-blue-400 hover:text-blue-300">#${Utils.escapeHtml(p.tokenId)}</a></td>
+                    <td class="py-3 pr-3 whitespace-nowrap">${v.link}</td>
                     <td class="py-3 pr-3 text-center whitespace-nowrap">${chainChip(p.chain, { named: true })}</td>
-                    <td class="py-3 pr-3 text-center whitespace-nowrap text-gray-200">${formatPrice(p.min)} – ${formatPrice(p.max)}</td>
-                    <td class="py-3 pr-3 text-center"><span class="px-2 py-0.5 rounded-full text-[11px] font-semibold whitespace-nowrap ${badge}">${label}</span></td>
+                    <td class="py-3 pr-3 whitespace-nowrap">${v.range}</td>
+                    <td class="py-3 pr-3">${distributionCell(p)}</td>
                     <td class="py-3 pr-3 text-right whitespace-nowrap text-gray-200">${formatData(p.data)}</td>
                     <td class="py-3 pr-3 text-right whitespace-nowrap text-gray-200">${Utils.formatBigNumber(p.usdc.toFixed(2))}</td>
                     <td class="py-3 pr-3 text-right whitespace-nowrap text-white font-medium">${formatUsd(p.value)}</td>
-                    <td class="py-3 text-right whitespace-nowrap text-gray-200" data-tooltip-content="${fees}">${formatUsd(p.feeValue)}</td>
+                    <td class="py-3 pr-3 text-right whitespace-nowrap text-gray-200" data-tooltip-content="${v.fees}">${formatUsd(p.feeValue)}</td>
+                    <td class="py-3 text-right">${v.manage}</td>
                 </tr>`;
             }).join('');
+            // Small screens: a card per position (the table needs scrolling there)
+            if (cards) {
+                const cell = (label, value, tip = '') => `<div><dt class="text-xs text-gray-300">${label}</dt><dd class="mt-0.5 text-white font-medium"${tip ? ` data-tooltip-content="${tip}"` : ''}>${value}</dd></div>`;
+                cards.innerHTML = sorted.map(p => {
+                    const v = view(p);
+                    return `
+                    <article class="p-3 bg-[#121212] border border-[#333] rounded-lg space-y-3">
+                        <div class="flex items-center justify-between gap-3">
+                            <span class="flex items-center gap-2">${v.link}${chainChip(p.chain, { named: true })}</span>
+                            ${v.manage}
+                        </div>
+                        <div class="text-sm">${v.range}</div>
+                        ${distributionCell(p, { wide: true })}
+                        <dl class="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+                            ${cell('DATA', formatData(p.data))}
+                            ${cell('USDC', Utils.formatBigNumber(p.usdc.toFixed(2)))}
+                            ${cell('Value', formatUsd(p.value))}
+                            ${cell('Uncollected fees', formatUsd(p.feeValue), v.fees)}
+                        </dl>
+                    </article>`;
+                }).join('');
+            }
         }
     }
 }
@@ -1216,6 +1319,7 @@ function setChain(chain) {
     state.quoteChecked = null;
     showError('');
     renderChain();
+    LiquidityManage.chainChanged();
     // The market and its liquidity book follow the form's chain (not the other way round)
     SwapMarket.setFilter(marketFilter());
     renderTokens();
@@ -2317,7 +2421,7 @@ function setupListeners() {
         const btn = e.target.closest('button[data-chain]');
         if (btn) setChain(Number(btn.dataset.chain));
     });
-    $('liquidity-refresh')?.addEventListener('click', () => Liquidity.refresh(state.address));
+    $('liquidity-refresh')?.addEventListener('click', () => withSpinner('liquidity-refresh', Liquidity.refresh(state.address)));
     $('liquidity-positions')?.addEventListener('mouseover', (e) => hoverPosition(e.target.closest('tr[data-position]')?.dataset.position ?? null));
     $('liquidity-positions')?.addEventListener('mouseleave', () => hoverPosition(null));
     $('liquidity-zoom')?.addEventListener('click', (e) => {
@@ -2327,6 +2431,23 @@ function setupListeners() {
         renderPositions();
     });
     Liquidity.onChange(renderPositions);
+    const statsCard = $('liquidity-overview')?.closest('section');
+    if (statsCard && window.ResizeObserver) new ResizeObserver(lockDepthHeight).observe(statsCard);
+    window.addEventListener('resize', lockDepthHeight);
+    $('market-positions-section')?.addEventListener('click', (e) => {
+        const btn = e.target.closest('button[data-manage-position]');
+        if (btn) LiquidityManage.openManage(btn.dataset.managePosition, Number(btn.dataset.chain));
+    });
+    LiquidityManage.init({
+        chain: () => state.chain,
+        address: () => state.address,
+        icons: ICONS,
+        onDraft: () => {
+            if (state.tab !== 'liquidity') return;
+            fitDraft();
+            renderDepth(Liquidity.depth(state.chain), depthRanges());
+        }
+    });
     SwapMarket.onChange(() => { if (state.tab === 'liquidity') renderPositions(); });
     $('swap-chain')?.addEventListener('click', (e) => {
         const btn = e.target.closest('button[data-chain]');

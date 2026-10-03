@@ -53,8 +53,11 @@ const IFACES = {
         'function ownerOf(uint256 id) view returns (address)',
         'function getPoolAndPositionInfo(uint256 tokenId) view returns ((address currency0, address currency1, uint24 fee, int24 tickSpacing, address hooks) poolKey, uint256 info)',
         'function getPositionLiquidity(uint256 tokenId) view returns (uint128)'
-    ])
+    ]),
+    erc20: new ethers.utils.Interface(['function balanceOf(address) view returns (uint256)', 'function allowance(address owner, address spender) view returns (uint256)']),
+    permit2: new ethers.utils.Interface(['function allowance(address owner, address token, address spender) view returns (uint160 amount, uint48 expiration, uint48 nonce)'])
 };
+const PERMIT2 = '0x000000000022D473030F116dDEE9F6B43aC78BA3';
 
 const word = (value) => `0x${BigInt.asUintN(256, BigInt(value)).toString(16).padStart(64, '0')}`;
 const toSigned = (value, bits) => BigInt.asIntN(bits, value);
@@ -164,11 +167,42 @@ async function readPositions(pool, address) {
         const [feeData, feeUsdc] = pool.dataIs0 ? [fees0 / 1e18, fees1 / 1e6] : [fees1 / 1e18, fees0 / 1e6];
         const [min, max] = [usdAtSqrt(pool, sqrtAtTick(f.lower)), usdAtSqrt(pool, sqrtAtTick(f.upper))].sort((a, b) => a - b);
         return {
-            chain: pool.chain, tokenId: f.tokenId, min, max, inRange: tick >= f.lower && tick < f.upper, closed: f.liquidity === 0n,
+            chain: pool.chain, tokenId: f.tokenId, lower: f.lower, upper: f.upper, liquidity: f.liquidity, min, max, price, inRange: tick >= f.lower && tick < f.upper, closed: f.liquidity === 0n,
             data, usdc, value: data * price + usdc, feeData, feeUsdc, feeValue: feeData * price + feeUsdc,
             url: `https://app.uniswap.org/positions/v4/${pool.slug}/${f.tokenId}`
         };
     });
+}
+
+/** The pool's √price (raw, token1 per token0) and tick now */
+export async function readPoolState(pool) {
+    const [slot0] = await multicall(pool.chain, [load(pool, pool.stateSlot)]);
+    if (!slot0) throw new Error(`${pool.name} pool not read`);
+    const word0 = BigInt(slot0[0]);
+    return { sqrtP: Number(word0 & ((1n << 160n) - 1n)) / 2 ** 96, tick: Number(toSigned((word0 >> 160n) & 0xffffffn, 24)) };
+}
+
+/**
+ * The wallet's DATA and USDC for deposits: balances as { data, usdc }, and per token0 / token1 the allowance to Permit2
+ * and Permit2's allowance to the PositionManager ({ amount, expiration, nonce })
+ */
+export async function readWallet(pool, address) {
+    const tokens = pool.dataIs0 ? [pool.data, pool.usdc] : [pool.usdc, pool.data];
+    const calls = tokens.flatMap(token => [
+        { target: token, iface: IFACES.erc20, fn: 'balanceOf', args: [address] },
+        { target: token, iface: IFACES.erc20, fn: 'allowance', args: [address, PERMIT2] },
+        { target: PERMIT2, iface: IFACES.permit2, fn: 'allowance', args: [address, token, pool.positions] }
+    ]);
+    const r = await multicall(pool.chain, calls);
+    if (r.some(x => !x)) throw new Error(`${pool.name} wallet not read`);
+    const big = (x) => BigInt(x.toString());
+    const balances = [big(r[0][0]), big(r[3][0])];
+    const [data, usdc] = pool.dataIs0 ? balances : [balances[1], balances[0]];
+    return {
+        data, usdc,
+        toPermit2: [big(r[1][0]), big(r[4][0])],
+        permits: [r[2], r[5]].map(x => ({ amount: big(x.amount), expiration: Number(x.expiration), nonce: Number(x.nonce) }))
+    };
 }
 
 const state = {
