@@ -188,11 +188,11 @@ const polygonRead = (readFn) => Services.readWithFallback(() => readFn(Services.
 
 /**
  * DATA is issued on Ethereum; the DATA on another chain is held by that chain's bridge contract on Ethereum. Each
- * chain's share: its bridge's balance; Ethereum's: the rest of the supply. Colors checked for color vision deficiency
- * on the card's surface (Ethereum blue, Polygon magenta: Polygon's own purple is too close to the blue)
+ * chain's share: its bridge's balance; Ethereum's: the rest of the supply. Colors near each chain's brand (Ethereum
+ * #627EEA, Polygon #8247E5), stepped apart so they pass the color vision deficiency checks on the page's surface
  */
 const SUPPLY_BRIDGES = [
-    { chain: 'Polygon', escrow: ERC20_PREDICATE, color: '#d55181', icon: () => CHAINS[POLYGON_CHAIN_ID].icon },
+    { chain: 'Polygon', escrow: ERC20_PREDICATE, color: '#7B3FE4', icon: () => CHAINS[POLYGON_CHAIN_ID].icon },
     { chain: 'Gnosis', escrow: '0x88ad09518695c6c3712AC10a214bE5109a655671', color: '#1baf7a', icon: () => '' }   // OmniBridge, shown when it holds DATA
 ];
 const SUPPLY_TTL_MS = 10 * 60 * 1000;
@@ -213,7 +213,7 @@ async function loadSupply() {
         state.supply = {
             at: Date.now(),
             total: toData(total),
-            chains: [{ chain: 'Ethereum', color: '#627EEA', icon: () => CHAINS[ETH_CHAIN_ID].icon, amount: toData(total) - bridged }, ...chains]
+            chains: [{ chain: 'Ethereum', color: '#6F86E8', icon: () => CHAINS[ETH_CHAIN_ID].icon, amount: toData(total) - bridged }, ...chains]
         };
     } catch (e) {
         logger.warn('Bridge: supply not read', e);
