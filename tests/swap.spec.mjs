@@ -341,6 +341,15 @@ test('the Liquidity tab shows the pool, and the wallet\'s v4 positions with thei
     expect(dataset.colors.filter(c => c.startsWith('rgba(34, 197, 94')).length).toBe(25);
     expect(dataset.ranges).toHaveLength(1);
     expect(dataset.ranges[0].min).toBeCloseTo(0.00023518, 7);
+    // A bar's tooltip sums the levels from the price to it (as the Depth): the second ask holds the first two
+    const tooltip = await page.evaluate(() => {
+        const chart = window.Chart.getChart(document.querySelector('#liquidity-depth canvas'));
+        const d = chart.data.datasets[0];
+        const k = d.levels.findIndex(l => l.side === 'ask') + 1;
+        return { label: chart.options.plugins.tooltip.callbacks.label({ dataset: d, dataIndex: k }), data: d.levels[k - 1].data + d.levels[k].data };
+    });
+    expect(Number(tooltip.label[0].replace('Total DATA ', '').replace(/\s/g, ''))).toBeCloseTo(tooltip.data, -1);
+    expect(tooltip.label[1]).toMatch(/^Average price \$0\.00025\d\d$/);
     // The Swap tab: the form, the market and the swaps
     await page.click('#market-tabs [data-market-tab="swap"]');
     await expect(page.locator('#market-swap-grid')).toBeVisible();

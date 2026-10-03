@@ -1065,14 +1065,19 @@ function renderDepth(depth, ranges) {
                 legend: { display: false },
                 tooltip: {
                     displayColors: false,
+                    // As the Depth's: from the price to this level, the DATA of a swap that far and its average price
                     callbacks: {
                         title: (items) => {
                             const l = items[0].dataset.levels[items[0].dataIndex];
                             return `${formatPrice(l.lo)} – ${formatPrice(l.hi)}`;
                         },
                         label: (item) => {
-                            const l = item.dataset.levels[item.dataIndex];
-                            return `${formatData(l.data)} DATA · ${formatUsd(l.usd)}`;
+                            const levels = item.dataset.levels;
+                            const l = levels[item.dataIndex];
+                            const path = levels.filter(x => x.side === l.side && (l.side === 'ask' ? x.hi <= l.hi : x.lo >= l.lo));
+                            const data = path.reduce((sum, x) => sum + x.data, 0);
+                            const usd = path.reduce((sum, x) => sum + x.usd, 0);
+                            return [`Total DATA ${formatData(data)}`, `Average price ${formatPrice(data > 0 ? usd / data : l.lo)}`];
                         }
                     }
                 }
