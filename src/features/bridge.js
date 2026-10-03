@@ -15,6 +15,7 @@ import * as UI from '../ui/ui.js';
 import * as Services from '../core/services.js';
 import { DATA_TOKEN_ADDRESS_POLYGON, POLYGONSCAN_NETWORK, getEtherscanApiKey, ETHEREUM_RPC_URLS } from '../core/constants.js';
 import { ethers } from 'ethers';
+import Chart from 'chart.js/auto';
 
 const { logger } = Utils;
 
@@ -90,6 +91,7 @@ const CHAINS = {
 const state = {
     active: false,
     direction: 'deposit',    // 'deposit' (Ethereum -> Polygon) | 'withdraw' (Polygon -> Ethereum)
+    supply: null,            // DATA's supply by chain: { at, total, chains } or { error }
     address: null,           // connected wallet (lowercase)
     balances: { ethData: null, polygonData: null, eth: null, pol: null },
     transfers: [],
@@ -180,6 +182,111 @@ async function ethRead(readFn) {
 }
 
 const polygonRead = (readFn) => Services.readWithFallback(() => readFn(Services.getReadOnlyProvider()));
+
+// ============================================
+// DATA's supply by chain
+// ============================================
+
+/**
+ * DATA is issued on Ethereum; the DATA on another chain is held by that chain's bridge contract on Ethereum. Each
+ * chain's share: its bridge's balance; Ethereum's: the rest of the supply. Colors checked for color vision deficiency
+ * on the card's surface (Ethereum blue, Polygon magenta: Polygon's own purple is too close to the blue)
+ */
+const SUPPLY_BRIDGES = [
+    { chain: 'Polygon', escrow: ERC20_PREDICATE, color: '#d55181', icon: () => CHAINS[POLYGON_CHAIN_ID].icon },
+    { chain: 'Gnosis', escrow: '0x88ad09518695c6c3712AC10a214bE5109a655671', color: '#1baf7a', icon: () => '' }   // OmniBridge, shown when it holds DATA
+];
+const SUPPLY_TTL_MS = 10 * 60 * 1000;
+const SUPPLY_ABI = ['function totalSupply() view returns (uint256)', 'function balanceOf(address) view returns (uint256)'];
+let supplyChart = null;
+
+/** The supply and each bridge's balance on Ethereum (read again after 10 minutes) */
+async function loadSupply() {
+    if (state.supply?.at && Date.now() - state.supply.at < SUPPLY_TTL_MS) return;
+    try {
+        const [total, ...held] = await ethRead(p => {
+            const data = new ethers.Contract(ETH_DATA, SUPPLY_ABI, p);
+            return Promise.all([data.totalSupply(), ...SUPPLY_BRIDGES.map(b => data.balanceOf(b.escrow))]);
+        });
+        const toData = (wei) => parseFloat(ethers.utils.formatEther(wei));
+        const chains = SUPPLY_BRIDGES.map((b, i) => ({ ...b, amount: toData(held[i]) })).filter(c => c.amount >= 1);
+        const bridged = chains.reduce((sum, c) => sum + c.amount, 0);
+        state.supply = {
+            at: Date.now(),
+            total: toData(total),
+            chains: [{ chain: 'Ethereum', color: '#627EEA', icon: () => CHAINS[ETH_CHAIN_ID].icon, amount: toData(total) - bridged }, ...chains]
+        };
+    } catch (e) {
+        logger.warn('Bridge: supply not read', e);
+        state.supply = { error: true };
+    }
+    renderSupply();
+}
+
+function renderSupply() {
+    const legend = $('bridge-supply-legend');
+    const container = $('bridge-supply-chart');
+    if (!legend || !container) return;
+    const supply = state.supply;
+    if (!supply?.chains) {
+        supplyChart?.destroy();
+        supplyChart = null;
+        container.innerHTML = '';
+        legend.innerHTML = `<li class="text-gray-300">${supply?.error ? 'The supply could not be read.' : 'Reading the supply...'}</li>`;
+        return;
+    }
+    const share = (amount) => (supply.total > 0 ? amount / supply.total * 100 : 0);
+    const pct = (amount) => `${share(amount) < 0.1 ? '<0.1' : share(amount).toFixed(1)}%`;
+    const whole = (amount) => Utils.formatBigNumber(Math.round(amount));
+    legend.innerHTML = `
+        ${supply.chains.map(c => `
+            <li class="flex items-center justify-between gap-6">
+                <span class="flex items-center gap-2 text-gray-200"><span class="w-2.5 h-2.5 rounded-sm flex-shrink-0" style="background: ${c.color}"></span>${c.icon().replace('w-5 h-5', 'w-4 h-4')}${c.chain}</span>
+                <span class="text-right"><span class="block text-white font-medium tabular-nums">${pct(c.amount)}</span><span class="block text-xs text-gray-300 tabular-nums">${whole(c.amount)} DATA</span></span>
+            </li>`).join('')}
+        <li class="flex items-center justify-between gap-6 pt-3 border-t border-[#2a2a2a]"><span class="text-gray-300">Total supply</span><span class="text-white font-medium tabular-nums">${whole(supply.total)} DATA</span></li>`;
+    const data = {
+        labels: supply.chains.map(c => c.chain),
+        datasets: [{ data: supply.chains.map(c => c.amount), backgroundColor: supply.chains.map(c => c.color), borderColor: '#1E1E1E', borderWidth: 2, hoverOffset: 4 }]
+    };
+    if (supplyChart && container.querySelector('canvas')) {
+        supplyChart.data = data;
+        supplyChart.update('none');
+        return;
+    }
+    supplyChart?.destroy();
+    container.innerHTML = '<canvas aria-label="DATA supply by chain" role="img"></canvas>';
+    const font = { family: "'Inter', sans-serif", size: 11 };
+    supplyChart = new Chart(container.querySelector('canvas').getContext('2d'), {
+        type: 'doughnut',
+        data,
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            animation: false,
+            cutout: '68%',
+            plugins: {
+                legend: { display: false },
+                // As the app's other charts
+                tooltip: {
+                    backgroundColor: 'rgba(30, 30, 30, 0.9)',
+                    titleColor: '#ffffff',
+                    bodyColor: '#d1d5db',
+                    borderColor: '#333333',
+                    borderWidth: 1,
+                    padding: 10,
+                    cornerRadius: 8,
+                    displayColors: false,
+                    titleFont: { ...font, size: 12, weight: '600' },
+                    bodyFont: { ...font, size: 13 },
+                    callbacks: {
+                        label: (item) => [`${whole(item.raw)} DATA`, pct(item.raw)]
+                    }
+                }
+            }
+        }
+    });
+}
 
 const usesPrivateKey = () => Boolean(window.appSigner?.privateKey);
 
@@ -1166,6 +1273,8 @@ export const BridgeLogic = {
         }
         renderDirection();
         renderTransfers();
+        renderSupply();
+        loadSupply();
         updateEstimate();
         if (state.address) {
             await refreshAll();

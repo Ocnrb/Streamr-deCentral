@@ -1,17 +1,11 @@
 <!-- Bridge: DATA between Ethereum and Polygon over the official Polygon PoS bridge -->
 <div id="bridge-view" class="hidden p-4 md:p-6">
     <div class="space-y-5">
-    <!-- Usual bridge times (Polygon docs: state sync ~7-8 min; checkpoints every ~10-30 min) -->
-    <div class="flex items-center gap-3 px-4 py-3 bg-yellow-500/10 border border-yellow-500/30 rounded-lg text-sm text-yellow-200" role="note">
-        <svg class="w-6 h-6 flex-shrink-0 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v3.75m0 3.75h.008M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/></svg>
-        <div class="space-y-0.5">
-            <p class="font-semibold text-yellow-300">Bridging is not instant</p>
-            <p><span class="text-white">Ethereum → Polygon:</span> about 7–8 minutes after the deposit confirms on Ethereum.</p>
-            <p><span class="text-white">Polygon → Ethereum:</span> the claim opens once a Polygon checkpoint reaches Ethereum, usually within an hour and at times up to about 3 hours.</p>
-        </div>
-    </div>
+        <!-- The transfer form and the bridge times, beside where DATA's supply is (as the Market page) -->
+        <div class="grid grid-cols-1 lg:grid-cols-[minmax(22rem,min(26%,30rem))_minmax(0,1fr)] xl:grid-cols-[minmax(24rem,min(26%,30rem))_minmax(0,1fr)] gap-5">
+        <div class="space-y-5 min-w-0">
         <!-- Transfer form -->
-        <section class="detail-section p-4 sm:p-5 space-y-4 w-full max-w-2xl mx-auto">
+        <section class="detail-section p-4 sm:p-5 space-y-4 w-full">
             <div>
                 <h2 class="text-lg font-semibold text-white">Bridge DATA</h2>
                 <p class="text-xs text-gray-300 mt-0.5 flex flex-wrap items-center gap-x-1">
@@ -85,6 +79,32 @@
 
             <button id="bridge-submit" type="button" class="w-full sm:w-auto sm:min-w-[280px] sm:mx-auto sm:px-8 bg-blue-800 hover:bg-blue-900 text-white font-bold py-3 px-4 rounded-lg transition-colors flex justify-center items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-blue-800">Bridge to Polygon</button>
         </section>
+            <!-- Usual bridge times (Polygon docs: state sync ~7-8 min; checkpoints every ~10-30 min) -->
+            <div class="flex items-center gap-3 px-4 py-3 bg-yellow-500/10 border border-yellow-500/30 rounded-lg text-sm text-yellow-200" role="note">
+                <svg class="w-6 h-6 flex-shrink-0 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v3.75m0 3.75h.008M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/></svg>
+                <div class="space-y-0.5">
+                    <p class="font-semibold text-yellow-300">Bridging is not instant</p>
+                    <p><span class="text-white">Ethereum → Polygon</span> about 7–8 minutes after the deposit confirms on Ethereum, sometimes up to 20 minutes.</p>
+                    <p><span class="text-white">Polygon → Ethereum</span> the claim opens once a Polygon checkpoint reaches Ethereum, usually within an hour and at times up to about 3 hours.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- DATA's supply by chain: the DATA on another chain is held by its bridge on Ethereum -->
+        <section id="bridge-supply-section" class="detail-section p-4 sm:p-5 flex flex-col min-w-0">
+            <div class="flex items-center gap-1.5">
+                <h3 class="text-base font-semibold text-white">DATA supply by chain</h3>
+                <button type="button" class="inline-flex text-gray-300 hover:text-white cursor-help" aria-label="About the supply"
+                    data-tooltip-content="DATA is issued on Ethereum. The DATA on another chain is held by its bridge contract on Ethereum, so each chain's share is that contract's balance and Ethereum keeps the rest.">
+                    <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+                </button>
+            </div>
+            <div class="flex-1 flex flex-col sm:flex-row items-center justify-center gap-6 sm:gap-10 py-4">
+                <div id="bridge-supply-chart" class="relative w-52 h-52 sm:w-60 sm:h-60 flex-shrink-0"></div>
+                <ul id="bridge-supply-legend" class="w-full sm:w-auto sm:min-w-[16rem] space-y-3 text-sm"></ul>
+            </div>
+        </section>
+        </div>
 
         <!-- Transfers of this wallet -->
         <section class="detail-section p-4 sm:p-5">
