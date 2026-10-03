@@ -187,33 +187,78 @@ const polygonRead = (readFn) => Services.readWithFallback(() => readFn(Services.
 // ============================================
 
 /**
- * DATA is issued on Ethereum; the DATA on another chain is held by that chain's bridge contract on Ethereum. Each
- * chain's share: its bridge's balance; Ethereum's: the rest of the supply. Each chain in its brand's color (as its
- * logo); the legend's logos, the slices' gaps and the tooltips tell them apart beyond color
+ * DATA's supply over every chain it is on. Each chain counts its token's total supply, in two parts: what its bridge
+ * holds locked on Ethereum (bridged from Ethereum), and the rest (issued on that chain, nothing locked for it).
+ * Ethereum counts its supply less what the bridges hold, so no DATA is counted twice. Each chain in its brand's color
+ * (as its logo), its parts in two shades; the legend's logos, the gaps and the tooltips tell them apart beyond color.
  */
-const SUPPLY_BRIDGES = [
-    { chain: 'Polygon', escrow: ERC20_PREDICATE, color: '#8247E5', icon: () => CHAINS[POLYGON_CHAIN_ID].icon },
-    { chain: 'Gnosis', escrow: '0x88ad09518695c6c3712AC10a214bE5109a655671', color: '#1baf7a', icon: () => '' }   // OmniBridge, shown when it holds DATA
+const GNOSIS_ICON = '<svg class="w-5 h-5 flex-shrink-0" viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="16" fill="#04795B"/><circle cx="11.5" cy="15" r="3.2" fill="none" stroke="#fff" stroke-width="2"/><circle cx="20.5" cy="15" r="3.2" fill="none" stroke="#fff" stroke-width="2"/><path d="M16 20.5l-2.2 2.8h4.4z" fill="#fff"/></svg>';
+const BNB_ICON = '<svg class="w-5 h-5 flex-shrink-0" viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="16" fill="#F0B90B"/><path fill="#fff" d="M16 7.5l2.6 2.6-6.1 6.1-2.6-2.6zm4.5 4.5l2.6 2.6-8.6 8.6-2.6-2.6zm-9 0l2.6 2.6-2.6 2.6-2.6-2.6zm9 4.5l2.6 2.6-6.1 6.1-2.6-2.6zm2.6-2l2.4 2.5-2.4 2.4-2.5-2.4z"/></svg>';
+const SUPPLY_CHAINS = [
+    {
+        chain: 'Polygon', color: '#8247E5', icon: () => CHAINS[POLYGON_CHAIN_ID].icon, token: DATA_TOKEN_ADDRESS_POLYGON,
+        read: (fn) => polygonRead(fn), locks: [ERC20_PREDICATE], bridge: 'Polygon PoS bridge'
+    },
+    {
+        chain: 'Gnosis', color: '#04795B', icon: () => GNOSIS_ICON, token: '0x256eb8a51f382650B2A1e946b8811953640ee47D',
+        rpcs: ['https://rpc.gnosischain.com', 'https://gnosis-rpc.publicnode.com'], id: 100,
+        locks: ['0x88ad09518695c6c3712AC10a214bE5109a655671'], bridge: 'OmniBridge'
+    },
+    {
+        chain: 'BNB Chain', color: '#F0B90B', icon: () => BNB_ICON, token: '0x0864c156b3c5f69824564dec60c629ae6401bf2a',
+        rpcs: ['https://bsc-dataseed.binance.org', 'https://bsc-rpc.publicnode.com'], id: 56, locks: []
+    }
 ];
 const SUPPLY_TTL_MS = 10 * 60 * 1000;
 const SUPPLY_ABI = ['function totalSupply() view returns (uint256)', 'function balanceOf(address) view returns (uint256)'];
-const SUPPLY_MIN_SHARE = 0.001;   // a chain under 0.1% of the supply is left out
+const chainProviders = new Map();
 
-/** The supply and each bridge's balance on Ethereum (read again after 10 minutes) */
+/** A chain's read: its own RPCs with failover (Polygon: the app's) */
+function chainRead(c, fn) {
+    if (c.read) return c.read(fn);
+    if (!chainProviders.has(c.id)) chainProviders.set(c.id, new Services.FailoverRpcProvider(c.rpcs, c.id, `supply_rpc_${c.id}`));
+    return fn(chainProviders.get(c.id));
+}
+
+/** A color mixed toward white (a chain's second part) */
+function lighter(hex, amount) {
+    const n = parseInt(hex.slice(1), 16);
+    return `#${[16, 8, 0].map(shift => Math.round(((n >> shift) & 255) + (255 - ((n >> shift) & 255)) * amount).toString(16).padStart(2, '0')).join('')}`;
+}
+
+/** The supply on Ethereum and every chain, with what the bridges hold (read again after 10 minutes) */
 async function loadSupply() {
     if (state.supply?.at && Date.now() - state.supply.at < SUPPLY_TTL_MS) return;
+    const toData = (wei) => parseFloat(ethers.utils.formatEther(wei));
     try {
-        const [total, ...held] = await ethRead(p => {
+        const [ethTotal, ...locked] = await ethRead(p => {
             const data = new ethers.Contract(ETH_DATA, SUPPLY_ABI, p);
-            return Promise.all([data.totalSupply(), ...SUPPLY_BRIDGES.map(b => data.balanceOf(b.escrow))]);
+            return Promise.all([data.totalSupply(), ...SUPPLY_CHAINS.flatMap(c => c.locks.map(escrow => data.balanceOf(escrow)))]);
         });
-        const toData = (wei) => parseFloat(ethers.utils.formatEther(wei));
-        const chains = SUPPLY_BRIDGES.map((b, i) => ({ ...b, amount: toData(held[i]) })).filter(c => c.amount >= toData(total) * SUPPLY_MIN_SHARE);
-        const bridged = chains.reduce((sum, c) => sum + c.amount, 0);
+        const supplies = await Promise.all(SUPPLY_CHAINS.map(c => chainRead(c, p => new ethers.Contract(c.token, SUPPLY_ABI, p).totalSupply()).then(toData, e => {
+            logger.warn(`Bridge: ${c.chain} supply not read`, e);
+            return null;
+        })));
+        let k = 0;
+        const chains = SUPPLY_CHAINS.map((c, i) => {
+            const lock = c.locks.reduce(sum => sum + toData(locked[k++]), 0);
+            const supply = supplies[i];
+            if (supply === null) return { ...c, lock, amount: null, parts: [] };
+            const bridged = Math.min(lock, supply);
+            const parts = [
+                { label: c.bridge ? `Via ${c.bridge}` : 'Bridged from Ethereum', amount: bridged, color: c.color },
+                { label: `Issued on ${c.chain}`, amount: supply - bridged, color: lighter(c.color, 0.45) }
+            ].filter(part => part.amount >= 1);
+            return { ...c, lock, amount: supply, parts };
+        });
+        // Ethereum: its supply less what the bridges of the chains read hold (an unread chain's stays in Ethereum's)
+        const ethereum = toData(ethTotal) - chains.reduce((sum, c) => sum + (c.amount === null ? 0 : c.lock), 0);
+        const all = [{ chain: 'Ethereum', color: '#627EEA', icon: () => CHAINS[ETH_CHAIN_ID].icon, amount: ethereum, parts: [{ label: 'Ethereum', amount: ethereum, color: '#627EEA' }] }, ...chains];
         state.supply = {
             at: Date.now(),
-            total: toData(total),
-            chains: [{ chain: 'Ethereum', color: '#627EEA', icon: () => CHAINS[ETH_CHAIN_ID].icon, amount: toData(total) - bridged }, ...chains]
+            total: all.reduce((sum, c) => sum + (c.amount || 0), 0),
+            chains: all.filter(c => c.amount === null || c.amount >= 1),
+            unread: chains.filter(c => c.amount === null).map(c => c.chain)
         };
     } catch (e) {
         logger.warn('Bridge: supply not read', e);
@@ -258,33 +303,54 @@ function renderSupply() {
     const share = (amount) => (supply.total > 0 ? amount / supply.total * 100 : 0);
     const pct = (amount) => `${share(amount) < 0.1 ? '<0.1' : share(amount).toFixed(1)}%`;
     const whole = (amount) => Utils.formatBigNumber(Math.round(amount));
+    // The ring's slices: each chain's parts in order, a chain's parts stand out together
+    const shown = supply.chains.filter(c => c.amount !== null);
+    const parts = shown.flatMap((c, i) => c.parts.map(part => ({ ...part, i, c })));
     legend.innerHTML = `
-        ${supply.chains.map((c, i) => `
-            <li data-slice="${i}" class="flex items-center justify-between gap-6 px-2 py-1 -mx-2 rounded-lg transition-colors cursor-default">
-                <span class="flex items-center gap-2 text-gray-200"><span class="w-2.5 h-2.5 rounded-sm flex-shrink-0" style="background: ${c.color}"></span>${c.icon().replace('w-5 h-5', 'w-4 h-4')}${c.chain}</span>
-                <span class="text-right"><span class="block text-white font-medium tabular-nums">${pct(c.amount)}</span><span class="block text-xs text-gray-300 tabular-nums">${whole(c.amount)} DATA</span></span>
-            </li>`).join('')}
+        ${supply.chains.map((c) => {
+            const i = shown.indexOf(c);
+            const head = `
+            <li${i >= 0 ? ` data-slice="${i}"` : ''} class="px-2 py-1 -mx-2 rounded-lg transition-colors cursor-default">
+                <div class="flex items-center justify-between gap-6">
+                    <span class="flex items-center gap-2 text-gray-200"><span class="w-2.5 h-2.5 rounded-sm flex-shrink-0" style="background: ${c.color}"></span>${c.icon().replace('w-5 h-5', 'w-4 h-4')}${c.chain}</span>
+                    <span class="text-right">${c.amount === null
+                        ? '<span class="block text-xs text-gray-400">Not read</span>'
+                        : `<span class="block text-white font-medium tabular-nums">${pct(c.amount)}</span><span class="block text-xs text-gray-300 tabular-nums">${whole(c.amount)} DATA</span>`}</span>
+                </div>
+                ${c.parts.length > 1 ? `<ul class="mt-1.5 ml-5 space-y-1">${c.parts.map(part => `
+                    <li class="flex items-center justify-between gap-4 text-xs text-gray-300"><span class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-sm flex-shrink-0" style="background: ${part.color}"></span>${part.label}</span><span class="tabular-nums whitespace-nowrap">${whole(part.amount)}</span></li>`).join('')}</ul>` : ''}
+            </li>`;
+            return head;
+        }).join('')}
         <li class="flex items-center justify-between gap-6 pt-3 border-t border-[#2a2a2a]"><span class="text-gray-300">Total supply</span><span class="text-white font-medium tabular-nums">${whole(supply.total)} DATA</span></li>`;
 
-    // The slices clockwise from the top, a hair apart; each pushed out along its middle when it stands out
+    // The slices clockwise from the top, a hair apart; each pushed out along its chain's middle when it stands out
     const GAP = 0.02;
     let start = 0;
-    const slices = supply.chains.map((c, i) => {
-        const sweep = supply.total > 0 ? c.amount / supply.total * 2 * Math.PI : 0;
+    const chainArc = new Map();
+    const slices = parts.map(part => {
+        const sweep = supply.total > 0 ? part.amount / supply.total * 2 * Math.PI : 0;
         const [a0, a1] = [start + GAP / 2, start + Math.max(GAP, sweep) - GAP / 2];
+        const arc = chainArc.get(part.i) || [start, start];
+        chainArc.set(part.i, [arc[0], start + sweep]);
         start += sweep;
+        return { ...part, d: ringSlice(a0, a1, 118, 74) };
+    });
+    slices.forEach(s => {
+        const [a0, a1] = chainArc.get(s.i);
         const mid = (a0 + a1) / 2;
-        return { i, c, d: ringSlice(a0, a1, 118, 74), dx: (10 * Math.sin(mid)).toFixed(1), dy: (-10 * Math.cos(mid)).toFixed(1) };
+        s.dx = (10 * Math.sin(mid)).toFixed(1);
+        s.dy = (-10 * Math.cos(mid)).toFixed(1);
     });
     const DEPTH = 14;   // the ring's thickness: layers 1 px apart, darker below the top
     const layer = (z, top) => `
         <svg viewBox="0 0 240 240" style="transform: translateZ(${z}px); pointer-events: none" aria-hidden="true">
-            ${slices.map(s => `<g data-slice="${s.i}" data-dx="${s.dx}" data-dy="${s.dy}"><path d="${s.d}" fill="${top ? s.c.color : darker(s.c.color, 0.55)}"/></g>`).join('')}
+            ${slices.map(s => `<g data-slice="${s.i}" data-dx="${s.dx}" data-dy="${s.dy}"><path d="${s.d}" fill="${top ? s.color : darker(s.color, 0.55)}"/></g>`).join('')}
         </svg>`;
     // The pointer's layer: the slices at rest, see-through, above the ring (a slice pushed out never slips from under it)
     const hits = `
         <svg viewBox="0 0 240 240" style="transform: translateZ(1px)">
-            ${slices.map(s => `<path data-slice-hit="${s.i}" d="${s.d}" fill="transparent" data-tooltip-content="<span class='font-semibold'>${s.c.chain}</span><br>${whole(s.c.amount)} DATA<br>${pct(s.c.amount)}"/>`).join('')}
+            ${slices.map(s => `<path data-slice-hit="${s.i}" d="${s.d}" fill="transparent" data-tooltip-content="<span class='font-semibold'>${s.c.chain}</span>${s.c.parts.length > 1 ? `<br>${s.label}` : ''}<br>${whole(s.amount)} DATA<br>${pct(s.amount)}"/>`).join('')}
         </svg>`;
     container.innerHTML = `
         <div class="supply-ring-shadow"></div>
