@@ -41,7 +41,7 @@
     <priority>0.5</priority>
   </url>
   <url>
-    <loc>https://streamr-decentral.vercel.app/swap</loc>
+    <loc>https://streamr-decentral.vercel.app/market</loc>
     <changefreq>monthly</changefreq>
     <priority>0.5</priority>
   </url>

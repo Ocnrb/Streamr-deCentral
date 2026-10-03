@@ -35,21 +35,21 @@ test('tablets have the compact sidebar, with the tooltips and no toggle', async 
     await expectWidth(page, 72);
     await expect(page.locator('#sidebar-compact-toggle')).toBeHidden();
     await page.hover('#app-sidebar .nav-link[data-nav="swap"]');
-    await expect(page.locator('#sidebar-tooltip')).toHaveText('Swap');
+    await expect(page.locator('#sidebar-tooltip')).toHaveText('Market');
 });
 
 const barLabels = (page) => page.locator('#bottom-nav .bottom-nav-item:visible > span:last-child');
 
 test('phones have the bottom bar, with the other pages under More', async ({ page }) => {
     await page.setViewportSize({ width: 320, height: 700 });
-    await expect(barLabels(page)).toHaveText(['Operator', 'Delegator', 'Overview', 'Streams', 'Swap', 'More']);
+    await expect(barLabels(page)).toHaveText(['Operator', 'Delegator', 'Overview', 'Streams', 'Market', 'More']);
     // The six fit the narrowest phones
     expect(await page.locator('#bottom-nav > div').evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
     await page.click('#bottom-nav-more');
     const menu = page.locator('#bottom-nav-more-menu');
     await expect(menu).toContainText('Autostaker');
     await expect(menu).toContainText('Settings');
-    await expect(menu).not.toContainText('Swap');
+    await expect(menu).not.toContainText('Market');
     await page.click('#bottom-nav-autostaker');
     await expect(menu).toBeHidden();
 });
@@ -59,7 +59,7 @@ test('a saved profile takes its list\'s place in the bar, and the list moves to 
     await page.evaluate((id) => localStorage.setItem('userOperatorProfile', JSON.stringify({ id, name: 'My Node' })), id);
     await page.setViewportSize({ width: 320, height: 700 });
     await openApp(page, '/');
-    await expect(barLabels(page)).toHaveText(['My Node', 'Delegator', 'Overview', 'Streams', 'Swap', 'More']);
+    await expect(barLabels(page)).toHaveText(['My Node', 'Delegator', 'Overview', 'Streams', 'Market', 'More']);
     await page.click('#bottom-nav-more');
     await expect(page.locator('#more-nav-operators')).toBeVisible();
     await expect(page.locator('#more-nav-delegators')).toBeHidden();

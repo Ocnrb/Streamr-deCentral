@@ -24,6 +24,7 @@ const POOLS_SLOT = 6n;                     // the PoolManager's pools mapping
 const LEVELS = 20;                         // levels on each side
 const STEPS = [0.005, 0.01, 0.02, 0.04, 0.08];   // level sizes (the + shows more depth); 20 levels of 8%: about x4.7
 const RANGE_TICKS = Math.ceil(Math.log(6) / Math.log(1.0001));   // ticks read each side of a pool's price (x6)
+const MAX_TICK = 887272;                   // Uniswap's price range: every tick (the Liquidity tab's pool)
 const REFRESH_MS = 30 * 1000;
 const VIEW_KEY = 'swapMarketView';
 const STABLES = ['USDC', 'USDC.e', 'USDT', 'DAI'];
@@ -86,7 +87,7 @@ function v4Slots(id) {
 }
 
 /** One chain's v4 pools: price and active liquidity, then the bitmap words around the price, then the ticks they mark */
-async function readChain(chain, pools) {
+async function readChain(chain, pools, range = RANGE_TICKS) {
     const manager = POOL_MANAGERS[chain];
     const load = (slot) => ({ target: manager, iface: IFACES.manager, fn: 'extsload', args: [slot] });
     const results = await multicall(chain, pools.flatMap(pool => [load(v4Slots(pool.id).slot0), load(v4Slots(pool.id).liquidity)]));
@@ -103,7 +104,8 @@ async function readChain(chain, pools) {
     const wordCalls = models.map(m => {
         const compress = (tick) => Math.floor(tick / m.spacing);
         const words = [];
-        for (let w = compress(m.tick - RANGE_TICKS) >> 8; w <= compress(m.tick + RANGE_TICKS) >> 8; w++) words.push(w);
+        m.range = range;
+        for (let w = compress(Math.max(-MAX_TICK, m.tick - range)) >> 8; w <= compress(Math.min(MAX_TICK, m.tick + range)) >> 8; w++) words.push(w);
         m.words = words;
         return words.map(w => load(v4Slots(m.pool.id).bitmap(w)));
     });
@@ -116,7 +118,7 @@ async function readChain(chain, pools) {
             for (let bit = 0; bits; bit++, bits >>= 1n) {
                 if (bits & 1n) {
                     const tick = ((w << 8) + bit) * m.spacing;
-                    if (Math.abs(tick - m.tick) <= RANGE_TICKS) found.push(tick);
+                    if (Math.abs(tick - m.tick) <= range) found.push(tick);
                 }
             }
         });
@@ -196,7 +198,7 @@ function sweep(m, edges, side) {
         const target = sqrtAtUsd(m, edge);
         let t0 = 0;
         let t1 = 0;
-        if (!(up ? target > pos : target < pos)) return { data: 0, usd: 0 };
+        if (!(up ? target > pos : target < pos)) return { data: 0, counter: 0, usd: 0 };
         while (pos !== target) {
             const next = j < ticks.length ? sqrtAt(ticks[j].tick) : null;
             const crosses = next !== null && (up ? next < target : next > target);
@@ -213,8 +215,61 @@ function sweep(m, edges, side) {
         }
         const data = (m.pool.dataIs0 ? t0 : t1) / 1e18;
         const counter = (m.pool.dataIs0 ? t1 / 10 ** m.dec1 : t0 / 10 ** m.dec0);
-        return { data, usd: counter * m.usd };
+        return { data, counter, usd: counter * m.usd };
     });
+}
+
+/**
+ * The tokens a pool holds: its liquidity walked from the price to the ends of the ticks read (x6 each way), then on to
+ * zero and infinity at the liquidity there (the positions still open that far are taken as full range)
+ */
+function holdings(m) {
+    const span = Math.sqrt(1.0001 ** Math.min(m.range, MAX_TICK));
+    const [top, bottom] = [sqrtAt(MAX_TICK), sqrtAt(-MAX_TICK)];
+    const walk = (up) => {
+        const ticks = m.ticks.filter(t => (up ? t.tick > m.tick : t.tick <= m.tick)).sort((a, b) => (up ? a.tick - b.tick : b.tick - a.tick));
+        const end = up ? Math.min(m.S * span, top) : Math.max(m.S / span, bottom);
+        let L = m.L;
+        let pos = m.S;
+        let amount = 0;
+        for (const t of ticks) {
+            const next = sqrtAt(t.tick);
+            if (up ? next > end : next < end) break;
+            amount += Math.max(0, L) * (up ? 1 / pos - 1 / next : pos - next);
+            pos = next;
+            L += up ? t.net : -t.net;
+        }
+        amount += Math.max(0, L) * (up ? 1 / pos : pos);   // to infinity (token0) or to zero (token1)
+        return amount;
+    };
+    const amount0 = walk(true) / 10 ** m.dec0;
+    const amount1 = walk(false) / 10 ** m.dec1;
+    return m.pool.dataIs0 ? { data: amount0, counter: amount1 } : { data: amount1, counter: amount0 };
+}
+
+/**
+ * One pool's depth (Market page, Liquidity tab), read over Uniswap's whole price range: its DATA price, the tokens it
+ * holds and its model, for its liquidity by price at any level size (poolLevels). Null when the pool is not read
+ */
+export async function readPoolDepth(chain, pool) {
+    const [m] = await readChain(chain, [pool], 2 * MAX_TICK);   // from any price, both ends
+    if (!m) return null;
+    m.usd = 1;   // against USDC
+    m.dec0 = pool.dataIs0 ? 18 : pool.counterDecimals;
+    m.dec1 = pool.dataIs0 ? pool.counterDecimals : 18;
+    m.price = usdAtSqrt(m, m.S);
+    const held = holdings(m);
+    return { price: m.price, model: m, data: held.data, usdc: held.counter, tvl: held.data * m.price + held.counter };
+}
+
+/** A pool's liquidity in `count` levels of `step` each way from its price ({ lo, hi, data, usd, side }, the lowest first) */
+export function poolLevels(depth, step, count = 25) {
+    const { model: m, price } = depth;
+    const askEdges = Array.from({ length: count }, (_, k) => price * (1 + step) ** (k + 1));
+    const bidEdges = Array.from({ length: count }, (_, k) => price / (1 + step) ** (k + 1));
+    const asks = sweep(m, askEdges, 'ask').map((l, k) => ({ ...l, lo: k ? askEdges[k - 1] : price, hi: askEdges[k], side: 'ask' }));
+    const bids = sweep(m, bidEdges, 'bid').map((l, k) => ({ ...l, lo: bidEdges[k], hi: k ? bidEdges[k - 1] : price, side: 'bid' }));
+    return [...bids.reverse(), ...asks];
 }
 
 /** The book of the pools shown: levels from the price of the deepest pool (its liquidity within 2% of its price) */
@@ -297,7 +352,7 @@ function highlightRows(container, row) {
     container.querySelectorAll('[data-book-k]').forEach(r => r.classList.toggle('bg-white/[0.06]', Number(r.dataset.bookK) <= k));
 }
 
-const ZOOM_BUTTON = 'inline-flex items-center justify-center w-5 h-5 rounded text-gray-400 hover:text-white hover:bg-white/5 disabled:opacity-30 disabled:hover:bg-transparent transition-colors';
+export const ZOOM_BUTTON = 'inline-flex items-center justify-center w-5 h-5 rounded text-gray-400 hover:text-white hover:bg-white/5 disabled:opacity-30 disabled:hover:bg-transparent transition-colors';
 
 function render() {
     const asksEl = $('swap-book-asks');
