@@ -2090,37 +2090,70 @@ function routeCell(entry) {
 function renderHistory() {
     SwapMarket.setOwnSwaps([...state.ownSwaps.values()]);
     const body = $('swap-history');
+    const cards = $('swap-history-cards');
     if (!body) return;
     const empty = (text) => `<tr><td colspan="9" class="py-4 text-sm text-gray-300">${text}</td></tr>`;
     if (!state.address || !state.history.length) {
         $('swap-history-more')?.classList.add('hidden');
-        body.innerHTML = empty(state.address ? 'No DATA swaps yet.' : 'Connect a wallet to see your swaps.');
+        const text = state.address ? 'No DATA swaps yet.' : 'Connect a wallet to see your swaps.';
+        body.innerHTML = empty(text);
+        if (cards) cards.innerHTML = `<p class="py-1 text-sm text-gray-300">${text}</p>`;
         return;
     }
     // Centered in the column: the amount right-aligned in a box of one width, then the chip in another, so the chips line up
     const amount = (leg) => `<span class="flex items-center justify-center gap-2 whitespace-nowrap"><span class="w-[6rem] text-right text-white font-medium">${leg.estimated ? '≈ ' : ''}${formatAmount(leg.amount, SYMBOL_DECIMALS[leg.symbol] ?? 18)}</span><span class="inline-flex w-[5rem]">${tokenChip(leg.symbol)}</span></span>`;
     const more = $('swap-history-more');
     more?.classList.toggle('hidden', state.history.length <= historyShown);
-    body.innerHTML = state.history.slice(0, historyShown).map(entry => {
+    const view = (entry) => {
         const [label, badge] = HISTORY_BADGES[entry.status] || HISTORY_BADGES.pending;
-        const selling = entry.pay?.symbol === 'DATA';
-        const action = selling
-            ? '<span class="tx-badge tx-badge-out whitespace-nowrap">Sell DATA</span>'
-            : '<span class="tx-badge tx-badge-in whitespace-nowrap">Buy DATA</span>';
         const hash = Utils.escapeHtml(entry.txHash);
+        return {
+            status: `<span class="px-2 py-0.5 rounded-full text-[11px] font-semibold whitespace-nowrap ${badge}">${label}</span>`,
+            action: entry.pay?.symbol === 'DATA'
+                ? '<span class="tx-badge tx-badge-out whitespace-nowrap">Sell DATA</span>'
+                : '<span class="tx-badge tx-badge-in whitespace-nowrap">Buy DATA</span>',
+            tx: `<a href="${NETWORKS[entry.chain || 137].explorer}/tx/${hash}" target="_blank" rel="noopener noreferrer" class="font-mono text-xs text-blue-400 hover:text-blue-300">${hash.slice(0, 6)}…${hash.slice(-4)}</a>`
+        };
+    };
+    const shown = state.history.slice(0, historyShown);
+    body.innerHTML = shown.map(entry => {
+        const v = view(entry);
         return `
             <tr class="border-b border-[#2a2a2a] last:border-0 align-middle">
                 <td class="py-3 pr-3 whitespace-nowrap"><div class="text-gray-200">${formatDateTime(entry.createdAt)}</div>${Date.now() - entry.createdAt < 86400000 ? `<div class="text-xs text-gray-400">${timeAgo(entry.createdAt)}</div>` : ''}</td>
                 <td class="py-3 pr-3 text-center">${chainChip(entry.chain || 137, { named: true })}</td>
-                <td class="py-3 pr-3 text-center">${action}</td>
+                <td class="py-3 pr-3 text-center">${v.action}</td>
                 <td class="py-3 pr-3">${amount(entry.pay)}</td>
                 <td class="py-3 pr-3">${amount(entry.receive)}</td>
                 <td class="py-3 pr-3 text-center">${dataUsdCell(entry)}</td>
                 <td class="py-3 pr-3 text-center text-xs text-gray-300">${routeCell(entry)}</td>
-                <td class="py-3 pr-3 text-center"><span class="px-2 py-0.5 rounded-full text-[11px] font-semibold whitespace-nowrap ${badge}">${label}</span></td>
-                <td class="py-3 text-right whitespace-nowrap"><a href="${NETWORKS[entry.chain || 137].explorer}/tx/${hash}" target="_blank" rel="noopener noreferrer" class="font-mono text-xs text-blue-400 hover:text-blue-300">${hash.slice(0, 6)}…${hash.slice(-4)}</a></td>
+                <td class="py-3 pr-3 text-center">${v.status}</td>
+                <td class="py-3 text-right whitespace-nowrap">${v.tx}</td>
             </tr>`;
     }).join('');
+    // Small screens: a card per swap (the table needs scrolling there)
+    if (cards) {
+        const leg = (l) => `<span class="inline-flex items-center gap-1.5 whitespace-nowrap"><span class="text-white font-medium">${l.estimated ? '≈ ' : ''}${formatAmount(l.amount, SYMBOL_DECIMALS[l.symbol] ?? 18)}</span>${tokenChip(l.symbol)}</span>`;
+        const cell = (label, value) => `<div class="min-w-0"><dt class="text-xs text-gray-300">${label}</dt><dd class="mt-0.5 text-gray-200">${value}</dd></div>`;
+        cards.innerHTML = shown.map(entry => {
+            const v = view(entry);
+            const today = Date.now() - entry.createdAt < 86400000;
+            return `
+            <article class="p-3 bg-[#121212] border border-[#333] rounded-lg space-y-3">
+                <div class="flex items-center justify-between gap-3">
+                    <span class="flex items-center gap-2">${v.action}${chainChip(entry.chain || 137, { named: true })}</span>
+                    ${v.status}
+                </div>
+                <div class="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">${leg(entry.pay)}<span class="text-gray-400">→</span>${leg(entry.receive)}</div>
+                <dl class="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+                    ${cell('DATA/USD', dataUsdCell(entry))}
+                    ${cell('Route', `<span class="text-xs">${routeCell(entry)}</span>`)}
+                    ${cell('Date', `${formatDateTime(entry.createdAt)}${today ? `<div class="text-xs text-gray-400">${timeAgo(entry.createdAt)}</div>` : ''}`)}
+                    ${cell('Transaction', v.tx)}
+                </dl>
+            </article>`;
+        }).join('');
+    }
     fillPolPrices();
     fillRoutes();
 }

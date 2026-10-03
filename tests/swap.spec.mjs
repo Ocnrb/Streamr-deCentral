@@ -656,6 +656,14 @@ test('your swaps include the ones on Ethereum, from its explorer', async ({ page
     await expect(row).toContainText('1 191');
     await expect(row).toContainText('Uniswap (Universal Router)');
     await expect(row.locator(`a[href="https://etherscan.io/tx/${hash}"]`)).toBeVisible();
+    // Small screens: the same swap as a card, the table hidden
+    await page.setViewportSize({ width: 360, height: 800 });
+    const card = page.locator('#swap-history-cards article', { has: page.locator('[data-tooltip-content="Ethereum"]') });
+    await expect(card).toContainText('Buy DATA', { ignoreCase: true });
+    await expect(card).toContainText('1 191');
+    await expect(card).toContainText('Uniswap (Universal Router)');
+    await expect(card.locator(`a[href="https://etherscan.io/tx/${hash}"]`)).toBeVisible();
+    await expect(page.locator('#swap-history')).toBeHidden();
 });
 
 test('"You" in the market trades comes from the explorer, not from the browser\'s storage', async ({ page }) => {
