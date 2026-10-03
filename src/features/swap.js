@@ -1010,6 +1010,22 @@ function hoverPosition(tokenId) {
     document.querySelectorAll('#liquidity-positions tr[data-position]').forEach(row => row.classList.toggle('bg-white/5', row.dataset.position === tokenId));
     depthChart?.update('none');
 }
+/**
+ * The wallet's share of each level (its fees' share while the price trades there): its positions' USDC over the
+ * level's, both L (√hi - √lo) in USD prices / 10^12 (USDC 6 decimals, DATA 18, whichever is token0)
+ */
+function levelShares(levels, ranges) {
+    const held = ranges.filter(r => r.L > 0);
+    return levels.map(l => {
+        if (!held.length || !(l.usd > 0)) return 0;
+        const mine = held.reduce((sum, r) => {
+            const [lo, hi] = [Math.max(l.lo, r.min), Math.min(l.hi, r.max)];
+            return hi > lo ? sum + r.L * (Math.sqrt(hi) - Math.sqrt(lo)) * 1e-12 : sum;
+        }, 0);
+        return Math.min(1, mine / l.usd);
+    });
+}
+
 const DEPTH_STEPS = [0.01, 0.02, 0.04, 0.08, 0.16];   // 25 levels each way: x1.28 up to x41
 
 /** The pool's liquidity by price in bars (USDC blue, DATA orange), the price between them, the wallet's ranges shaded behind */
@@ -1028,7 +1044,7 @@ function renderDepth(depth, ranges) {
     const colors = levels.map(l => (l.side === 'bid' ? 'rgba(59, 130, 246, 0.6)' : 'rgba(249, 115, 22, 0.6)'));
     const data = {
         labels: levels.map(l => formatPrice(Math.sqrt(l.lo * l.hi))),
-        datasets: [{ data: levels.map(l => l.usd), backgroundColor: colors, borderWidth: 0, barPercentage: 1, categoryPercentage: 0.9, levels, ranges }]
+        datasets: [{ data: levels.map(l => l.usd), backgroundColor: colors, borderWidth: 0, barPercentage: 1, categoryPercentage: 0.9, levels, ranges, shares: levelShares(levels, ranges) }]
     };
     // Wider levels show a wider range of prices
     const zoom = $('liquidity-zoom');
@@ -1086,6 +1102,25 @@ function renderDepth(depth, ranges) {
         }
     };
     // The price: a line between the bids and the asks
+    // The wallet's share of each level: the bar's lower part, in white
+    const shareBars = {
+        id: 'liquidityShares',
+        afterDatasetsDraw(chart) {
+            const { shares } = chart.data.datasets[0];
+            const bars = chart.getDatasetMeta(0).data;
+            if (!shares?.some(x => x > 0)) return;
+            const { ctx } = chart;
+            ctx.save();
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.35)';
+            bars.forEach((bar, k) => {
+                if (!(shares[k] > 0)) return;
+                const { x, y, base, width } = bar.getProps(['x', 'y', 'base', 'width'], true);
+                const height = (base - y) * shares[k];
+                ctx.fillRect(x - width / 2, base - height, width, height);
+            });
+            ctx.restore();
+        }
+    };
     const priceLine = {
         id: 'liquidityPrice',
         afterDatasetsDraw(chart) {
@@ -1109,7 +1144,7 @@ function renderDepth(depth, ranges) {
     depthChart = new Chart(container.querySelector('canvas').getContext('2d'), {
         type: 'bar',
         data,
-        plugins: [rangeBands, priceLine],
+        plugins: [rangeBands, shareBars, priceLine],
         options: {
             responsive: true,
             maintainAspectRatio: false,
@@ -1140,7 +1175,9 @@ function renderDepth(depth, ranges) {
                             const total = l.side === 'bid'
                                 ? `Total USDC ${Utils.formatBigNumber(path.reduce((sum, x) => sum + x.counter, 0).toFixed(2))}`
                                 : `Total DATA ${formatData(data)}`;
-                            return [total, `Average price ${formatPrice(data > 0 ? usd / data : l.lo)}`];
+                            const share = item.dataset.shares?.[item.dataIndex] || 0;
+                            const yours = share > 0 ? [`Your share ${share < 0.01 ? '<1' : Math.round(share * 100)}%`] : [];
+                            return [total, `Average price ${formatPrice(data > 0 ? usd / data : l.lo)}`, ...yours];
                         }
                     }
                 }
@@ -1187,7 +1224,7 @@ function fitDraft() {
 
 /** The ranges on the chain's chart: the wallet's open positions, and the new position's while it is being made */
 function depthRanges() {
-    const ranges = (Liquidity.positions() || []).filter(p => p.chain === state.chain && !p.closed).map(p => ({ tokenId: p.tokenId, min: p.min, max: p.max }));
+    const ranges = (Liquidity.positions() || []).filter(p => p.chain === state.chain && !p.closed).map(p => ({ tokenId: p.tokenId, min: p.min, max: p.max, L: Number(p.liquidity) }));
     const draft = LiquidityManage.draft(state.chain);
     return draft ? [...ranges, { tokenId: 'new', draft: true, ...draft }] : ranges;
 }
