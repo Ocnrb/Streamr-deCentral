@@ -981,12 +981,12 @@ let depthChart = null;
 function hoverPosition(tokenId) {
     if (tokenId === state.hoverPosition) return;
     state.hoverPosition = tokenId;
-    document.querySelectorAll('#liquidity-positions tr[data-position]').forEach(row => row.classList.toggle('bg-blue-500/10', row.dataset.position === tokenId));
+    document.querySelectorAll('#liquidity-positions tr[data-position]').forEach(row => row.classList.toggle('bg-white/5', row.dataset.position === tokenId));
     depthChart?.update('none');
 }
 const DEPTH_STEPS = [0.01, 0.02, 0.04, 0.08, 0.16];   // 25 levels each way: x1.28 up to x41
 
-/** The pool's liquidity by price in bars (bids green, asks red), the price between them, the wallet's ranges shaded behind */
+/** The pool's liquidity by price in bars (USDC blue, DATA orange), the price between them, the wallet's ranges shaded behind */
 function renderDepth(depth, ranges) {
     const container = $('liquidity-depth');
     if (!container) return;
@@ -998,7 +998,8 @@ function renderDepth(depth, ranges) {
     }
     const step = DEPTH_STEPS[state.depthStep];
     const levels = poolLevels(depth, step);
-    const colors = levels.map(l => (l.side === 'bid' ? 'rgba(34, 197, 94, 0.5)' : 'rgba(239, 68, 68, 0.5)'));
+    // The token the pool holds there, in the colors of its balances: USDC below the price, DATA above
+    const colors = levels.map(l => (l.side === 'bid' ? 'rgba(59, 130, 246, 0.6)' : 'rgba(249, 115, 22, 0.6)'));
     const data = {
         labels: levels.map(l => formatPrice(Math.sqrt(l.lo * l.hi))),
         datasets: [{ data: levels.map(l => l.usd), backgroundColor: colors, borderWidth: 0, barPercentage: 1, categoryPercentage: 0.9, levels, ranges }]
@@ -1041,9 +1042,9 @@ function renderDepth(depth, ranges) {
                 const [x0, x1] = [xAt(r.min), xAt(r.max)];
                 chart.$bands.push({ tokenId: r.tokenId, x0, x1 });
                 const hovered = r.tokenId === state.hoverPosition;
-                ctx.fillStyle = hovered ? 'rgba(59, 130, 246, 0.35)' : 'rgba(59, 130, 246, 0.15)';
+                ctx.fillStyle = hovered ? 'rgba(255, 255, 255, 0.16)' : 'rgba(255, 255, 255, 0.07)';
                 ctx.fillRect(x0, chartArea.top, x1 - x0, chartArea.bottom - chartArea.top);
-                ctx.strokeStyle = hovered ? 'rgba(147, 197, 253, 1)' : 'rgba(96, 165, 250, 0.9)';
+                ctx.strokeStyle = hovered ? 'rgba(255, 255, 255, 1)' : 'rgba(255, 255, 255, 0.6)';
                 ctx.lineWidth = hovered ? 2.5 : 1.5;
                 ctx.beginPath();
                 ctx.moveTo(x0, chartArea.top);
@@ -1183,7 +1184,7 @@ function renderPositions() {
             body.innerHTML = [...positions].sort((a, b) => b.chain - a.chain || Number(b.tokenId) - Number(a.tokenId)).map(p => {
                 const [label, badge] = POSITION_BADGES[p.closed ? 'closed' : p.inRange ? 'in' : 'out'];
                 const fees = `${formatData(p.feeData)} DATA and ${p.feeUsdc.toFixed(2)} USDC`;
-                const hovered = p.tokenId === state.hoverPosition ? ' bg-blue-500/10' : '';
+                const hovered = p.tokenId === state.hoverPosition ? ' bg-white/5' : '';
                 return `
                 <tr data-position="${Utils.escapeHtml(p.tokenId)}" class="border-b border-[#2a2a2a] last:border-0 transition-colors${hovered}">
                     <td class="py-3 pr-3 whitespace-nowrap"><a href="${p.url}" target="_blank" rel="noopener noreferrer" class="text-blue-400 hover:text-blue-300">#${Utils.escapeHtml(p.tokenId)}</a></td>

@@ -337,7 +337,7 @@ test('the Liquidity tab shows the pool, and the wallet\'s v4 positions with thei
         return d && { colors: d.backgroundColor, ranges: d.ranges };
     });
     expect(dataset.colors).toHaveLength(50);
-    expect(dataset.colors.filter(c => c.startsWith('rgba(34, 197, 94')).length).toBe(25);
+    expect(dataset.colors.filter(c => c.startsWith('rgba(59, 130, 246')).length).toBe(25);
     expect(dataset.ranges).toHaveLength(1);
     expect(dataset.ranges[0].min).toBeCloseTo(0.00023518, 7);
     // A bar's tooltip sums the levels from the price to it (as the Depth): the second ask holds the first two
@@ -359,9 +359,9 @@ test('the Liquidity tab shows the pool, and the wallet\'s v4 positions with thei
     expect(Number(bid.label[0].replace('Total USDC ', '').replace(/\s/g, ''))).toBeCloseTo(bid.usdc, 2);
     // Hovering the position highlights its range, and hovering its range highlights the position
     await row.hover();
-    await expect(row).toHaveClass(/bg-blue-500\/10/);
+    await expect(row).toHaveClass(/bg-white\/5/);
     await page.mouse.move(0, 0);
-    await expect(row).not.toHaveClass(/bg-blue-500\/10/);
+    await expect(row).not.toHaveClass(/bg-white\/5/);
     const band = await page.evaluate(() => {
         const canvas = document.querySelector('#liquidity-depth canvas');
         const [b] = window.Chart.getChart(canvas).$bands;
@@ -369,7 +369,7 @@ test('the Liquidity tab shows the pool, and the wallet\'s v4 positions with thei
         return { x: box.left + (b.x0 + b.x1) / 2, y: box.top + box.height / 2 };
     });
     await page.mouse.move(band.x, band.y);
-    await expect(row).toHaveClass(/bg-blue-500\/10/);
+    await expect(row).toHaveClass(/bg-white\/5/);
     // Wider levels: a wider range of prices, still 25 levels each way
     const lowest = () => page.evaluate(() => window.Chart.getChart(document.querySelector('#liquidity-depth canvas')).data.datasets[0].levels[0].lo);
     const before = await lowest();
