@@ -953,6 +953,8 @@ function setChain(chain) {
     state.quoteChecked = null;
     showError('');
     renderChain();
+    // The market and its liquidity book follow the form's chain (not the other way round)
+    SwapMarket.setFilter(chain === 1 ? 'ethereum' : 'polygon');
     renderTokens();
     updateAmountStatus();
     renderQuote();

@@ -188,9 +188,12 @@ test('the all-time volume counts the emptied pools, and prices their old days fr
 
 test('the liquidity book shows the v4 pools\' liquidity by price, in place of the trades', async ({ page }) => {
     await openSwap(page);
+    // The info icon is the books' only
+    await expect(page.locator('#swap-book-info')).toBeHidden();
     await page.click('[data-market-view="book"]');
     await expect(page.locator('#swap-trades-view')).toBeHidden();
     await expect(page.locator('#swap-trades-filter')).toBeVisible();
+    await expect(page.locator('#swap-book-info')).toBeVisible();
     // The position's 600 ticks each side of the price: up to 6.2%, 12 or 13 levels of 0.5% each way (where the price sits in its tick)
     const asks = page.locator('#swap-book-asks > div');
     const bids = page.locator('#swap-book-bids > div');
@@ -213,13 +216,18 @@ test('the liquidity book shows the v4 pools\' liquidity by price, in place of th
     await page.click('[data-book-step="1"]');
     await expect(mid).toContainText('1%');
     await expect.poll(() => asks.count()).toBeLessThan(narrow);
-    // On Ethereum (no v4 pool read here): nothing
-    await page.click('#swap-trades-filter [data-filter="ethereum"]');
+    // The swap form's chain sets the books' (no v4 pool read on Ethereum here: nothing)
+    await page.click('#swap-chain [data-chain="1"]');
+    await expect(page.locator('#swap-trades-filter [data-filter="ethereum"]')).toHaveClass(/bg-blue-800/);
     await expect(mid).toContainText('No pool liquidity read on this chain.');
+    // Not the other way round
+    await page.click('#swap-trades-filter [data-filter="polygon"]');
+    await expect(page.locator('#swap-chain [data-chain="1"]')).toHaveClass(/bg-blue-800/);
     // Back to the trades
     await page.click('[data-market-view="trades"]');
     await expect(page.locator('#swap-trades-view')).toBeVisible();
     await expect(page.locator('#swap-book-view')).toBeHidden();
+    await expect(page.locator('#swap-book-info')).toBeHidden();
 });
 
 test('hovering a book level highlights the levels from the price to it and sums them in a tooltip', async ({ page }) => {
@@ -234,14 +242,11 @@ test('hovering a book level highlights the levels from the price to it and sums 
     const tooltip = page.locator('#custom-tooltip');
     await expect(tooltip).toBeVisible();
     const text = (await tooltip.innerText()).replace(/\u00A0/g, ' ');
-    expect(text).toContain(`Sell down to ${rows[2][0]}`);
-    // The DATA of the three levels (each row rounded) and their USD (the third row's running total)
+    // The DATA of the three levels (each row rounded), and their average price
     const data = rows.slice(0, 3).reduce((sum, row) => sum + Number(row[1].replace(/ /g, '')), 0);
-    const [, summed, usd] = text.match(/([\d ]+) DATA for (\$[\d .]+)/);
+    const [, summed] = text.match(/Total DATA ([\d ]+)/);
     expect(Math.abs(Number(summed.replace(/ /g, '')) - data)).toBeLessThanOrEqual(2);
-    expect(usd.trim()).toBe(rows[2][2]);
-    expect(text).toContain('−1.5% from $0.0002500');
-    expect(text).toContain('Less the 0.3% pool fee');
+    expect(text).toMatch(/^Total DATA [\d ]+\nAverage price \$0\.000248\d$/);
     // Leaving the book: nothing highlighted
     await page.mouse.move(0, 0);
     await expect(page.locator('#swap-book-bids > div.bg-white\\/\\[0\\.06\\]')).toHaveCount(0);

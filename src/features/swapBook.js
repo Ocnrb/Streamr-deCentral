@@ -267,9 +267,9 @@ function schedule() {
 
 /**
  * A side's rows, the nearest level first. Each row's tooltip sums the levels from the price up to it: the DATA and USD
- * of a swap that moves the price that far, its average price and the price move (before the pool fee)
+ * of a swap that moves the price that far and its average price (before the pool fee)
  */
-function levelRows(levels, side, max, book) {
+function levelRows(levels, side, max) {
     let total = 0;
     let data = 0;
     return levels.map((level, k) => {
@@ -277,13 +277,9 @@ function levelRows(levels, side, max, book) {
         data += level.data;
         if (level.data < 1) return '';   // no liquidity at these prices
         const width = max > 0 ? Math.min(100, (total / max) * 100) : 0;
-        const move = (level.price / book.price - 1) * 100;
         const tooltip = [
-            `<span class='font-semibold'>${side === 'ask' ? 'Buy up to' : 'Sell down to'} ${formatPrice(level.price)}</span>`,
-            `${formatData(data)} DATA for ${formatUsd(total)}`,
-            `Average price ${formatPrice(total / data)}`,
-            `Price ${move > 0 ? '+' : '−'}${Math.abs(move).toFixed(1)}% from ${formatPrice(book.price)}`,
-            `${side === 'ask' ? 'Plus' : 'Less'} the ${book.fee} pool fee`
+            `Total DATA ${formatData(data)}`,
+            `Average price ${formatPrice(total / data)}`
         ].join('<br>');
         return `
             <div data-book-k="${k}" data-tooltip-content="${Utils.escapeHtml(tooltip)}" class="relative grid grid-cols-3 gap-2 px-1 py-1 text-sm cursor-default transition-colors">
@@ -318,13 +314,11 @@ function render() {
         return;
     }
     const book = buildBook(models);
-    const fees = [...new Set(models.map(m => m.pool.fee / 10000))].sort((a, b) => a - b);
-    book.fee = fees.length === 1 ? `${fees[0]}%` : `${fees[0]}–${fees[fees.length - 1]}%`;
     const sum = (levels) => levels.reduce((total, level) => total + level.usd, 0);
     const max = Math.max(sum(book.asks), sum(book.bids));
     // Asks above the price, the nearest at the bottom; bids below it, the nearest at the top
-    asksEl.innerHTML = levelRows(book.asks, 'ask', max, book).reverse().join('');
-    bidsEl.innerHTML = levelRows(book.bids, 'bid', max, book).join('');
+    asksEl.innerHTML = levelRows(book.asks, 'ask', max).reverse().join('');
+    bidsEl.innerHTML = levelRows(book.bids, 'bid', max).join('');
     asksEl.scrollTop = asksEl.scrollHeight;
     bidsEl.scrollTop = 0;
     const names = models.map(m => `${m.pool.label} · DATA/${m.pool.counterSymbol === 'WPOL' ? 'POL' : m.pool.counterSymbol} · ${CHAIN_NAMES[m.chain]}`).join('<br>');
@@ -354,6 +348,9 @@ function setView(view) {
         btn.classList.toggle('hover:text-gray-300', !selected);
     });
     $('swap-trades-view')?.classList.toggle('hidden', book);
+    const info = $('swap-book-info');   // its tooltip explains the books
+    info?.classList.toggle('hidden', !book);
+    info?.classList.toggle('flex', book);
     $('swap-book-view')?.classList.toggle('hidden', !book);
     if (book) {
         render();

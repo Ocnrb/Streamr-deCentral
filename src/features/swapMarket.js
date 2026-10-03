@@ -1142,12 +1142,7 @@ function setupListeners() {
     $('swap-trades-more')?.addEventListener('click', loadMore);
     $('swap-trades-filter')?.addEventListener('click', (e) => {
         const btn = e.target.closest('button[data-filter]');
-        if (!btn || btn.dataset.filter === state.filter) return;
-        state.filter = btn.dataset.filter;
-        state.shown = TRADES_PAGE;
-        renderFilter();
-        renderTrades();
-        notifyChange();
+        if (btn) setFilter(btn.dataset.filter);
     });
     $('swap-chart-range')?.addEventListener('click', (e) => {
         const btn = e.target.closest('button[data-range]');
@@ -1158,6 +1153,16 @@ function setupListeners() {
         renderChart();
     });
     Services.onHistoricalDataLoaded(setHistory);
+}
+
+/** Shows the trades and the liquidity book of 'all', 'polygon' or 'ethereum' */
+function setFilter(filter) {
+    if (filter === state.filter) return;
+    state.filter = filter;
+    state.shown = TRADES_PAGE;
+    renderFilter();
+    renderTrades();
+    notifyChange();
 }
 
 // The liquidity book follows the pools and the chain filter
@@ -1171,6 +1176,7 @@ export const SwapMarket = {
     pools: () => state.pools,
     /** The chain filter: 'all', 'polygon' or 'ethereum' */
     filter: () => state.filter,
+    setFilter,
     /** Calls `fn` when a pool is added or the chain filter changes */
     onChange(fn) {
         changeListeners.add(fn);
