@@ -919,7 +919,10 @@ function chartPoints() {
         const opening = priceAt(tradeStart);
         if (opening) points.push({ x: tradeStart, y: opening });
         for (const trade of priceTrades()) {
-            if (trade.time >= tradeStart) points.push({ x: trade.time, y: trade.price });
+            if (trade.time < tradeStart) continue;
+            // Trades of the same second: the price after the last of them (a step of no width would draw a needle)
+            if (points[points.length - 1]?.x === trade.time) points.pop();
+            points.push({ x: trade.time, y: trade.price });
         }
     } else if (!points.length && start !== -Infinity) {
         const opening = priceAt(start);
@@ -989,7 +992,7 @@ function renderChart() {
         pointHoverBackgroundColor: '#3b82f6',
         pointHoverBorderColor: '#121212',
         pointHoverBorderWidth: 2,
-        stepped: stepped ? 'after' : false,
+        stepped: stepped ? 'before' : false,   // each price holds from its trade until the next one
         tension: 0,
         fill: true
     };

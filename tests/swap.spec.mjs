@@ -107,6 +107,21 @@ test('the trades cover the whole 7 days, at the measured block time of the chain
     expect(to - from).toBe(7 * 86400 / 1.5);
 });
 
+test('the trade chart holds each price from its trade until the next one', async ({ page }) => {
+    await openSwap(page);
+    await expect(page.locator('#swap-trades tr')).toHaveCount(4, { timeout: 30000 });
+    await page.click('#swap-chart-range [data-range="7D"]');
+    const chart = () => page.evaluate(() => {
+        const dataset = window.Chart?.getChart(document.querySelector('#swap-chart canvas'))?.data.datasets[0];
+        return dataset && { stepped: dataset.stepped, xs: dataset.data.map(p => p.x) };
+    });
+    await expect.poll(async () => (await chart())?.xs.length || 0, { timeout: 30000 }).toBeGreaterThan(2);
+    const { stepped, xs } = await chart();
+    // 'before': flat at the old price up to the trade, then the step (not the new price drawn from the trade before)
+    expect(stepped).toBe('before');
+    expect(new Set(xs).size).toBe(xs.length);
+});
+
 test('the all-time volume values the days the DEX subgraph has no USD for at the day\'s DATA price', async ({ page }) => {
     // The main pool's days: 1000 recent ones of $1 (a full page), then an old one without USD: 1 000 000 DATA
     const today = Math.floor(Date.now() / 86400000) * 86400;
