@@ -167,7 +167,7 @@ async function readPositions(pool, address) {
         const [feeData, feeUsdc] = pool.dataIs0 ? [fees0 / 1e18, fees1 / 1e6] : [fees1 / 1e18, fees0 / 1e6];
         const [min, max] = [usdAtSqrt(pool, sqrtAtTick(f.lower)), usdAtSqrt(pool, sqrtAtTick(f.upper))].sort((a, b) => a - b);
         return {
-            chain: pool.chain, tokenId: f.tokenId, lower: f.lower, upper: f.upper, liquidity: f.liquidity, min, max, inRange: tick >= f.lower && tick < f.upper, closed: f.liquidity === 0n,
+            chain: pool.chain, tokenId: f.tokenId, lower: f.lower, upper: f.upper, liquidity: f.liquidity, min, max, price, inRange: tick >= f.lower && tick < f.upper, closed: f.liquidity === 0n,
             data, usdc, value: data * price + usdc, feeData, feeUsdc, feeValue: feeData * price + feeUsdc,
             url: `https://app.uniswap.org/positions/v4/${pool.slug}/${f.tokenId}`
         };

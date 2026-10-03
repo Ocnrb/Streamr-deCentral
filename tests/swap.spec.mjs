@@ -394,7 +394,11 @@ test('the Liquidity tab shows the pool, and the wallet\'s v4 positions with thei
     await expect(row).toContainText('Polygon');
     await expect(row).toContainText('In range');
     await expect(row).toContainText('$0.0002352 – $0.0002652');
-    await expect(row).toContainText('1 834 684');
+    // Distribution: its amounts in the tooltip, its shares by value below the bar, in range: the dot on it
+    const distribution = row.locator('td').nth(2);
+    await expect(distribution.locator('[data-tooltip-content]')).toHaveAttribute('data-tooltip-content', '1 834 684 DATA and 475.87 USDC');
+    await expect(distribution).toContainText(/DATA \d+%\d+% USDC/);
+    await expect(distribution.locator('.bg-green-400')).toHaveCount(1);
     await expect(row).toContainText('$934.54');
     await expect(row).toContainText('$2.25');
     const summary = page.locator('#liquidity-summary');
