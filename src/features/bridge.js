@@ -90,6 +90,7 @@ const CHAINS = {
 const state = {
     active: false,
     direction: 'deposit',    // 'deposit' (Ethereum -> Polygon) | 'withdraw' (Polygon -> Ethereum)
+    supply: null,            // DATA's supply by chain: { at, total, chains } or { error }
     address: null,           // connected wallet (lowercase)
     balances: { ethData: null, polygonData: null, eth: null, pol: null },
     transfers: [],
@@ -180,6 +181,207 @@ async function ethRead(readFn) {
 }
 
 const polygonRead = (readFn) => Services.readWithFallback(() => readFn(Services.getReadOnlyProvider()));
+
+// ============================================
+// DATA's supply by chain
+// ============================================
+
+/**
+ * DATA's supply over every chain it is on. Each chain counts its token's total supply, in two parts: what its bridge
+ * holds locked on Ethereum (bridged from Ethereum), and the rest (issued on that chain, nothing locked for it).
+ * Ethereum counts its supply less what the bridges hold, so no DATA is counted twice. Each chain in its brand's color
+ * (as its logo), its parts in close shades; the legend's logos, the gaps and the tooltips tell them apart beyond color.
+ */
+const GNOSIS_ICON = '<svg class="w-5 h-5 flex-shrink-0" viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="16" fill="#04795B"/><circle cx="11.5" cy="15" r="3.2" fill="none" stroke="#fff" stroke-width="2"/><circle cx="20.5" cy="15" r="3.2" fill="none" stroke="#fff" stroke-width="2"/><path d="M16 20.5l-2.2 2.8h4.4z" fill="#fff"/></svg>';
+const SUPPLY_CHAINS = [
+    {
+        chain: 'Polygon', color: '#8247E5', icon: () => CHAINS[POLYGON_CHAIN_ID].icon, token: DATA_TOKEN_ADDRESS_POLYGON,
+        read: (fn) => polygonRead(fn), locks: [ERC20_PREDICATE], bridge: 'PoS bridge'
+    },
+    {
+        chain: 'Gnosis', color: '#04795B', icon: () => GNOSIS_ICON, token: '0x256eb8a51f382650B2A1e946b8811953640ee47D',
+        rpcs: ['https://rpc.gnosischain.com', 'https://gnosis-rpc.publicnode.com'], id: 100,
+        locks: ['0x88ad09518695c6c3712AC10a214bE5109a655671'], bridge: 'OmniBridge'
+    }
+    // Not BNB Chain: its DATA (Binance's) stands for DATA Binance holds on Ethereum, already counted there
+];
+/**
+ * The old token (XDATA) not yet migrated: its supply (a migration burns it, and the migration contract, its upgrade
+ * agent, gives as much DATA, held for that among Ethereum's DATA). On Gnosis, XDATA bridged over from Ethereum's.
+ */
+const XDATA = { ethereum: '0x0Cf0Ee63788A0849fE5297F3407f701E122cC023', gnosis: '0xE4a2620edE1058D61BEe5F45F6414314fdf10548' };
+const XDATA_ABI = ['function totalSupply() view returns (uint256)', 'function upgradeAgent() view returns (address)'];
+const SUPPLY_TTL_MS = 10 * 60 * 1000;
+const SUPPLY_ABI = ['function totalSupply() view returns (uint256)', 'function balanceOf(address) view returns (uint256)'];
+const chainProviders = new Map();
+
+/** A chain's read: its own RPCs with failover (Polygon: the app's) */
+function chainRead(c, fn) {
+    if (c.read) return c.read(fn);
+    if (!chainProviders.has(c.id)) chainProviders.set(c.id, new Services.FailoverRpcProvider(c.rpcs, c.id, `supply_rpc_${c.id}`));
+    return fn(chainProviders.get(c.id));
+}
+
+/** A color mixed toward white (a chain's second part) */
+function lighter(hex, amount) {
+    const n = parseInt(hex.slice(1), 16);
+    return `#${[16, 8, 0].map(shift => Math.round(((n >> shift) & 255) + (255 - ((n >> shift) & 255)) * amount).toString(16).padStart(2, '0')).join('')}`;
+}
+
+/** The supply on Ethereum and every chain, with what the bridges hold (read again after 10 minutes) */
+async function loadSupply() {
+    if (state.supply?.at && Date.now() - state.supply.at < SUPPLY_TTL_MS) return;
+    const toData = (wei) => parseFloat(ethers.utils.formatEther(wei));
+    try {
+        const [ethTotal, ...locked] = await ethRead(p => {
+            const data = new ethers.Contract(ETH_DATA, SUPPLY_ABI, p);
+            return Promise.all([data.totalSupply(), ...SUPPLY_CHAINS.flatMap(c => c.locks.map(escrow => data.balanceOf(escrow)))]);
+        });
+        // XDATA not migrated, and the DATA its migration contract holds for it (none when not read)
+        const xdata = await ethRead(async p => {
+            const old = new ethers.Contract(XDATA.ethereum, XDATA_ABI, p);
+            const [supply, agent] = await Promise.all([old.totalSupply(), old.upgradeAgent().catch(() => ethers.constants.AddressZero)]);
+            const reserved = agent === ethers.constants.AddressZero ? ethers.constants.Zero : await new ethers.Contract(ETH_DATA, SUPPLY_ABI, p).balanceOf(agent);
+            return { supply: toData(supply), reserved: toData(reserved) };
+        }).catch(e => {
+            logger.warn('Bridge: XDATA not read', e);
+            return { supply: 0, reserved: 0 };
+        });
+        const gnosisXdata = await chainRead(SUPPLY_CHAINS.find(c => c.chain === 'Gnosis'), p => new ethers.Contract(XDATA.gnosis, XDATA_ABI, p).totalSupply()).then(toData, () => 0);
+        const supplies = await Promise.all(SUPPLY_CHAINS.map(c => chainRead(c, p => new ethers.Contract(c.token, SUPPLY_ABI, p).totalSupply()).then(toData, e => {
+            logger.warn(`Bridge: ${c.chain} supply not read`, e);
+            return null;
+        })));
+        let k = 0;
+        const chains = SUPPLY_CHAINS.map((c, i) => {
+            const lock = c.locks.reduce(sum => sum + toData(locked[k++]), 0);
+            const supply = supplies[i];
+            if (supply === null) return { ...c, lock, amount: null, parts: [] };
+            const bridged = Math.min(lock, supply);
+            const old = c.chain === 'Gnosis' ? gnosisXdata : 0;
+            const parts = [
+                { unit: 'DATA', note: `via ${c.bridge}`, amount: bridged, color: c.color },
+                { unit: 'DATA', note: `minted on ${c.chain}`, amount: supply - bridged, color: lighter(c.color, 0.18) },
+                { unit: 'XDATA', note: 'not migrated', amount: old, color: lighter(c.color, 0.3) }
+            ].filter(part => part.amount >= 1);
+            return { ...c, lock, amount: supply + old, parts };
+        });
+        // Ethereum: its supply less what the bridges of the chains read hold (an unread chain's stays in Ethereum's) and
+        // the DATA held for XDATA's migration (counted as the XDATA not migrated, less Gnosis's)
+        const ethData = toData(ethTotal) - chains.reduce((sum, c) => sum + (c.amount === null ? 0 : c.lock), 0) - xdata.reserved;
+        const ethXdata = Math.max(0, xdata.supply - gnosisXdata);
+        const ethParts = [
+            { unit: 'DATA', note: '', amount: ethData, color: '#627EEA' },
+            { unit: 'XDATA', note: 'not migrated', amount: ethXdata, color: lighter('#627EEA', 0.22) }
+        ].filter(part => part.amount >= 1);
+        const all = [{ chain: 'Ethereum', color: '#627EEA', icon: () => CHAINS[ETH_CHAIN_ID].icon, amount: ethData + ethXdata, parts: ethParts }, ...chains];
+        state.supply = {
+            at: Date.now(),
+            total: all.reduce((sum, c) => sum + (c.amount || 0), 0),
+            chains: all.filter(c => c.amount === null || c.amount >= 1),
+            unread: chains.filter(c => c.amount === null).map(c => c.chain)
+        };
+    } catch (e) {
+        logger.warn('Bridge: supply not read', e);
+        state.supply = { error: true };
+    }
+    renderSupply();
+}
+
+/** A ring's slice between two angles (radians, clockwise from the top): its outer arc, then the inner one back */
+function ringSlice(a0, a1, r, ri, c = 120) {
+    const at = (radius, a) => `${(c + radius * Math.sin(a)).toFixed(2)} ${(c - radius * Math.cos(a)).toFixed(2)}`;
+    const large = a1 - a0 > Math.PI ? 1 : 0;
+    return `M${at(r, a0)} A${r} ${r} 0 ${large} 1 ${at(r, a1)} L${at(ri, a1)} A${ri} ${ri} 0 ${large} 0 ${at(ri, a0)} Z`;
+}
+
+/** A color a shade darker (the ring's side) */
+function darker(hex, factor) {
+    const n = parseInt(hex.slice(1), 16);
+    return `rgb(${[16, 8, 0].map(shift => Math.round(((n >> shift) & 255) * factor)).join(', ')})`;
+}
+
+/** A slice stands out (pushed out of the ring, its legend row lit), or none */
+function highlightSlice(index) {
+    document.querySelectorAll('#bridge-supply-chart g[data-slice]').forEach(g => {
+        const on = Number(g.dataset.slice) === index;
+        g.style.transform = on ? `translate(${g.dataset.dx}px, ${g.dataset.dy}px)` : '';
+    });
+    document.querySelectorAll('#bridge-supply-legend li[data-slice]').forEach(li => li.classList.toggle('bg-white/5', Number(li.dataset.slice) === index));
+}
+
+/** DATA's supply by chain: a ring, tilted with a thickness (layers stacked below its top) and floating, and its legend */
+function renderSupply() {
+    const legend = $('bridge-supply-legend');
+    const container = $('bridge-supply-chart');
+    if (!legend || !container) return;
+    const supply = state.supply;
+    if (!supply?.chains) {
+        container.innerHTML = '';
+        legend.innerHTML = `<li class="text-center text-gray-300">${supply?.error ? 'The supply could not be read.' : 'Reading the supply...'}</li>`;
+        return;
+    }
+    const share = (amount) => (supply.total > 0 ? amount / supply.total * 100 : 0);
+    const pct = (amount) => `${share(amount) < 0.1 ? '<0.1' : share(amount).toFixed(1)}%`;
+    const whole = (amount) => Utils.formatBigNumber(Math.round(amount));
+    // The ring's slices: each chain's parts in order, a chain's parts stand out together
+    const shown = supply.chains.filter(c => c.amount !== null);
+    const parts = shown.flatMap((c, i) => c.parts.map(part => ({ ...part, i, c })));
+    legend.innerHTML = `
+        ${supply.chains.map((c) => {
+            const i = shown.indexOf(c);
+            // Where it is: the chain's parts in a tooltip
+            const where = c.parts.length > 1 ? ` data-tooltip-content="<span class='font-semibold'>${c.chain}</span>${c.parts.map(part => `<br>${whole(part.amount)} ${part.unit}${part.note ? ` ${part.note}` : ''}`).join('')}"` : '';
+            const head = `
+            <li${i >= 0 ? ` data-slice="${i}"` : ''}${where} class="px-2 py-1 -mx-2 rounded-lg transition-colors cursor-default">
+                <div class="flex items-center justify-between gap-6">
+                    <span class="flex items-center gap-2 text-gray-200"><span class="w-2.5 h-2.5 rounded-sm flex-shrink-0" style="background: ${c.color}"></span>${c.icon().replace('w-5 h-5', 'w-4 h-4')}${c.chain}</span>
+                    <span class="text-right">${c.amount === null
+                        ? '<span class="block text-xs text-gray-400">Not read</span>'
+                        : `<span class="block text-white font-medium tabular-nums">${pct(c.amount)}</span><span class="block text-xs text-gray-300 tabular-nums">${whole(c.amount)} DATA</span>`}</span>
+                </div>
+            </li>`;
+            return head;
+        }).join('')}
+        <li class="flex items-center justify-between gap-6 pt-3 border-t border-[#2a2a2a]"><span class="text-gray-300">Total supply</span><span class="text-white font-medium tabular-nums">${whole(supply.total)} DATA</span></li>`;
+
+    // The slices clockwise from the top, a hair apart; each pushed out along its chain's middle when it stands out
+    const GAP = 0.02;
+    let start = 0;
+    const chainArc = new Map();
+    const slices = parts.map(part => {
+        const sweep = supply.total > 0 ? part.amount / supply.total * 2 * Math.PI : 0;
+        const [a0, a1] = [start + GAP / 2, start + Math.max(GAP, sweep) - GAP / 2];
+        const arc = chainArc.get(part.i) || [start, start];
+        chainArc.set(part.i, [arc[0], start + sweep]);
+        start += sweep;
+        return { ...part, d: ringSlice(a0, a1, 118, 74) };
+    });
+    slices.forEach(s => {
+        const [a0, a1] = chainArc.get(s.i);
+        const mid = (a0 + a1) / 2;
+        s.dx = (10 * Math.sin(mid)).toFixed(1);
+        s.dy = (-10 * Math.cos(mid)).toFixed(1);
+    });
+    const DEPTH = 14;   // the ring's thickness: layers 1 px apart, darker below the top
+    const layer = (z, top) => `
+        <svg viewBox="0 0 240 240" style="transform: translateZ(${z}px); pointer-events: none" aria-hidden="true">
+            ${slices.map(s => `<g data-slice="${s.i}" data-dx="${s.dx}" data-dy="${s.dy}"><path d="${s.d}" fill="${top ? s.color : darker(s.color, 0.55)}"/></g>`).join('')}
+        </svg>`;
+    // The pointer's layer: the slices at rest, see-through, above the ring (a slice pushed out never slips from under it);
+    // each part's tooltip its chain's total (the parts are in the legend's)
+    const hits = `
+        <svg viewBox="0 0 240 240" style="transform: translateZ(1px)">
+            ${slices.map(s => `<path data-slice-hit="${s.i}" d="${s.d}" fill="transparent" data-tooltip-content="<span class='font-semibold'>${s.c.chain}</span><br>${whole(s.c.amount)} DATA<br>${pct(s.c.amount)}"/>`).join('')}
+        </svg>`;
+    container.innerHTML = `
+        <div class="supply-ring-shadow"></div>
+        <div class="supply-ring-float"><div class="supply-ring-tilt">
+            ${Array.from({ length: DEPTH }, (_, k) => layer(k - DEPTH, false)).join('')}
+            ${layer(0, true)}
+            ${hits}
+        </div></div>`;
+}
 
 const usesPrivateKey = () => Boolean(window.appSigner?.privateKey);
 
@@ -1103,9 +1305,19 @@ async function refreshAll() {
     }
 }
 
+function setupSupplyListeners() {
+    const chart = $('bridge-supply-chart');
+    const legend = $('bridge-supply-legend');
+    chart?.addEventListener('mouseover', (e) => highlightSlice(Number(e.target.closest('[data-slice-hit]')?.dataset.sliceHit ?? -1)));
+    chart?.addEventListener('mouseleave', () => highlightSlice(-1));
+    legend?.addEventListener('mouseover', (e) => highlightSlice(Number(e.target.closest('li[data-slice]')?.dataset.slice ?? -1)));
+    legend?.addEventListener('mouseleave', () => highlightSlice(-1));
+}
+
 function setupListeners() {
     if (state.listenersSetup) return;
     state.listenersSetup = true;
+    setupSupplyListeners();
     $('bridge-amount')?.addEventListener('input', () => {
         if (state.flow) return;
         showError('');
@@ -1166,6 +1378,8 @@ export const BridgeLogic = {
         }
         renderDirection();
         renderTransfers();
+        renderSupply();
+        loadSupply();
         updateEstimate();
         if (state.address) {
             await refreshAll();
