@@ -4,9 +4,9 @@
  * Allows operators to automatically manage stakes across sponsorships
  */
 
-import { runQuery, switchToFallbackRpc, getCurrentRpcUrl, readWithFallback, isRateLimitError as isRateLimitErrorService } from '../core/services.js';
-import { convertWeiToData, formatBigNumber } from '../core/utils.js';
-import { OPERATOR_CONTRACT_ABI, SPONSORSHIP_ABI } from '../core/constants.js';
+import { runQuery, switchToFallbackRpc, getCurrentRpcUrl, readWithFallback, getReadOnlyProvider, isRateLimitError as isRateLimitErrorService } from '../core/services.js';
+import { convertWeiToData, formatBigNumber, getFriendlyErrorMessage } from '../core/utils.js';
+import { OPERATOR_CONTRACT_ABI, SPONSORSHIP_ABI, OPERATOR_V4 } from '../core/constants.js';
 import { ethers } from 'ethers';
 
 // ethers is loaded globally from libs/ethers.umd.min.js
@@ -130,6 +130,26 @@ async function fetchMinStakePerSponsorship() {
  * @param {Set<string>} excludedSponsorships - Set of excluded sponsorship IDs
  * @returns {Promise<Map<string, Object>>} Map of sponsorship ID to config
  */
+/**
+ * The full sponsorships among the ones with a max operator count: isFull() on the chain for sponsorships
+ * deployed from 2026-10-12, the subgraph's operatorCount / maxOperators for older ones (they have no isFull)
+ * @param {Array<{id: string, operatorCount: number|string, maxOperators: string|null}>} sponsorships
+ * @returns {Promise<Set<string>>} ids of the full ones
+ */
+async function fetchFullSponsorships(sponsorships) {
+    const full = new Set();
+    await Promise.all(sponsorships.filter(sp => sp.maxOperators !== null && sp.maxOperators !== undefined).map(async sp => {
+        let isFull;
+        try {
+            isFull = await readWithFallback(() => new ethers.Contract(sp.id, SPONSORSHIP_ABI, getReadOnlyProvider()).isFull());
+        } catch {
+            isFull = Number(sp.operatorCount) >= Number(sp.maxOperators);
+        }
+        if (isFull) full.add(sp.id);
+    }));
+    return full;
+}
+
 async function fetchStakeableSponsorships(currentStakes, maxAcceptableMinOperatorCount, excludedSponsorships) {
     const now = Math.floor(Date.now() / 1000);
     const query = `
@@ -158,14 +178,10 @@ async function fetchStakeableSponsorships(currentStakes, maxAcceptableMinOperato
     
     const data = await runQuery(query);
     const sponsorships = data.sponsorships || [];
+    const full = await fetchFullSponsorships(sponsorships.filter(sp => !currentStakes.has(sp.id)));
     
-    const hasAcceptableOperatorCount = (item) => {
-        if (currentStakes.has(item.id)) {
-            // Already staked - keep in list
-            return true;
-        }
-        return (item.maxOperators === null) || (item.operatorCount < Number(item.maxOperators));
-    };
+    // Already staked: kept in the list; else not full
+    const hasAcceptableOperatorCount = (item) => currentStakes.has(item.id) || !full.has(item.id);
     
     const result = new Map();
     for (const sp of sponsorships) {
@@ -314,6 +330,7 @@ export async function fetchAllSponsorshipsForDisplay(operatorId) {
     const data = await runQuery(query);
     const sponsorships = data.sponsorships || [];
     const now = Math.floor(Date.now() / 1000);
+    const full = await fetchFullSponsorships(sponsorships);
     
     return sponsorships.map(sp => {
         // Determine why a sponsorship might not be stakeable by autostaker
@@ -342,7 +359,7 @@ export async function fetchAllSponsorshipsForDisplay(operatorId) {
         if (payoutPerSec < MIN_SPONSORSHIP_TOTAL_PAYOUT_PER_SECOND) issues.push('Low payout');
         if (remainingWei < MIN_SPONSORSHIP_BALANCE_WEI) issues.push('Low balance');
         if (minOperators > DEFAULT_MAX_ACCEPTABLE_MIN_OPERATOR_COUNT) issues.push(`Min operators: ${minOperators}`);
-        if (sp.maxOperators !== null && operatorCount >= parseInt(sp.maxOperators)) issues.push('Full');
+        if (full.has(sp.id)) issues.push('Full');
         
         return {
             id: sp.id,
@@ -931,6 +948,89 @@ function isRetryableError(error) {
  * @param {Object} config - Autostaker configuration (for recalculation)
  * @returns {Promise<Object>} Execution result
  */
+/** V4 Operators have rebalanceStake */
+async function isV4Operator(operatorContract) {
+    try {
+        return (await readWithFallback(() => operatorContract.version())).gte(OPERATOR_V4);
+    } catch {
+        return false;
+    }
+}
+
+/**
+ * The reductions and stakes of one rebalanceStake, checked as the one-by-one path does: a locked stake skips its
+ * reduction, a partial one is kept at the sponsorship's minimum, and one with nothing to reduce is skipped
+ */
+async function prepareRebalance(unstakeActions, stakeActions, operatorContract, operatorId, provider) {
+    const reduce = [];
+    const skipped = [];
+    for (const action of unstakeActions) {
+        const sponsorship = new ethers.Contract(action.sponsorshipId, SPONSORSHIP_ABI, provider);
+        const lockedStake = await readWithFallback(() => sponsorship.lockedStakeWei(operatorId));
+        if (lockedStake.gt(0)) {
+            skipped.push({ action, error: `Cannot unstake - ${ethers.utils.formatEther(lockedStake)} DATA is locked due to lock period` });
+            continue;
+        }
+        let target = ethers.BigNumber.from('0x' + action.targetStake.toString(16));
+        if (!target.isZero()) {
+            // 0 leaves the sponsorship (unstake); a partial reduction keeps at least the minimum
+            const [current, minimum] = await Promise.all([
+                readWithFallback(() => operatorContract.stakedInto(action.sponsorshipId)),
+                readWithFallback(() => sponsorship.minimumStakeOf(operatorId))
+            ]);
+            if (target.lt(minimum)) target = minimum;
+            if (target.gte(current)) {
+                skipped.push({ action, error: 'Cannot reduce stake - target is not less than current stake or at minimum' });
+                continue;
+            }
+        }
+        reduce.push({ action, target });
+    }
+    const stake = stakeActions.map(action => ({ action, amount: ethers.BigNumber.from('0x' + action.amount.toString(16)) }));
+    return { reduce, stake, skipped };
+}
+
+/**
+ * V4 Operators: all the reductions and stakes in one rebalanceStake transaction (stake moves at once, the
+ * undelegation queue is paid from the freed DATA, and a full sponsorship fails it before any stake moves).
+ * @returns {Promise<Object|null>} the execution result, or null to run the actions one by one: fewer than 2
+ *   to batch, or the transaction would revert (not enough DATA freed, queue not paid, a full sponsorship)
+ */
+async function executeRebalance(unstakeActions, stakeActions, operatorContract, operatorId, signer, gasSettings, onProgress) {
+    const { reduce, stake, skipped } = await prepareRebalance(unstakeActions, stakeActions, operatorContract, operatorId, signer.provider);
+    if (reduce.length + stake.length < 2) return null;
+    const args = [
+        reduce.map(r => r.action.sponsorshipId), reduce.map(r => r.target),
+        stake.map(s => s.action.sponsorshipId), stake.map(s => s.amount)
+    ];
+    let gasLimit;
+    try {
+        gasLimit = (await operatorContract.estimateGas.rebalanceStake(...args)).mul(13).div(10);
+    } catch (e) {
+        console.warn('[Autostaker] rebalanceStake would fail, running the actions one by one:', getFriendlyErrorMessage(e));
+        return null;
+    }
+    const actions = [...reduce, ...stake].map(item => item.action);
+    if (onProgress) {
+        const moved = stake.reduce((sum, s) => sum + BigInt(s.amount.toString()), 0n);
+        onProgress({ current: 1, total: 1, action: { type: 'rebalance', sponsorshipId: operatorId, amount: moved } });
+    }
+    try {
+        console.log(`[Autostaker] Calling rebalanceStake: ${reduce.length} reduction(s), ${stake.length} stake(s)`);
+        const tx = await operatorContract.rebalanceStake(...args, { ...gasSettings, gasLimit });
+        const receipt = await tx.wait();
+        return {
+            success: skipped.length === 0,
+            results: { successful: actions.map(action => ({ action, txHash: receipt.transactionHash })), failed: skipped }
+        };
+    } catch (e) {
+        // Not retried one by one: a sent transaction may have gone through. The next cycle recalculates from the chain.
+        console.error('[Autostaker] rebalanceStake failed:', e);
+        const error = getFriendlyErrorMessage(e);
+        return { success: false, results: { successful: [], failed: [...actions.map(action => ({ action, error })), ...skipped] } };
+    }
+}
+
 export async function executeActions(actions, operatorId, signer, onProgress, config = null) {
     if (!actions || actions.length === 0) {
         return { success: true, message: 'No actions to execute' };
@@ -1029,6 +1129,12 @@ export async function executeActions(actions, operatorId, signer, onProgress, co
         } catch (e) {
             console.warn('[Autostaker] Failed to check queue status:', e.message);
         }
+    }
+    
+    // V4 Operators: one rebalanceStake transaction for all of them, when it goes through
+    if (orderedActions.length > 1 && await isV4Operator(operatorContract)) {
+        const rebalanced = await executeRebalance(unstakeActions, stakeActions, operatorContract, operatorId, signer, gasSettings, onProgress);
+        if (rebalanced) return rebalanced;
     }
     
     // Track freed funds from unstakes to validate stakes
