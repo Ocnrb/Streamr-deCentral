@@ -203,16 +203,18 @@ export const OPERATOR_AVATAR_PLACEHOLDER = 'https://placehold.co/64x64/1E1E1E/a3
 export const AVATAR_STREAM_MARKER = '#avatar-stream=';
 const PROFILE_STREAM_ID_REGEX = /^(0x[0-9a-fA-F]{40}|[a-z0-9.-]+\.eth)\/[A-Za-z0-9_.\-/]+$/;
 
-// IPFS avatars that failed to load are remembered (7 days): the files of most Streamr operator avatars
-// are no longer available on IPFS, so they aren't requested again on every render
-const DEAD_CIDS_STORAGE_KEY = 'deadIpfsAvatarCids';
-const DEAD_CID_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+// IPFS avatars that failed on every gateway are remembered for a day, so they aren't requested again on
+// every render. (v2: the list kept before the Hub moved the avatars to Pinata, 2026-10-19, is dropped.)
+const DEAD_CIDS_STORAGE_KEY = 'deadIpfsAvatarCids.v2';
+const OLD_DEAD_CIDS_STORAGE_KEY = 'deadIpfsAvatarCids';
+const DEAD_CID_TTL_MS = 24 * 60 * 60 * 1000;
 let deadCids = null;
 
 function loadDeadCids() {
     if (deadCids) return deadCids;
     deadCids = new Map();
     try {
+        localStorage.removeItem(OLD_DEAD_CIDS_STORAGE_KEY);
         const stored = JSON.parse(localStorage.getItem(DEAD_CIDS_STORAGE_KEY) || '{}');
         const now = Date.now();
         for (const [cid, at] of Object.entries(stored)) {
@@ -243,12 +245,36 @@ export function ipfsCidFromAvatarUrl(url) {
     return match ? match[1] : null;
 }
 
+// Where an IPFS avatar is tried, in order (the Streamr Hub uploads operator avatars to Pinata since 2026-10-19):
+// 1. a small thumbnail through the wsrv.nl image proxy (the gateways serve the original file, often large, slow
+//    in lists), from the Filebase gateway: Pinata and ipfs.io answer the proxy with 429 (ipfs.io's public gateway
+//    is being sunset)
+// 2. Pinata's public gateway directly, from the browser (the original file)
+const IPFS_AVATAR_SOURCES = [
+    (cid, size) => `https://wsrv.nl/?url=${encodeURIComponent(`https://ipfs.filebase.io/ipfs/${cid}`)}&w=${size}&h=${size}&fit=cover&output=webp`,
+    (cid) => `https://gateway.pinata.cloud/ipfs/${cid}`
+];
+
 /**
- * IPFS avatar as a small square thumbnail through the wsrv.nl image proxy (as the Network Map does):
- * the gateway serves the original file, often large, which is slow in lists
+ * An IPFS avatar's URL: its first source (see IPFS_AVATAR_SOURCES), or the given one
+ * @param {string} cid
+ * @param {number} [size=160] - thumbnail side in pixels
+ * @param {number} [source=0] - index of the source
  */
-export function ipfsAvatarUrl(cid, size = 160) {
-    return `https://wsrv.nl/?url=${encodeURIComponent(`https://ipfs.io/ipfs/${cid}`)}&w=${size}&h=${size}&fit=cover&output=webp`;
+export function ipfsAvatarUrl(cid, size = 160, source = 0) {
+    return IPFS_AVATAR_SOURCES[source](cid, size);
+}
+
+/**
+ * The next source of an IPFS avatar after the given URL failed, or null when it was the last one
+ */
+export function nextIpfsAvatarUrl(url) {
+    const cid = ipfsCidFromAvatarUrl(url);
+    if (!cid) return null;
+    const size = Number(/[?&]w=(\d+)/.exec(url)?.[1]) || 160;
+    const current = IPFS_AVATAR_SOURCES.findIndex((source) => source(cid, size) === url);
+    if (current === -1 || current === IPFS_AVATAR_SOURCES.length - 1) return null;
+    return IPFS_AVATAR_SOURCES[current + 1](cid, size);
 }
 
 /**
