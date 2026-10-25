@@ -37,7 +37,7 @@ export async function fetchOperators(skip = 0, filterQuery = '') {
                 const query = `
                 query GetOperatorsList {
                     operators(first: ${OPERATORS_PER_PAGE}, skip: ${skip}, orderBy: valueWithoutEarnings, orderDirection: desc, ${whereClause}) {
-                        id valueWithoutEarnings delegatorCount metadataJsonString contractVersion stakes(first: 50) { amountWei sponsorship { spotAPY } }
+                        id valueWithoutEarnings delegatorCount metadataJsonString stakes(first: 50) { amountWei sponsorship { spotAPY } }
                     }
                 }`;
                 const data = await runQuery(query);
@@ -51,7 +51,7 @@ export async function fetchOperators(skip = 0, filterQuery = '') {
             const topResultsQuery = `
                 query GetTopOperatorsForClientSearch {
                     operators(first: 1000, orderBy: valueWithoutEarnings, orderDirection: desc) {
-                        id valueWithoutEarnings delegatorCount metadataJsonString contractVersion stakes(first: 50) { amountWei sponsorship { spotAPY } }
+                        id valueWithoutEarnings delegatorCount metadataJsonString stakes(first: 50) { amountWei sponsorship { spotAPY } }
                     }
                 }`;
             const data = await runQuery(topResultsQuery);
@@ -64,7 +64,7 @@ export async function fetchOperators(skip = 0, filterQuery = '') {
         const query = `
             query GetOperatorsList {
                 operators(first: ${OPERATORS_PER_PAGE}, skip: ${skip}, orderBy: valueWithoutEarnings, orderDirection: desc) {
-                    id valueWithoutEarnings delegatorCount metadataJsonString contractVersion stakes(first: 50) { amountWei sponsorship { spotAPY } }
+                    id valueWithoutEarnings delegatorCount metadataJsonString stakes(first: 50) { amountWei sponsorship { spotAPY } }
                 }
             }`;
         const data = await runQuery(query);
