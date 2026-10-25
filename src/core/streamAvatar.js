@@ -14,7 +14,7 @@
  */
 
 import { runQuery } from './services.js';
-import { AVATAR_STREAM_MARKER as MARKER, OPERATOR_AVATAR_PLACEHOLDER, isValidProfileStreamId, ipfsCidFromAvatarUrl, markDeadIpfsCid, gqlEscape } from './utils.js';
+import { AVATAR_STREAM_MARKER as MARKER, OPERATOR_AVATAR_PLACEHOLDER, isValidProfileStreamId, ipfsCidFromAvatarUrl, nextIpfsAvatarUrl, markDeadIpfsCid, gqlEscape } from './utils.js';
 import { STREAMR_SDK_CONTRACTS_CONFIG } from './constants.js';
 
 export { isValidProfileStreamId };
@@ -196,12 +196,18 @@ function parseMarker(src) {
 }
 
 /**
- * Error handler of the operator avatar <img> (avatarImgHtml): the IPFS image failed -> remember the
- * CID (not requested again for a while) and show the placeholder; the hydrator then uses the avatar
- * stream, if any.
+ * Error handler of the operator avatar <img> (avatarImgHtml): the IPFS image failed -> its next source
+ * (another gateway); when all failed, remember the CID (not requested again for a while) and show the
+ * placeholder; the hydrator then uses the avatar stream, if any.
  */
 function avatarFallback(img) {
-    const cid = ipfsCidFromAvatarUrl(img.getAttribute('src'));
+    const src = img.getAttribute('src');
+    const next = nextIpfsAvatarUrl(src);
+    if (next) {
+        img.src = next;
+        return;
+    }
+    const cid = ipfsCidFromAvatarUrl(src);
     if (cid) markDeadIpfsCid(cid);
     img.onerror = null;
     img.src = OPERATOR_AVATAR_PLACEHOLDER;
@@ -296,13 +302,17 @@ export async function loadOperatorAvatarImage(imageUrl) {
     const marker = parseMarker(imageUrl);
     const base = marker ? marker.base : imageUrl;
     if (base && !isPlaceholder(base)) {
-        try {
-            return await loadImage(base);
-        } catch (e) {
-            const cid = ipfsCidFromAvatarUrl(base);
-            if (cid) markDeadIpfsCid(cid);
-            if (!marker) return null;
+        // The IPFS image, from its sources in turn (see IPFS_AVATAR_SOURCES)
+        for (let url = base; url; url = nextIpfsAvatarUrl(url)) {
+            try {
+                return await loadImage(url);
+            } catch (e) {
+                if (!ipfsCidFromAvatarUrl(url)) break;   // not an IPFS image
+            }
         }
+        const cid = ipfsCidFromAvatarUrl(base);
+        if (cid) markDeadIpfsCid(cid);
+        if (!marker) return null;
     }
     if (!marker) return null;
     const dataUrl = await loadStreamAvatar(marker.streamId, marker.partition).catch(() => null);
