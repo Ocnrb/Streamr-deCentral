@@ -215,6 +215,8 @@ function processSponsorshipHistory(graphEvents, polygonscanTxs, limitToEtherscan
     });
 
     (polygonscanTxs || []).forEach(tx => {
+        // The protocol fee is 0 since 2026-10-12: its 0 DATA transfers are not shown
+        if (tx.methodId === 'Protocol Tax' && BigInt(tx.rawValue || '0') === 0n) return;
         const timestamp = Number(tx.timestamp); 
         if (!combinedEvents.has(timestamp)) {
             combinedEvents.set(timestamp, { timestamp, events: [] });
