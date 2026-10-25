@@ -84,12 +84,14 @@ test('the history names V4 rebalances and the 2026-10-09 drain', async ({ page }
     await expect(history).toContainText('Exploit Drain');
     await expect(history).toContainText('Collect Earnings');
     await expect(history).not.toContainText('0x38849a3a');
-    // The rebalance: leaving sponsorship 0 (no StakingEvent at 0) is its own block with its earnings and tax,
-    // the stake into sponsorship 3 another one
+    // The rebalance: leaving sponsorship 0 (no StakingEvent at 0) is its own block with its earnings (its tax
+    // of 0, as the protocol fee is now, is not shown), the stake into sponsorship 3 another one
     const blocks = history.locator('div.relative');
     const exit = blocks.filter({ hasText: 'stream-0' }).filter({ hasText: 'Collect Earnings' });
     await expect(exit).toHaveCount(1);
     await expect(exit).toContainText('Unstaked');
-    await expect(exit).toContainText('Protocol Tax');
+    await expect(exit).not.toContainText('Protocol Tax');
+    // The drain's tax (918 DATA) is shown
+    await expect(history).toContainText(/Protocol Tax\s*− 918 DATA/);
     await expect(blocks.filter({ hasText: 'stream-3' }).filter({ hasText: /Staked\s*− 4\D?000 DATA/ })).toHaveCount(1);
 });
