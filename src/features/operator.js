@@ -95,14 +95,12 @@ const INITIAL_ETHERSCAN_OFFSET = 500;
  */
 function computeStakeChanges(graphEvents, polygonscanTxs) {
     const changes = new Map();
-    // Exits: Unstake / Force Unstake, and stake returned with no StakingEvent in that tx (a full exit
-    // within Rebalance Stake, where the subgraph writes no event at 0)
-    const graphTxHashes = new Set((graphEvents || [])
-        .map(e => (typeof e.id === 'string' ? e.id.split('-').pop().toLowerCase() : null))
-        .filter(Boolean));
+    // Exits: Unstake / Force Unstake, and stake returned with no StakingEvent of that sponsorship in that tx
+    // (a full exit within Rebalance Stake, where the subgraph writes no event at 0)
+    const graphKeys = new Set((graphEvents || []).map(e => (typeof e.id === 'string' ? e.id.toLowerCase() : null)).filter(Boolean));
     const unstakes = (polygonscanTxs || [])
         .filter(tx => tx.from && (['Unstake', 'Force Unstake'].includes(tx.methodId)
-            || (tx.methodId === 'Reduce Stake' && tx.direction === 'IN' && !graphTxHashes.has(tx.txHash?.toLowerCase()))))
+            || (tx.methodId === 'Reduce Stake' && tx.direction === 'IN' && !graphKeys.has(`${tx.from.toLowerCase()}-${tx.txHash?.toLowerCase()}`))))
         .map(tx => ({ sponsorship: tx.from.toLowerCase(), timestamp: Number(tx.timestamp) }));
     // Polygonscan transfers by transaction (lowercase hash)
     const scanByTx = new Map();
@@ -228,17 +226,19 @@ function processSponsorshipHistory(graphEvents, polygonscanTxs, limitToEtherscan
             token: tx.token,
             methodId: tx.methodId,
             txHash: tx.txHash,
-            relatedObject: tx.direction
+            relatedObject: tx.direction,
+            // The other side of the transfer (a sponsorship for stake moves and earnings)
+            counterparty: (tx.direction === 'IN' ? tx.from : tx.to)?.toLowerCase() || null
         });
     });
 
     // Full exits: the subgraph writes no StakingEvent when the stake goes to 0, so the stake returned by
-    // the sponsorship (Unstake / Force Unstake / Reduce Stake with no event in that tx) gets its row here,
-    // within the period covered by the loaded StakingEvents
+    // the sponsorship (Unstake / Force Unstake / Reduce Stake with no event of that sponsorship in that tx;
+    // a Rebalance Stake has events of the other sponsorships) gets its row here, within the period covered
+    // by the loaded StakingEvents
     const allGraphEvents = state.historyState.graphEvents?.length ? state.historyState.graphEvents : (graphEvents || []);
-    const graphTxHashes = new Set(allGraphEvents
-        .map(e => (typeof e.id === 'string' ? e.id.split('-').pop().toLowerCase() : null))
-        .filter(Boolean));
+    // StakingEvent ids: "<sponsorship>-<txHash>"
+    const graphKeys = new Set(allGraphEvents.map(e => (typeof e.id === 'string' ? e.id.toLowerCase() : null)).filter(Boolean));
     const coverageStart = state.historyState.hasMoreGraph && allGraphEvents.length
         ? Math.min(...allGraphEvents.map(e => Number(e.date)))
         : -Infinity;
@@ -253,7 +253,7 @@ function processSponsorshipHistory(graphEvents, polygonscanTxs, limitToEtherscan
         const timestamp = Number(tx.timestamp);
         const sponsorshipId = tx.from?.toLowerCase();
         if (!['Unstake', 'Force Unstake', 'Reduce Stake'].includes(tx.methodId) || tx.direction !== 'IN' || tx.token !== 'DATA') return;
-        if (!sponsorshipId || !tx.txHash || graphTxHashes.has(tx.txHash.toLowerCase()) || timestamp < coverageStart) return;
+        if (!sponsorshipId || !tx.txHash || graphKeys.has(`${sponsorshipId}-${tx.txHash.toLowerCase()}`) || timestamp < coverageStart) return;
         if (!combinedEvents.has(timestamp)) combinedEvents.set(timestamp, { timestamp, events: [] });
         const streamId = streamOf.get(sponsorshipId);
         combinedEvents.get(timestamp).events.push({

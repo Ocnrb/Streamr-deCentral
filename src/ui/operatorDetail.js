@@ -245,12 +245,17 @@ export function renderSponsorshipsHistory(historyGroups, showLoadAllButton = tru
             unstake: ['Unstake', 'Force Unstake', 'Reduce Stake'],
             earnings: ['Collect Earnings']
         };
+        // Within a transaction (a Rebalance Stake moves several stakes): exits and reductions first, as they run
+        const ACTION_ORDER = { unstake: 0, reduce: 1, earnings: 2, stake: 3 };
         const clustersHtml = clusters.map((cluster, index) => {
             const merged = new Set();
             // Each action is its own block: a short, slightly thicker bar on the left, rows close
             // together, and some space between blocks
             const actionBlocks = [];
-            for (const event of cluster.graph) {
+            const blockSponsorships = [];
+            const graphEvents = [...cluster.graph].sort((a, b) => (ACTION_ORDER[a.stakeChange] ?? 4) - (ACTION_ORDER[b.stakeChange] ?? 4));
+            for (const event of graphEvents) {
+                blockSponsorships.push(event.relatedObject?.id?.toLowerCase() || null);
                 const methods = matchingMethods[event.stakeChange];
                 const match = methods && cluster.scan.find(t => !merged.has(t) && methods.includes(t.methodId) && t.token === 'DATA'
                     && (event.stakeChange === 'earnings' || Math.abs(Math.abs(t.amount) - Math.abs(event.stakeDelta)) < 1));
@@ -263,9 +268,27 @@ export function renderSponsorshipsHistory(historyGroups, showLoadAllButton = tru
                     ? scanRowHtml(match)
                     : graphRowHtml(event, scanBadgeHtml(match))));
             }
-            // The other transfers of the same transaction (Protocol Tax, earnings...) belong to its action
-            const otherTransfers = cluster.scan.filter(t => !merged.has(t)).map(t => scanRowHtml(t)).join('');
-            if (actionBlocks.length > 0 && otherTransfers) actionBlocks[actionBlocks.length - 1] += otherTransfers;
+            // The other transfers of the same transaction (earnings, Protocol Tax...) belong to an action: the one
+            // of the sponsorship on the other side of the transfer, the tax to the one whose earnings it is taken
+            // from, else the last one
+            const leftover = cluster.scan.filter(t => !merged.has(t));
+            const otherTransfers = leftover.map(t => scanRowHtml(t)).join('');
+            if (actionBlocks.length > 0) {
+                let earningsBlock = -1;
+                const placeOf = (t) => {
+                    const own = t.counterparty ? blockSponsorships.indexOf(t.counterparty) : -1;
+                    if (own !== -1) return own;
+                    if (t.methodId === 'Protocol Tax' && earningsBlock !== -1) return earningsBlock;
+                    return actionBlocks.length - 1;
+                };
+                // Earnings first, so the tax can follow them
+                const ordered = [...leftover].sort((a, b) => (a.methodId === 'Protocol Tax') - (b.methodId === 'Protocol Tax'));
+                for (const t of ordered) {
+                    const place = placeOf(t);
+                    if (t.methodId === 'Collect Earnings' && earningsBlock === -1) earningsBlock = place;
+                    actionBlocks[place] += scanRowHtml(t);
+                }
+            }
             const graphHtml = actionBlocks.map(block => `
                 <div class="relative pl-4 [&>div]:py-1.5 before:content-[''] before:absolute before:left-0 before:top-2 before:bottom-2 before:w-[3px] before:rounded-full before:bg-[#444]">${block}</div>`).join('');
             const scanHtml = actionBlocks.length > 0 ? '' : otherTransfers;

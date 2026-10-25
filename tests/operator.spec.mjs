@@ -30,7 +30,8 @@ const EXPLORER = {
 
 let stats, errors;
 test.beforeEach(async ({ page }) => {
-    stats = await mockNetwork(page.context(), { explorer: EXPLORER });
+    // The rebalance also staked into sponsorship 3 (its StakingEvent; leaving sponsorship 0 has none)
+    stats = await mockNetwork(page.context(), { explorer: EXPLORER, stakingEvents: [{ operator: 0, sponsorship: 3, tx: 901, secsAgo: 300, amount: 104000 }] });
     errors = [];
     page.on('pageerror', e => errors.push(e.message));
 });
@@ -83,4 +84,12 @@ test('the history names V4 rebalances and the 2026-10-09 drain', async ({ page }
     await expect(history).toContainText('Exploit Drain');
     await expect(history).toContainText('Collect Earnings');
     await expect(history).not.toContainText('0x38849a3a');
+    // The rebalance: leaving sponsorship 0 (no StakingEvent at 0) is its own block with its earnings and tax,
+    // the stake into sponsorship 3 another one
+    const blocks = history.locator('div.relative');
+    const exit = blocks.filter({ hasText: 'stream-0' }).filter({ hasText: 'Collect Earnings' });
+    await expect(exit).toHaveCount(1);
+    await expect(exit).toContainText('Unstaked');
+    await expect(exit).toContainText('Protocol Tax');
+    await expect(blocks.filter({ hasText: 'stream-3' }).filter({ hasText: /Staked\s*− 4\D?000 DATA/ })).toHaveCount(1);
 });
