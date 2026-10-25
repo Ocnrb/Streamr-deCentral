@@ -95,8 +95,14 @@ const INITIAL_ETHERSCAN_OFFSET = 500;
  */
 function computeStakeChanges(graphEvents, polygonscanTxs) {
     const changes = new Map();
+    // Exits: Unstake / Force Unstake, and stake returned with no StakingEvent in that tx (a full exit
+    // within Rebalance Stake, where the subgraph writes no event at 0)
+    const graphTxHashes = new Set((graphEvents || [])
+        .map(e => (typeof e.id === 'string' ? e.id.split('-').pop().toLowerCase() : null))
+        .filter(Boolean));
     const unstakes = (polygonscanTxs || [])
-        .filter(tx => ['Unstake', 'Force Unstake'].includes(tx.methodId) && tx.from)
+        .filter(tx => tx.from && (['Unstake', 'Force Unstake'].includes(tx.methodId)
+            || (tx.methodId === 'Reduce Stake' && tx.direction === 'IN' && !graphTxHashes.has(tx.txHash?.toLowerCase()))))
         .map(tx => ({ sponsorship: tx.from.toLowerCase(), timestamp: Number(tx.timestamp) }));
     // Polygonscan transfers by transaction (lowercase hash)
     const scanByTx = new Map();

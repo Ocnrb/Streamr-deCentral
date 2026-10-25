@@ -59,18 +59,6 @@ const LINK_FIELDS = [
 // Same CID check as Utils.parseOperatorMetadata (CIDv0 Qm... / CIDv1 b...)
 const IPFS_CID_REGEX = /^Qm[1-9A-HJ-NP-Za-km-z]{44}$|^b[a-z2-7]{58,}$/;
 
-// Custom errors of the OperatorFactory / Operator contracts (4-byte selectors)
-const CONTRACT_ERRORS = {
-    'OperatorAlreadyDeployed(address)': 'This wallet already has an Operator.',
-    'PolicyNotTrusted()': 'One of the operator policies is not trusted by the factory.',
-    'StakedInSponsorships()': "The owner's cut can only be changed when the operator is not staked in any sponsorship.",
-    'InvalidOperatorsCut(uint256)': "The owner's cut must be between 0% and 100%.",
-    'AccessDeniedOperatorOnly()': 'This wallet is not the owner or a controller of the operator.'
-};
-const CONTRACT_ERROR_SELECTORS = Object.fromEntries(
-    Object.entries(CONTRACT_ERRORS).map(([signature, message]) => [ethers.utils.id(signature).slice(0, 10), message])
-);
-
 // ============================================
 // State
 // ============================================
@@ -146,13 +134,9 @@ function formatPol(wei) {
 
 function formatTxError(error) {
     if (error?.code === 4001 || error?.code === 'ACTION_REJECTED') return 'Transaction rejected in your wallet.';
-    const text = `${error?.reason || ''} ${error?.error?.message || ''} ${error?.data?.message || ''} ${error?.message || ''} ${error?.error?.data?.data || ''} ${error?.data || ''} ${error?.error?.data || ''}`;
-    for (const [selector, message] of Object.entries(CONTRACT_ERROR_SELECTORS)) {
-        if (text.includes(selector)) return message;
-    }
-    for (const [signature, message] of Object.entries(CONTRACT_ERRORS)) {
-        if (text.includes(signature.split('(')[0])) return message;
-    }
+    const contractError = Utils.contractErrorMessage(error);
+    if (contractError) return contractError;
+    const text = `${error?.reason || ''} ${error?.error?.message || ''} ${error?.message || ''}`;
     if (text.toLowerCase().includes('insufficient funds')) return 'Insufficient POL to pay for gas.';
     if (Services.isRateLimitError(error)) return 'RPC rate limited. Please try again in a few seconds.';
     return Utils.getFriendlyErrorMessage(error);

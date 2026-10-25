@@ -1,5 +1,5 @@
 // The operator page: details, delegators, sponsorships, charts and the stats panel
-import { escapeHtml, formatBigNumber, convertWeiToData, createAddressLink, createEntityLink, createDelegatorLink, parseOperatorMetadata, calculateWeightedApy, avatarImgHtml } from '../core/utils.js';
+import { escapeHtml, formatBigNumber, convertWeiToData, createAddressLink, createEntityLink, createDelegatorLink, parseOperatorMetadata, calculateWeightedApy, avatarImgHtml, operatorVersionBadgeHtml } from '../core/utils.js';
 import { getMaticBalance } from '../core/services.js';
 import { initLeafletMap } from './nodeMap.js';
 import { updateProfileButton } from './profileShortcut.js';
@@ -195,7 +195,7 @@ export function renderSponsorshipsHistory(historyGroups, showLoadAllButton = tru
 
         // From the operator's side: earnings and delegations come in (+), the protocol tax and
         // undelegations go out (−)
-        const SCAN_SIGNS = { 'Collect Earnings': '+ ', 'Delegate': '+ ', 'Protocol Tax': '− ', 'Undelegate': '− ' };
+        const SCAN_SIGNS = { 'Collect Earnings': '+ ', 'Delegate': '+ ', 'Protocol Tax': '− ', 'Undelegate': '− ', 'Exploit Drain': '− ' };
         const scanSign = (event) => SCAN_SIGNS[event.methodId] || '';
 
         // sponsorship: shown after the method ("Collect Earnings on X") when merged with its action
@@ -682,6 +682,7 @@ export function renderOperatorDetails(data, globalState) {
                 <div class="flex-1 min-w-0">
                     <h2 class="text-lg sm:text-2xl lg:text-3xl font-bold text-white break-words" ${description ? `data-tooltip-content="${escapeHtml(description)}"` : ''}>${safeOperatorName}</h2>
                     ${name ? `<div class="font-mono text-xs sm:text-sm text-gray-400 mt-1 break-all">${createAddressLink(op.id)}</div>` : ''}
+                    ${operatorVersionBadgeHtml(op.contractVersion) ? `<div class="mt-2">${operatorVersionBadgeHtml(op.contractVersion)}</div>` : ''}
                 </div>
                 <div class="flex-shrink-0 text-right">
                     <p class="text-xs sm:text-sm text-gray-400 font-semibold mb-1">APY</p>

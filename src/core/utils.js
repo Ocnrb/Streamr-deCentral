@@ -1,3 +1,5 @@
+import { CONTRACT_ERROR_MESSAGES } from './constants.js';
+
 /**
  * Production logger - only logs errors to keep console clean
  */
@@ -260,6 +262,17 @@ export function ipfsAvatarUrl(cid, size = 160) {
  * @param {string} [options.alt]
  * @param {string} [options.attrs] - extra raw attributes (already escaped)
  */
+/**
+ * Operator contract version pill ("V4") from the subgraph's contractVersion; empty when unknown
+ * @param {string|number|null|undefined} version
+ */
+export function operatorVersionBadgeHtml(version) {
+    const v = parseInt(version, 10);
+    if (!Number.isInteger(v) || v < 1) return '';
+    const tone = v >= 4 ? 'border-green-700 text-green-300' : 'border-[#444444] text-gray-400';
+    return `<span class="inline-flex items-center rounded border ${tone} px-1.5 py-0.5 text-[10px] font-semibold leading-none" data-tooltip-content="Operator contract version">V${v}</span>`;
+}
+
 export function avatarImgHtml(imageUrl, { className = 'w-8 h-8', alt = '', attrs = '' } = {}) {
     const src = typeof imageUrl === 'string' && imageUrl.startsWith('https://') ? imageUrl : OPERATOR_AVATAR_PLACEHOLDER;
     return `<img src="${escapeHtml(src)}" alt="${escapeHtml(alt)}" loading="lazy" data-avatar-fallback class="rounded-full object-cover flex-shrink-0 bg-[#1E1E1E] ${className}" ${attrs}>`;
@@ -324,10 +337,29 @@ export function parseOperatorMetadata(metadataJsonString) {
  * @param {Error} error - The error object from ethers.js or wallet.
  * @returns {string} A user-friendly error message.
  */
+/**
+ * The message of a known custom error of the Streamr contracts (CONTRACT_ERROR_MESSAGES), found by its
+ * selector in the revert data or by its name in the error text; null when there is none
+ * @param {Error} error - from ethers.js or the wallet
+ */
+export function contractErrorMessage(error) {
+    const parts = [error?.reason, error?.message, error?.data, error?.data?.data, error?.data?.message,
+        error?.error?.message, error?.error?.data, error?.error?.data?.data, error?.error?.error?.data];
+    const text = parts.filter(p => typeof p === 'string').join(' ');
+    if (!text) return null;
+    const lower = text.toLowerCase();
+    for (const [selector, [name, message]] of Object.entries(CONTRACT_ERROR_MESSAGES)) {
+        if (lower.includes(selector.slice(2)) || text.includes(name)) return message;
+    }
+    return null;
+}
+
 export function getFriendlyErrorMessage(error) {
     if (error.code === 4001) {
         return 'Transaction rejected in your wallet.';
     }
+    const contractError = contractErrorMessage(error);
+    if (contractError) return contractError;
     if (error.reason) {
         if (error.reason.toLowerCase().includes('slash')) {
             return 'Operation failed. The operator may have been slashed.';
