@@ -15,7 +15,7 @@ export const XSS_NAME = '<img src=x onerror="window.__xss=1">Evil';
 
 // ---------- Subgraph data ----------
 
-function buildData() {
+function buildData(extraStakingEvents = []) {
     const T = {};
     T.operators = Array.from({ length: 1500 }, (_, i) => ({
         id: hex(0xa0000 + i), owner: hex(0xf000 + i),
@@ -89,7 +89,8 @@ function buildData() {
         se(1, 1, 705, 4 * DAY, 80000), se(1, 1, 706, 600, 80000),       // earnings collected: skipped
         se(5, 2, 707, 5 * DAY, 50000), se(5, 2, 708, 900, 42000),       // slashed 8K
         se(7, 6, 709, 6 * DAY, 20000),                                  // then unstaked (Unstaked log): 20K
-        se(8, 9, 710, 10 * DAY, 30000), se(8, 9, 711, 200, 45000)       // left 8 days ago, staked again: +45K
+        se(8, 9, 710, 10 * DAY, 30000), se(8, 9, 711, 200, 45000),      // left 8 days ago, staked again: +45K
+        ...extraStakingEvents.map(e => se(e.operator, e.sponsorship, e.tx, e.secsAgo, e.amount))
     ];
     T.slashingEvents.push({ id: T.stakingEvents[7].id, amount: W(8000), date: T.stakingEvents[7].date, sponsorship: T.sponsorships[2], operator: { id: T.operators[5].id } });
     // Owners' self-delegations: 30% of the first 300 operators' value
@@ -211,9 +212,10 @@ function project(value, selection) {
  * one whose operators send coordination heartbeats (the 300 with stake: even ones 1 node, odd ones 2, the first
  * 10 also a shared one = 451 nodes). Returns what the app asked for.
  * @param {Object} [options.explorer] - an address's own transactions: { [address]: { txlist: [], tokentx: [] } }
+ * @param {Array} [options.stakingEvents] - more StakingEvents: { operator, sponsorship (indexes), tx, secsAgo, amount (DATA) }
  */
-export async function mockNetwork(context, { explorer = {} } = {}) {
-    const T = buildData();
+export async function mockNetwork(context, { explorer = {}, stakingEvents = [] } = {}) {
+    const T = buildData(stakingEvents);
     const logs = buildLogs(T);
     const stats = { invalidQueries: [], queries: {}, explorerCalls: 0, receiptCalls: 0 };
 
