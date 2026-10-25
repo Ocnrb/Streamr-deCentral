@@ -15,7 +15,7 @@ export const XSS_NAME = '<img src=x onerror="window.__xss=1">Evil';
 
 // ---------- Subgraph data ----------
 
-function buildData() {
+function buildData(extraStakingEvents = []) {
     const T = {};
     T.operators = Array.from({ length: 1500 }, (_, i) => ({
         id: hex(0xa0000 + i), owner: hex(0xf000 + i),
@@ -24,6 +24,7 @@ function buildData() {
         // The operator page's fields: 10% owner's cut, earnings, its owner as agent
         operatorsCutFraction: (10n ** 17n).toString(), operatorTokenTotalSupplyWei: W(i < 300 ? 200000 : 1000), cumulativeEarningsWei: W(i < 300 ? 30000 : 0),
         cumulativeProfitsWei: W(i < 300 ? 27000 : 0), cumulativeOperatorsCutWei: W(i < 300 ? 3000 : 0), nodes: [], controllers: [hex(0xf000 + i)], queueEntries: [],
+        contractVersion: i === 0 ? '4' : '3',   // operator 0 is a V4 Operator
         // The largest ones earning nothing are skipped from the top list
         stakes: [{ amountWei: W(1e5), sponsorship: {
             id: hex(0xb000 + (i % 20)), stream: { id: `${hex(0xc000 + (i % 20))}/stream-${i % 20}` }, isRunning: true, remainingWei: W(40000), totalStakedWei: W(5e6), totalPayoutWeiPerSec: (BigInt(W(1)) / 50n).toString(),
@@ -88,7 +89,8 @@ function buildData() {
         se(1, 1, 705, 4 * DAY, 80000), se(1, 1, 706, 600, 80000),       // earnings collected: skipped
         se(5, 2, 707, 5 * DAY, 50000), se(5, 2, 708, 900, 42000),       // slashed 8K
         se(7, 6, 709, 6 * DAY, 20000),                                  // then unstaked (Unstaked log): 20K
-        se(8, 9, 710, 10 * DAY, 30000), se(8, 9, 711, 200, 45000)       // left 8 days ago, staked again: +45K
+        se(8, 9, 710, 10 * DAY, 30000), se(8, 9, 711, 200, 45000),      // left 8 days ago, staked again: +45K
+        ...extraStakingEvents.map(e => se(e.operator, e.sponsorship, e.tx, e.secsAgo, e.amount))
     ];
     T.slashingEvents.push({ id: T.stakingEvents[7].id, amount: W(8000), date: T.stakingEvents[7].date, sponsorship: T.sponsorships[2], operator: { id: T.operators[5].id } });
     // Owners' self-delegations: 30% of the first 300 operators' value
@@ -209,9 +211,11 @@ function project(value, selection) {
  * the app's own files go to the test server, anything else is aborted. Also replaces the Streamr client with
  * one whose operators send coordination heartbeats (the 300 with stake: even ones 1 node, odd ones 2, the first
  * 10 also a shared one = 451 nodes). Returns what the app asked for.
+ * @param {Object} [options.explorer] - an address's own transactions: { [address]: { txlist: [], tokentx: [] } }
+ * @param {Array} [options.stakingEvents] - more StakingEvents: { operator, sponsorship (indexes), tx, secsAgo, amount (DATA) }
  */
-export async function mockNetwork(context) {
-    const T = buildData();
+export async function mockNetwork(context, { explorer = {}, stakingEvents = [] } = {}) {
+    const T = buildData(stakingEvents);
     const logs = buildLogs(T);
     const stats = { invalidQueries: [], queries: {}, explorerCalls: 0, receiptCalls: 0 };
 
@@ -262,9 +266,11 @@ export async function mockNetwork(context) {
         const request = route.request();
         const url = request.url();
         if (url.startsWith('http://localhost:')) return route.continue();
-        // An operator's own transactions: none (its history comes from the subgraph)
+        // An address's own transactions: the test's (options.explorer), else none (the history comes from the subgraph)
         if (url.includes('api.etherscan.io') && /action=(txlist|tokentx)/.test(url)) {
-            return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ status: '0', message: 'No transactions found', result: [] }) });
+            const q = new URL(url).searchParams;
+            const result = explorer[q.get('address')?.toLowerCase()]?.[q.get('action')] || [];
+            return route.fulfill({ contentType: 'application/json', body: JSON.stringify(result.length ? { status: '1', message: 'OK', result } : { status: '0', message: 'No transactions found', result: [] }) });
         }
         if (url.includes('api.etherscan.io') && url.includes('action=getLogs')) {
             stats.explorerCalls++;

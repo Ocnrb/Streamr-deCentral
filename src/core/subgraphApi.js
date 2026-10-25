@@ -89,7 +89,7 @@ export async function fetchOperatorDetails(operatorId) {
     const query = `
         query GetOperatorDetails {
           operator(id: "${sanitizedId}") {
-            id owner valueWithoutEarnings operatorTokenTotalSupplyWei delegatorCount cumulativeEarningsWei cumulativeProfitsWei cumulativeOperatorsCutWei operatorsCutFraction nodes controllers metadataJsonString
+            id owner valueWithoutEarnings operatorTokenTotalSupplyWei delegatorCount cumulativeEarningsWei cumulativeProfitsWei cumulativeOperatorsCutWei operatorsCutFraction nodes controllers metadataJsonString contractVersion
             stakes(first: 100) { amountWei sponsorship { id remainingWei spotAPY isRunning totalPayoutWeiPerSec totalStakedWei stream { id } } }
             delegations(where: {isSelfDelegation: false}, first: 15, orderBy: _valueDataWei, orderDirection: desc) { id _valueDataWei operatorTokenBalanceWei delegator { id } }
             queueEntries(orderBy: date, orderDirection: asc) { id amount delegator { id } date }

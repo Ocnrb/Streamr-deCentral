@@ -147,8 +147,31 @@ export const OPERATOR_CONTRACT_ABI = [
         ],
         "stateMutability": "view",
         "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "version",
+        "outputs": [ { "internalType": "uint256", "name": "", "type": "uint256" } ],
+        "stateMutability": "pure",
+        "type": "function"
+    },
+    {
+        // V4 only: reduce stake in some sponsorships, then stake into others, in one transaction
+        "inputs": [
+            { "internalType": "address[]", "name": "reduceStakeFromSponsorships", "type": "address[]" },
+            { "internalType": "uint256[]", "name": "reducedTargetStakesWei", "type": "uint256[]" },
+            { "internalType": "address[]", "name": "stakeOnSponsorships", "type": "address[]" },
+            { "internalType": "uint256[]", "name": "stakeAmountsWei", "type": "uint256[]" }
+        ],
+        "name": "rebalanceStake",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
     }
 ];
+
+// Operator contracts from this version on have rebalanceStake and the fix for the 2026-10-09 drain
+export const OPERATOR_V4 = 4;
 
 export const SPONSORSHIP_ABI = [
     {
@@ -169,6 +192,22 @@ export const SPONSORSHIP_ABI = [
         "inputs": [ { "internalType": "address", "name": "operator", "type": "address" } ],
         "name": "lockedStakeWei",
         "outputs": [ { "internalType": "uint256", "name": "", "type": "uint256" } ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        // Sponsorships deployed from 2026-10-12 only
+        "inputs": [],
+        "name": "isFull",
+        "outputs": [ { "internalType": "bool", "name": "", "type": "bool" } ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        // Sponsorships deployed from 2026-10-12 only
+        "inputs": [],
+        "name": "maxOperatorCount",
+        "outputs": [ { "internalType": "uint256", "name": "maxOperators", "type": "uint256" } ],
         "stateMutability": "view",
         "type": "function"
     }
@@ -299,6 +338,47 @@ export const POLYGONSCAN_METHOD_IDS = {
     "0xd1b68611": "Reduce Stake",
     "0xf2888dbb": "Unstake",
     "0x4a178fe4": "Flag",
+    "0x38849a3a": "Rebalance Stake",
+    "0x1401f70b": "Unstake",
+    "0x4b095c03": "Reduce Stake",
+    "0x50d3ba9e": "Collect Earnings",
+    "0x87396e3b": "Undelegate",
+    "0x11606010": "Undelegate",
+    "0x9fa6dd35": "Delegate",
+    "0x5dff6e9f": "Update Owner's Cut",
+    "0x14797daa": "Set Node Address",
+    "0x21194bd7": "Update Metadata",
+    "0xf4350c24": "Trigger Withdraw",
+    "0x2f2ff15d": "Grant Role",
+    "0xd547741f": "Revoke Role",
+    "0x095ea7b3": "Approve",
+};
+
+// Contracts behind the 2026-10-09 Operator drain: DATA sent to them is labeled as such in the history
+export const OPERATOR_EXPLOIT_ADDRESSES = new Set([
+    '0x5e5b9d124fb49e55311aee59a790dc1ef6ad4606'
+]);
+
+// Custom errors of the Operator, OperatorFactory and Sponsorship contracts: 4-byte selector -> message
+// (selector = first 4 bytes of keccak256 of the signature; module errors arrive wrapped in ModuleCallError)
+export const CONTRACT_ERROR_MESSAGES = {
+    '0x1609c582': ['OperatorAlreadyDeployed', 'This wallet already has an Operator. A new V4 Operator needs another wallet.'],
+    '0x2cc6b17b': ['PolicyNotTrusted', 'One of the operator policies is not trusted by the factory.'],
+    '0x81cf7f80': ['StakedInSponsorships', "The owner's cut can only be changed when the operator is not staked in any sponsorship."],
+    '0xf37a3008': ['InvalidOperatorsCut', "The owner's cut must be between 0% and 100%."],
+    '0x69d9c224': ['AccessDeniedOperatorOnly', 'This wallet is not the owner or a controller of the operator.'],
+    '0x9e39d8be': ['AccessDeniedNodesOnly', 'Only the operator nodes can do this.'],
+    '0xf89a442b': ['AccessDeniedStreamrOperatorOnly', 'Only Operators deployed by the Streamr OperatorFactory are accepted.'],
+    '0x1f2b846e': ['CannotTriggerOwnWithdraw', 'An Operator cannot trigger its own withdraw.'],
+    '0xa24a13a6': ['ArrayLengthMismatch', 'Each sponsorship needs exactly one amount.'],
+    '0x7f2f3f9e': ['SponsorshipFull', 'The sponsorship is full: it reached its maximum number of operators.'],
+    '0xb73ddd6f': ['CannotStakeForOthers', 'Only the Operator itself can stake into this sponsorship.'],
+    '0x25b10de0': ['NotMyStakedSponsorship', 'The Operator is not staked in one of these sponsorships.'],
+    '0x4ee7a8de': ['NoEarnings', 'There are no earnings to collect.'],
+    '0xec6c87a6': ['FirstEmptyQueueThenStake', 'Pay out the undelegation queue before staking.'],
+    '0xc89199b3': ['SelfDelegationTooLow', "The owner's self-delegation is below the minimum."],
+    '0x24c69407': ['DelegationBelowMinimum', 'The delegation is below the minimum.'],
+    '0xc0a6104c': ['ZeroUndelegation', 'The amount to undelegate must be more than zero.']
 };
 
 export const VOTE_ON_FLAG_RAW_AMOUNTS = new Set([

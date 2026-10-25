@@ -1,5 +1,5 @@
 // Polygonscan (Etherscan API v2): the operator's transaction history and contract logs
-import { STREAMR_TREASURY_ADDRESS, POLYGONSCAN_NETWORK, POLYGONSCAN_METHOD_IDS, VOTE_ON_FLAG_RAW_AMOUNTS, getEtherscanApiKey, buildPolygonscanUrl, STORAGE_KEYS } from './constants.js';
+import { STREAMR_TREASURY_ADDRESS, POLYGONSCAN_NETWORK, POLYGONSCAN_METHOD_IDS, VOTE_ON_FLAG_RAW_AMOUNTS, OPERATOR_EXPLOIT_ADDRESSES, getEtherscanApiKey, buildPolygonscanUrl, STORAGE_KEYS } from './constants.js';
 import { showToast } from '../ui/ui.js';
 import { logger } from './utils.js';
 
@@ -177,224 +177,7 @@ export async function fetchPolygonscanHistory(walletAddress, offset = 500, spons
         const tokenTxs = Array.isArray(tokentxData.result) ? tokentxData.result : [];
         const nativeToken = POLYGONSCAN_NETWORK.nativeToken;
 
-        const methodIdMap = new Map();
-        const processedNormalTxs = normalTxs.map(tx => {
-            const direction = tx.from.toLowerCase() === walletAddress.toLowerCase() ? "OUT" : "IN";
-            const methodIdHex = (tx.input === "0x" || !tx.input) ? "-" : tx.input.substring(0, 10);
-            const methodId = POLYGONSCAN_METHOD_IDS[methodIdHex] || methodIdHex;
-            
-            if (methodId !== "-") {
-                methodIdMap.set(tx.hash, methodId);
-            }
-
-            const amount = parseFloat(tx.value) / 1e18;
-
-            return {
-                txHash: tx.hash,
-                timestamp: parseInt(tx.timeStamp),
-                token: nativeToken,
-                direction: direction,
-                methodId: methodId,
-                amount: amount,
-                rawValue: tx.value,
-                from: tx.from,
-                to: tx.to
-            };
-        });
-
-        const tokenTxsByHash = new Map();
-        for (const tx of tokenTxs) {
-            if (!tokenTxsByHash.has(tx.hash)) {
-                tokenTxsByHash.set(tx.hash, []);
-            }
-            tokenTxsByHash.get(tx.hash).push(tx);
-        }
-
-        const processedTokenTxs = [];
-        for (const [txHash, txGroup] of tokenTxsByHash.entries()) {
-            
-            const baseMethodId = methodIdMap.get(txHash) || "-";
-            let groupMethodId = baseMethodId;
-
-            // ===========================================
-            // INFER METHOD ID FROM TOKEN TRANSFER PATTERNS
-            // (for transactions initiated by other addresses)
-            // ===========================================
-            if (groupMethodId === "-") {
-                const directions = txGroup.map(t => t.from.toLowerCase() === walletAddress.toLowerCase() ? "OUT" : "IN");
-                const hasIn = directions.includes("IN");
-                const hasOutToTreasury = txGroup.some(t => 
-                    t.from.toLowerCase() === walletAddress.toLowerCase() && 
-                    t.to.toLowerCase() === STREAMR_TREASURY_ADDRESS.toLowerCase()
-                );
-                const allAreIn = directions.every(d => d === "IN");
-                const dataTransfers = txGroup.filter(t => t.tokenSymbol === "DATA");
-                
-                if (txGroup.length > 1) {
-                    // Multiple transfers in same tx
-                    if (hasIn && hasOutToTreasury) {
-                        // IN + OUT to Treasury = Collect Earnings (earnings + protocol tax)
-                        groupMethodId = "Collect Earnings";
-                    } else if (allAreIn && dataTransfers.length > 1) {
-                        // Multiple DATA INs = Force Unstake (slashing payout from multiple sources)
-                        groupMethodId = "Force Unstake";
-                    }
-                } else if (txGroup.length === 1) {
-                    // Single transfer - try to infer from context
-                    const singleTx = txGroup[0];
-                    const singleDirection = directions[0];
-                    const singleIsToTreasury = singleTx.to.toLowerCase() === STREAMR_TREASURY_ADDRESS.toLowerCase();
-                    
-                    if (singleTx.tokenSymbol === "DATA") {
-                        // First check if it's a Vote on Flag (specific amounts)
-                        if (VOTE_ON_FLAG_RAW_AMOUNTS.has(singleTx.value)) {
-                            groupMethodId = "Vote On Flag";
-                        } else if (singleDirection === "OUT" && singleIsToTreasury) {
-                            // OUT to Treasury = Protocol Tax
-                            groupMethodId = "Protocol Tax";
-                        } else if (singleDirection === "IN") {
-                            // Single DATA IN with unknown method
-                            // Check if from address is a known sponsorship (smart contract)
-                            const fromAddress = singleTx.from.toLowerCase();
-                            if (sponsorshipSet.has(fromAddress)) {
-                                // From sponsorship without Tax (single tx) = Reduce Stake
-                                // (Collect Earnings would typically have a second Tax transfer)
-                                groupMethodId = "Reduce Stake";
-                            } else {
-                                // From normal address (EOA) = Delegate (external user delegating)
-                                groupMethodId = "Delegate";
-                            }
-                        } else if (singleDirection === "OUT" && !singleIsToTreasury) {
-                            // Single DATA OUT without known method
-                            // Check if destination is a known sponsorship (smart contract)
-                            const toAddress = singleTx.to.toLowerCase();
-                            if (sponsorshipSet.has(toAddress)) {
-                                // To sponsorship = Stake
-                                groupMethodId = "Stake";
-                            } else {
-                                // To normal address (EOA) = Undelegate (returning funds to delegator)
-                                groupMethodId = "Undelegate";
-                            }
-                        }
-                    }
-                }
-            }
-
-            // Find index of Protocol Tax transaction (OUT to Treasury) in this group to help classify related transfers
-            const protocolTaxIndex = txGroup.findIndex(t => 
-                t.from.toLowerCase() === walletAddress.toLowerCase() && 
-                t.to.toLowerCase() === STREAMR_TREASURY_ADDRESS.toLowerCase() &&
-                t.tokenSymbol === "DATA"
-            );
-
-            for (let i = 0; i < txGroup.length; i++) {
-                const tx = txGroup[i];
-                const direction = tx.from.toLowerCase() === walletAddress.toLowerCase() ? "OUT" : "IN";
-                const decimals = parseInt(tx.tokenDecimal) || 18;
-                const amount = parseFloat(tx.value) / Math.pow(10, decimals);
-                const isToTreasury = tx.to.toLowerCase() === STREAMR_TREASURY_ADDRESS.toLowerCase();
-                
-                let finalMethodId = groupMethodId;
-
-                // ===========================================
-                // TRANSACTION CLASSIFICATION RULES (in order of priority)
-                // ===========================================
-
-                // 1. Protocol Tax: any DATA OUT to Treasury address (highest priority)
-                if (direction === "OUT" && tx.tokenSymbol === "DATA" && isToTreasury) {
-                    finalMethodId = "Protocol Tax";
-                }
-                // 2. Specific overrides for Reduce Stake/Collect Earnings OUT
-                // If the group is identified as "Collect Earnings" (inferred or explicit), 
-                // any OUT that isn't Tax (caught by Rule 1) must be something else, usually Undelegate.
-                else if ((groupMethodId === "Reduce Stake" || groupMethodId === "Collect Earnings") && direction === "OUT") {
-                    finalMethodId = "Undelegate";
-                }
-                // 3. Protocol Tax Context: The 2nd transaction after tax is typically the earnings component
-                else if (protocolTaxIndex !== -1 && i === protocolTaxIndex + 2 && tx.tokenSymbol === "DATA") {
-                    finalMethodId = "Collect Earnings";
-                }
-                // 4. Known methods that should keep their name
-                else if (baseMethodId === "Stake") {
-                    finalMethodId = "Stake";
-                }
-                else if (baseMethodId === "Undelegate") {
-                    finalMethodId = "Undelegate";
-                }
-                else if (baseMethodId === "Reduce Stake") {
-                    finalMethodId = "Reduce Stake";
-                }
-                else if (baseMethodId === "Unstake") {
-                    finalMethodId = "Unstake";
-                }
-                // 5. Collect Earnings (0xe8e658b4): IN = "Collect Earnings"
-                else if (baseMethodId === "Collect Earnings" && direction === "IN" && tx.tokenSymbol === "DATA") {
-                    finalMethodId = "Collect Earnings";
-                }
-                // 6. Unstake/Force Unstake: OUT (not to treasury) - keep method name
-                else if ((baseMethodId === "Unstake" || baseMethodId === "Force Unstake") && direction === "OUT" && !isToTreasury) {
-                    finalMethodId = baseMethodId;
-                }
-                // 7. Delegate (transferAndCall) OUT = "Stake" (staking into sponsorship via transferAndCall)
-                else if (baseMethodId === "Delegate" && direction === "OUT" && tx.tokenSymbol === "DATA" && !isToTreasury) {
-                    finalMethodId = "Stake";
-                }
-                // 8. Delegate/Transfer: IN = "Delegate"
-                else if ((baseMethodId === "Delegate" || baseMethodId === "Transfer") && direction === "IN") {
-                    finalMethodId = "Delegate";
-                }
-                // 9. Vote On Flag: detected by specific raw amounts (fallback)
-                else if (finalMethodId === "-" && tx.tokenSymbol === "DATA" && VOTE_ON_FLAG_RAW_AMOUNTS.has(tx.value)) {
-                    finalMethodId = "Vote On Flag";
-                }
-                // 10. Fallback for unknown methods based on address types (Heuristic for complex txs)
-                else if (finalMethodId === "-" && tx.tokenSymbol === "DATA") {
-                    if (direction === "IN") {
-                        // IN from Sponsorship -> Reduce Stake (heuristic for unknown method)
-                        if (sponsorshipSet.has(tx.from.toLowerCase())) {
-                            finalMethodId = "Reduce Stake";
-                        } else {
-                            // IN from User/Other -> Delegate
-                            finalMethodId = "Delegate";
-                        }
-                    } else if (direction === "OUT") {
-                        // OUT to Sponsorship -> Stake
-                        if (sponsorshipSet.has(tx.to.toLowerCase())) {
-                            finalMethodId = "Stake";
-                        } else if (!isToTreasury) {
-                            // OUT to User/Other -> Undelegate
-                            finalMethodId = "Undelegate";
-                        }
-                    }
-                }
-            
-                processedTokenTxs.push({
-                    txHash: tx.hash,
-                    timestamp: parseInt(tx.timeStamp),
-                    token: tx.tokenSymbol,
-                    direction: direction,
-                    methodId: finalMethodId,
-                    amount: amount,
-                    rawValue: tx.value,
-                    from: tx.from,
-                    to: tx.to
-                });
-            }
-        }
-
-        const allTxs = [...processedNormalTxs, ...processedTokenTxs];
-
-        const filteredFinalTxs = allTxs.filter(tx => {
-            const tokenSymbol = tx.token.toUpperCase();
-            const nativeTokenSymbol = nativeToken.toUpperCase();
-            if (tokenSymbol === 'DATA') {
-                return true;
-            }
-            if (tokenSymbol === nativeTokenSymbol && tx.amount > 0) {
-                return true;
-            }
-            return false;
-        });
+        const filteredFinalTxs = processPolygonscanPage(normalTxs, tokenTxs, walletAddress, sponsorshipSet, nativeToken);
 
         const hasMore = normalTxs.length === offset || tokenTxs.length === offset;
         
@@ -538,6 +321,7 @@ function processPolygonscanPage(normalTxs, tokenTxs, walletAddress, sponsorshipS
             t.to.toLowerCase() === STREAMR_TREASURY_ADDRESS.toLowerCase() &&
             t.tokenSymbol === "DATA"
         );
+        const rebalanceEarnings = baseMethodId === "Rebalance Stake" ? findRebalanceEarnings(txGroup, walletAddress) : new Set();
 
         for (let i = 0; i < txGroup.length; i++) {
             const tx = txGroup[i];
@@ -548,7 +332,7 @@ function processPolygonscanPage(normalTxs, tokenTxs, walletAddress, sponsorshipS
             
             const finalMethodId = classifyTransaction(
                 tx, direction, isToTreasury, baseMethodId, groupMethodId, 
-                protocolTaxIndex, i, sponsorshipSet
+                protocolTaxIndex, i, sponsorshipSet, rebalanceEarnings
             );
         
             processedTokenTxs.push({
@@ -608,9 +392,41 @@ function inferGroupMethodId(txGroup, baseMethodId, walletAddress, sponsorshipSet
     return "-";
 }
 
-function classifyTransaction(tx, direction, isToTreasury, baseMethodId, groupMethodId, protocolTaxIndex, index, sponsorshipSet) {
+/**
+ * Rebalance Stake (V4): a sponsorship left or reduced sends the stake and, in a second transfer, its
+ * earnings; the smaller transfers from the same sponsorship are the earnings
+ * @returns {Set<Object>} the earnings transfers of the group
+ */
+function findRebalanceEarnings(txGroup, walletAddress) {
+    const inBySender = new Map();
+    for (const t of txGroup) {
+        if (t.tokenSymbol !== "DATA" || t.from.toLowerCase() === walletAddress.toLowerCase()) continue;
+        const sender = t.from.toLowerCase();
+        if (!inBySender.has(sender)) inBySender.set(sender, []);
+        inBySender.get(sender).push(t);
+    }
+    const earnings = new Set();
+    for (const ins of inBySender.values()) {
+        if (ins.length < 2) continue;
+        const stake = ins.reduce((a, b) => (BigInt(b.value) > BigInt(a.value) ? b : a));
+        for (const t of ins) if (t !== stake) earnings.add(t);
+    }
+    return earnings;
+}
+
+function classifyTransaction(tx, direction, isToTreasury, baseMethodId, groupMethodId, protocolTaxIndex, index, sponsorshipSet, rebalanceEarnings = new Set()) {
     if (direction === "OUT" && tx.tokenSymbol === "DATA" && isToTreasury) {
         return "Protocol Tax";
+    }
+    // DATA taken by the 2026-10-09 Operator drain
+    if (direction === "OUT" && tx.tokenSymbol === "DATA" && OPERATOR_EXPLOIT_ADDRESSES.has(tx.to.toLowerCase())) {
+        return "Exploit Drain";
+    }
+    // Rebalance Stake (V4): stake back from sponsorships (+ their earnings), stake into others, undelegation
+    // queue paid out. Sponsorships not known here are fixed later from The Graph (relabelSponsorshipTransfers).
+    if (baseMethodId === "Rebalance Stake" && tx.tokenSymbol === "DATA") {
+        if (direction === "IN") return rebalanceEarnings.has(tx) ? "Collect Earnings" : "Reduce Stake";
+        return sponsorshipSet.has(tx.to.toLowerCase()) ? "Stake" : "Undelegate";
     }
     if ((groupMethodId === "Reduce Stake" || groupMethodId === "Collect Earnings") && direction === "OUT") {
         return "Undelegate";
