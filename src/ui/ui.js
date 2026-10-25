@@ -1,5 +1,5 @@
 // Shared UI: element cache, loader, login modal, views, modal states and the operators list
-import { escapeHtml, formatBigNumber, convertWeiToData, createAddressLink, parseOperatorMetadata, calculateWeightedApy, avatarImgHtml, operatorVersionBadgeHtml } from '../core/utils.js';
+import { escapeHtml, formatBigNumber, convertWeiToData, createAddressLink, parseOperatorMetadata, calculateWeightedApy, avatarImgHtml } from '../core/utils.js';
 import { showToast, updateToast, removeToast } from './toast.js';
 
 // The parts of the UI in their own files, still reachable as UI.* from the modules
@@ -310,7 +310,6 @@ function createOperatorCardHtml(op) {
 
     const roundedApy = Math.round(weightedApy * 100);
     const apyColorClass = roundedApy === 0 ? 'text-red-400' : 'text-green-400';
-    const versionBadge = operatorVersionBadgeHtml(op.contractVersion);
 
     return `
      <div class="operator-card bg-[#1E1E1E] p-5 rounded-xl border border-[#333333] card flex flex-col items-center text-center" data-operator-id="${op.id}">
@@ -318,7 +317,6 @@ function createOperatorCardHtml(op) {
          <div class="w-full">
              <h3 class="operator-name font-bold text-lg text-white truncate" title="${safeOperatorName}">${safeOperatorName}</h3>
              ${name ? `<div class="font-mono text-xs text-gray-500 truncate mt-1">${createAddressLink(op.id)}</div>` : ''}
-             ${versionBadge ? `<div class="mt-2">${versionBadge}</div>` : ''}
          </div>
          <div class="metrics-row mt-4 pt-4 border-t border-[#333333] w-full text-left space-y-2 text-sm">
              <p><strong class="text-gray-400">APY:</strong> <span class="font-mono ${apyColorClass}" data-tooltip-content="Sponsorships: ${sponsorshipsCount}">${roundedApy}%</span></p>

@@ -66,9 +66,10 @@ test('an operator is saved as a profile', async ({ page }) => {
     await expect(page.locator('#sidebar-profiles-section')).toContainText('Operator 0');
 });
 
-test('operators show their contract version', async ({ page }) => {
+test('the operator page shows its contract version, the list does not', async ({ page }) => {
     await openApp(page, '/operators');
-    await expect(page.locator('#operators-grid .operator-card').first()).toContainText('V3');
+    await expect(page.locator('#operators-grid .operator-card').first()).toBeVisible();
+    await expect(page.locator('#operators-grid')).not.toContainText(/\bV[34]\b/);
     await openApp(page, `/operator/${OPERATOR}`);
     await expect(page.locator('#detail-content')).toContainText('Operator 0');
     await expect(page.locator('#detail-content')).toContainText('V4');
