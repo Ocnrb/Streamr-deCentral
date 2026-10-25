@@ -431,6 +431,8 @@ async function runAutostakerBotCycle() {
                         } else {
                             addAutostakerLog('info', `🔄 Recalculating actions (${progress.retryAttempt}/5)...`);
                         }
+                    } else if (action.type === 'rebalance') {
+                        addAutostakerLog('action', `⚖️ Rebalance: ${action.count} actions in one transaction (${amountData} DATA staked)`);
                     } else if (progress.isRetry) {
                         addAutostakerLog('action', `[${progress.current}/${progress.total}] ↻ ${action.type}: ${amountData} DATA`);
                     } else {
