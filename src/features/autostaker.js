@@ -5,7 +5,7 @@
  */
 
 import { runQuery, switchToFallbackRpc, getCurrentRpcUrl, readWithFallback, getReadOnlyProvider, isRateLimitError as isRateLimitErrorService } from '../core/services.js';
-import { convertWeiToData, formatBigNumber, getFriendlyErrorMessage } from '../core/utils.js';
+import { convertWeiToData, formatBigNumber, getFriendlyErrorMessage, contractErrorMessage } from '../core/utils.js';
 import { OPERATOR_CONTRACT_ABI, SPONSORSHIP_ABI, OPERATOR_V4 } from '../core/constants.js';
 import { ethers } from 'ethers';
 
@@ -990,11 +990,15 @@ async function prepareRebalance(unstakeActions, stakeActions, operatorContract, 
     return { reduce, stake, skipped };
 }
 
+// Like the official plugin: the rebalanceStake is retried 5 times, 5 s apart, before it is sent
+const REBALANCE_RETRY_COUNT = 5;
+const REBALANCE_RETRY_DELAY_MS = 5000;
+
 /**
- * V4 Operators: all the reductions and stakes in one rebalanceStake transaction (stake moves at once, the
- * undelegation queue is paid from the freed DATA, and a full sponsorship fails it before any stake moves).
- * @returns {Promise<Object|null>} the execution result, or null to run the actions one by one: fewer than 2
- *   to batch, or the transaction would revert (not enough DATA freed, queue not paid, a full sponsorship)
+ * V4 Operators: all the reductions and stakes in one atomic rebalanceStake transaction (stake moves at once, the
+ * undelegation queue is paid from the freed DATA). If any of them can't be done (e.g. a full sponsorship), nothing
+ * is sent and no stake is touched; the next cycle recalculates from the chain.
+ * @returns {Promise<Object|null>} the execution result, or null when there are fewer than 2 actions to batch
  */
 async function executeRebalance(unstakeActions, stakeActions, operatorContract, operatorId, signer, gasSettings, onProgress) {
     const { reduce, stake, skipped } = await prepareRebalance(unstakeActions, stakeActions, operatorContract, operatorId, signer.provider);
@@ -1003,17 +1007,23 @@ async function executeRebalance(unstakeActions, stakeActions, operatorContract, 
         reduce.map(r => r.action.sponsorshipId), reduce.map(r => r.target),
         stake.map(s => s.action.sponsorshipId), stake.map(s => s.amount)
     ];
-    let gasLimit;
-    try {
-        gasLimit = (await operatorContract.estimateGas.rebalanceStake(...args)).mul(13).div(10);
-    } catch (e) {
-        console.warn('[Autostaker] rebalanceStake would fail, running the actions one by one:', getFriendlyErrorMessage(e));
-        return null;
-    }
     const actions = [...reduce, ...stake].map(item => item.action);
+    const fail = (error) => ({ success: false, results: { successful: [], failed: [...actions.map(action => ({ action, error })), ...skipped] } });
+    let gasLimit;
+    for (let attempt = 1; !gasLimit; attempt++) {
+        try {
+            gasLimit = (await operatorContract.estimateGas.rebalanceStake(...args)).mul(13).div(10);
+        } catch (e) {
+            // A contract error (SponsorshipFull...) doesn't change on a retry
+            const contractError = contractErrorMessage(e);
+            console.warn(`[Autostaker] rebalanceStake would fail (attempt ${attempt}/${REBALANCE_RETRY_COUNT}):`, getFriendlyErrorMessage(e));
+            if (contractError || attempt >= REBALANCE_RETRY_COUNT) return fail(contractError || getFriendlyErrorMessage(e));
+            await new Promise(resolve => setTimeout(resolve, REBALANCE_RETRY_DELAY_MS));
+        }
+    }
     if (onProgress) {
         const moved = stake.reduce((sum, s) => sum + BigInt(s.amount.toString()), 0n);
-        onProgress({ current: 1, total: 1, action: { type: 'rebalance', sponsorshipId: operatorId, amount: moved } });
+        onProgress({ current: 1, total: 1, action: { type: 'rebalance', sponsorshipId: operatorId, amount: moved, count: actions.length } });
     }
     try {
         console.log(`[Autostaker] Calling rebalanceStake: ${reduce.length} reduction(s), ${stake.length} stake(s)`);
@@ -1024,10 +1034,9 @@ async function executeRebalance(unstakeActions, stakeActions, operatorContract, 
             results: { successful: actions.map(action => ({ action, txHash: receipt.transactionHash })), failed: skipped }
         };
     } catch (e) {
-        // Not retried one by one: a sent transaction may have gone through. The next cycle recalculates from the chain.
+        // Not retried: a sent transaction may have gone through. The next cycle recalculates from the chain.
         console.error('[Autostaker] rebalanceStake failed:', e);
-        const error = getFriendlyErrorMessage(e);
-        return { success: false, results: { successful: [], failed: [...actions.map(action => ({ action, error })), ...skipped] } };
+        return fail(getFriendlyErrorMessage(e));
     }
 }
 
@@ -1131,7 +1140,7 @@ export async function executeActions(actions, operatorId, signer, onProgress, co
         }
     }
     
-    // V4 Operators: one rebalanceStake transaction for all of them, when it goes through
+    // V4 Operators: one atomic rebalanceStake transaction for all of them, never one by one
     if (orderedActions.length > 1 && await isV4Operator(operatorContract)) {
         const rebalanced = await executeRebalance(unstakeActions, stakeActions, operatorContract, operatorId, signer, gasSettings, onProgress);
         if (rebalanced) return rebalanced;

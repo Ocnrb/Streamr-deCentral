@@ -16,7 +16,7 @@ const iface = new ethers.utils.Interface([
 const word = (n) => '0x' + BigInt(n).toString(16).padStart(64, '0');
 
 /** Runs executeActions with a wallet that answers the reads and records the transactions it sends */
-async function runAutostaker(page, version) {
+async function runAutostaker(page, version, estimateError = null) {
     const answers = {
         [iface.getSighash('version')]: word(version), [iface.getSighash('queueIsEmpty')]: word(1),
         [iface.getSighash('stakedInto')]: word(5000n * 10n ** 18n), [iface.getSighash('valueWithoutEarnings')]: word(20000n * 10n ** 18n),
@@ -24,7 +24,7 @@ async function runAutostaker(page, version) {
         [iface.getSighash('minimumStakeOf')]: word(10n ** 18n)
     };
     await openApp(page, '/');
-    return page.evaluate(async ({ answers, operator, leave, join }) => {
+    return page.evaluate(async ({ answers, operator, leave, join, estimateError }) => {
         const autostaker = await import('/src/features/autostaker.js');
         const { ethers } = window;   // the app's copy (libs.js), for its BigNumber
         const sent = [];
@@ -34,7 +34,10 @@ async function runAutostaker(page, version) {
             _isSigner: true, provider,
             getAddress: async () => '0x' + 'f'.repeat(40),
             call,
-            estimateGas: async () => ethers.BigNumber.from('0x100000'),
+            estimateGas: async (tx) => {
+                if (estimateError && tx.data.startsWith('0x38849a3a')) throw Object.assign(new Error('execution reverted'), { data: estimateError });
+                return ethers.BigNumber.from('0x100000');
+            },
             sendTransaction: async (tx) => {
                 sent.push({ to: tx.to, data: tx.data });
                 return { hash: '0x' + String(sent.length).padStart(64, '0'), wait: async () => ({ transactionHash: '0x' + String(sent.length).padStart(64, '0'), logs: [] }) };
@@ -46,7 +49,7 @@ async function runAutostaker(page, version) {
         ];
         const result = await autostaker.executeActions(actions, operator, signer, () => {});
         return { success: result.success, successful: result.results.successful.length, failed: result.results.failed.map(f => f.error), sent };
-    }, { answers, operator: OPERATOR, leave: LEAVE, join: JOIN });
+    }, { answers, operator: OPERATOR, leave: LEAVE, join: JOIN, estimateError });
 }
 
 test.beforeEach(async ({ page }) => {
@@ -72,4 +75,11 @@ test('a V3 Operator keeps one transaction per action, unstakes first', async ({ 
     const run = await runAutostaker(page, 3);
     expect(run.failed).toEqual([]);
     expect(run.sent.map(tx => iface.parseTransaction({ data: tx.data }).name)).toEqual(['unstake', 'stake']);
+});
+
+test('a V4 rebalance that would revert sends nothing, not even one by one', async ({ page }) => {
+    const run = await runAutostaker(page, 4, '0x7f2f3f9e');   // SponsorshipFull
+    expect(run.sent).toHaveLength(0);
+    expect(run.successful).toBe(0);
+    expect(run.failed).toEqual(Array(2).fill('The sponsorship is full: it reached its maximum number of operators.'));
 });
