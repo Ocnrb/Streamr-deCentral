@@ -30,7 +30,7 @@
   },
   "dependencies": {
     "chart.js": "4.5.1",
-    "d3": "7.9.0",
+    "d3": "7.9.2",
     "ethers": "5.8.0",
     "leaflet": "1.9.4",
     "lucide": "1.59.0"
